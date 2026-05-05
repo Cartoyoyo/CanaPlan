@@ -112,6 +112,53 @@ def _coerce_paths(src_path, dxf_paths_kw=None) -> List[str]:
 
 
 
+# EU/EP ne doit pas être précédé ni suivi d'une lettre
+# ("REU" → non, "BET_EU" → oui, "EU_COND" → oui, "EUROPE" → non)
+_RE_EU = re.compile(r'(?<![A-Za-z])EU(?![A-Za-z])')
+_RE_EP = re.compile(r'(?<![A-Za-z])EP(?![A-Za-z])')
+
+
+def _linetype_reseau(name: str, description: str = '') -> Optional[str]:
+    """Retourne 'EU' ou 'EP' si détecté dans le nom ou la description
+    du linetype, None sinon.
+    """
+    for s in (name or '', description or ''):
+        if _RE_EU.search(s):
+            return 'EU'
+        if _RE_EP.search(s):
+            return 'EP'
+    return None
+
+
+def _build_lt_reseau_map(doc) -> Dict[str, str]:
+    """Scanne les linetypes d'un doc ezdxf et retourne
+    {linetype_name: 'EU'|'EP'} pour ceux qui contiennent EU/EP.
+
+    Vérifie : nom, description, et group 9 (TEXT des complex linetypes).
+    """
+    result: Dict[str, str] = {}
+    try:
+        for lt in doc.linetypes:
+            name = lt.dxf.name
+            desc = getattr(lt.dxf, 'description', '') or ''
+            reseau = _linetype_reseau(name, desc)
+            if not reseau:
+                # Cherche les textes embarqués (group 9) des complex linetypes
+                try:
+                    for tag in lt.tags:
+                        if getattr(tag, 'code', None) == 9:
+                            reseau = _linetype_reseau(tag.value)
+                            if reseau:
+                                break
+                except Exception:
+                    pass
+            if reseau:
+                result[name] = reseau
+    except Exception:
+        pass
+    return result
+
+
 def _coords_to_geom(coords: List[tuple]):
     """Convert coordinate sequence into (geom_type, shapely geom)."""
     from shapely.geometry import Point, LineString, Polygon
@@ -492,6 +539,11 @@ def _precise_convert_ezdxf(
             say(f"[error] read failed: {ex}")
             continue
 
+        # Construit la map linetype → réseau pour ce fichier
+        lt_reseau = _build_lt_reseau_map(doc)
+        if lt_reseau:
+            say(f"[convert] linetypes EU/EP détectés : {lt_reseau}")
+
         count = 0
         ins_count = 0
         for e in msp:
@@ -588,7 +640,15 @@ def _precise_convert_ezdxf(
                     continue
 
                 # non-INSERT
-                rows += _precise_rows_from_entity(e, layer, include_3d, flat_dist_precise)
+                entity_rows = _precise_rows_from_entity(e, layer, include_3d, flat_dist_precise)
+                if entity_rows and lt_reseau:
+                    lt_name = getattr(e.dxf, 'linetype', '') or ''
+                    reseau = lt_reseau.get(lt_name) or lt_reseau.get(lt_name.upper())
+                    if reseau:
+                        for r in entity_rows:
+                            r['linetype'] = lt_name
+                            r['reseau'] = reseau
+                rows += entity_rows
             except Exception as ex:
                 say(f"[warn] entity failed: {ex}")
                 continue
@@ -955,6 +1015,21 @@ def _convert_ogr_fallback(
     sel_layers = set(target_layers) if target_layers else None
     rows: List[dict] = []
 
+    # ---------- Scan linetypes EU/EP via ezdxf (si dispo) ----------
+    lt_reseau_ogr: Dict[str, str] = {}
+    try:
+        import ezdxf as _ez
+        for path in dxf_paths:
+            try:
+                _doc = _ez.readfile(path)
+                lt_reseau_ogr.update(_build_lt_reseau_map(_doc))
+            except Exception:
+                pass
+        if lt_reseau_ogr:
+            say(f"[ogr] linetypes EU/EP détectés : {lt_reseau_ogr}")
+    except ImportError:
+        pass
+
     # ---------- INSERT pass (NO inline): collect INSERT instances ----------
     say("[ogr] collecting INSERT instances (no-inline pass)…")
     inserts = _ogr_collect_inserts(dxf_paths, target_layers, on_progress=on_progress)
@@ -1036,12 +1111,20 @@ def _convert_ogr_fallback(
                     except Exception:
                         pass
 
+                # Réseau depuis linetype si détecté
+                lt_name = attrs.get('Linetype') or attrs.get('linetype') or ''
+                reseau = (lt_reseau_ogr.get(lt_name)
+                          or lt_reseau_ogr.get(lt_name.upper())
+                          or _linetype_reseau(lt_name))
+
                 for gcode in ("LINE","POLYGON","POINT"):
                     geom_out = agg.get(gcode)
                     if geom_out is None or geom_out.is_empty:
                         continue
                     row = {"layer": layer_name, "geom": gcode, "geometry": geom_out}
                     row.update(attrs)
+                    if reseau:
+                        row['reseau'] = reseau
                     rows.append(row); kept += 1
             except Exception as ex:
                 say(f"[ogr:warn] feature read failed: {ex}")

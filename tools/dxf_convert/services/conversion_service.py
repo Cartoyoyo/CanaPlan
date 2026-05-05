@@ -298,6 +298,85 @@ def _merge_lines_robust(lines, tol: float, say=lambda m: None):
     return None
 
 
+def _merge_lines_edgeminer(lines, tol: float, say=lambda m: None):
+    """Fusion via ezdxf.edgeminer — reconstruit des polylignes continues
+    à partir de segments distincts.  Retourne None si ezdxf absent ou vide.
+
+    Chaque LineString shapely devient un Edge (start=premier pt, end=dernier pt).
+    EdgeMiner détermine l'ordre et la direction de chaque segment dans la chaîne ;
+    on reconstruit les coordonnées intermédiaires en conséquence.
+    """
+    try:
+        from ezdxf import edgeminer as em
+        from ezdxf.math import Vec2
+    except ImportError:
+        return None
+
+    from shapely.geometry import LineString, MultiLineString
+
+    if not lines:
+        return None
+
+    edge_list = []
+    coords_map: dict = {}
+
+    for i, ls in enumerate(lines):
+        try:
+            coords = [(float(c[0]), float(c[1])) for c in ls.coords]
+            if len(coords) < 2:
+                continue
+            edge_list.append(
+                em.Edge(start=Vec2(coords[0]), end=Vec2(coords[-1]), payload=i)
+            )
+            coords_map[i] = coords
+        except Exception:
+            continue
+
+    if not edge_list:
+        return None
+
+    gap = max(float(tol), 1e-9)
+    try:
+        miner = em.EdgeMiner(edge_list, gap=gap)
+        chains = miner.find_all_chains()
+    except Exception as exc:
+        say(f"[edgeminer] {exc}")
+        return None
+
+    merged = []
+    for chain in (chains or []):
+        chain_pts: list = []
+        for edge in chain:
+            seg = coords_map.get(edge.payload)
+            if seg is None:
+                continue
+            # EdgeMiner peut inverser un edge ; on vérifie via edge.start
+            em_sx = float(edge.start.x)
+            em_sy = float(edge.start.y)
+            orig_sx, orig_sy = seg[0]
+            if abs(em_sx - orig_sx) > gap or abs(em_sy - orig_sy) > gap:
+                seg = list(reversed(seg))
+            if chain_pts:
+                # Évite le doublon de jonction
+                if chain_pts[-1] == seg[0]:
+                    chain_pts.extend(seg[1:])
+                else:
+                    chain_pts.extend(seg)
+            else:
+                chain_pts.extend(seg)
+
+        if len(chain_pts) >= 2:
+            try:
+                merged.append(LineString(chain_pts))
+            except Exception:
+                pass
+
+    if not merged:
+        return None
+    return (merged[0] if len(merged) == 1
+            else MultiLineString([ls for ls in merged if ls.length > 0]))
+
+
 def _merge_lines_graph(lines, tol: float):
     """Greedy graph stitcher (endpoints bucketed by tolerance)."""
     from shapely.geometry import LineString, MultiLineString
@@ -646,7 +725,8 @@ def _precise_convert_ezdxf(
                         except Exception as ex:
                             say(f"[warn] virtual_entities failed: {ex}")
 
-                        merged = _merge_lines_robust(lines, float(line_merge_tol or 0.0), say) \
+                        merged = _merge_lines_edgeminer(lines, float(line_merge_tol or 0.0), say) \
+                                 or _merge_lines_robust(lines, float(line_merge_tol or 0.0), say) \
                                  or _merge_lines_graph(lines, float(line_merge_tol or 0.0)) \
                                  or _as_single_multiline(lines)
 
@@ -1221,7 +1301,8 @@ def _convert_ogr_fallback(
                     parts = _collect_parts(sub.geometry)
                     if not parts:
                         continue
-                    merged = _merge_lines_robust(parts, tol_eff, say) \
+                    merged = _merge_lines_edgeminer(parts, tol_eff, say) \
+                             or _merge_lines_robust(parts, tol_eff, say) \
                              or _merge_lines_graph(parts, tol_eff) \
                              or _as_single_multiline(parts)
                     base = {c: sub.iloc[0].get(c, None) for c in sub.columns if c != "geometry"}
@@ -1237,7 +1318,8 @@ def _convert_ogr_fallback(
                     for blk_id, sub in lines_tagged.loc[has_id].groupby("_blk_id"):
                         parts = _collect_parts(sub.geometry)
                         if not parts: continue
-                        merged = _merge_lines_robust(parts, tol_eff, say) \
+                        merged = _merge_lines_edgeminer(parts, tol_eff, say) \
+                                 or _merge_lines_robust(parts, tol_eff, say) \
                                  or _merge_lines_graph(parts, tol_eff) \
                                  or _as_single_multiline(parts)
                         base = {c: sub.iloc[0].get(c, None) for c in sub.columns if c not in ("geometry","_blk_id")}
@@ -1250,7 +1332,9 @@ def _convert_ogr_fallback(
                         for layer_name, sub in remain.groupby("layer"):
                             parts = _collect_parts(sub.geometry)
                             if not parts: continue
-                            merged = _merge_lines_graph(parts, tol_eff) or _as_single_multiline(parts)
+                            merged = _merge_lines_edgeminer(parts, tol_eff, say) \
+                                     or _merge_lines_graph(parts, tol_eff) \
+                                     or _as_single_multiline(parts)
                             base = {c: None for c in sub.columns if c != "geometry"}
                             base["layer"] = layer_name
                             merged_rows.append({**base, "geom":"LINE", "geometry": merged})

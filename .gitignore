@@ -1,0 +1,16 @@
+# Dépendances installées localement (ezdxf, numpy, pyparsing…)
+libs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# QGIS
+*.qgz
+*.qgs~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,3 @@
+créer un repertoire projet qui enrgistre toute les couches temporaires en couche normales avec toutes les etiquettes etc etc. il faudrait que lorsqu'on rappelle ce fichier projet il reouvre le projet et on puisse continuer. a discuter 
+
+a l ouverture demande de créer un projet ouvrir un projet liste des projet recent 

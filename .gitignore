@@ -1,6 +1,3 @@
-# Dépendances installées localement (ezdxf, numpy, pyparsing…)
-libs/
-
 # Python
 __pycache__/
 *.py[cod]

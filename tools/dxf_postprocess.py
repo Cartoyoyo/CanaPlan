@@ -335,7 +335,7 @@ def _read_symbol_color(lyr):
 
 
 def _build_point_symbol_index():
-    """Retourne {nom_lower: {'layer_name': str, 'role': str,
+    """Retourne {nom_lower: {'layer_name': str, 'role': str, 'reseau': str,
                              'rgb': (r,g,b), 'features': [(x,y), ...]}}
     pour toutes les couches regard_*/tabouret_* visibles.
     """
@@ -351,10 +351,10 @@ def _build_point_symbol_index():
         if not name.lower().startswith(_TARGET_PREFIXES):
             continue
         role = 'regard' if name.lower().startswith('regard_') else 'tabouret'
-        # Couleur : lue depuis le renderer ; fallback EU=rouge EP=bleu
+        reseau = 'EU' if 'eu' in name.lower() else 'EP'
         rgb = _read_symbol_color(lyr)
         if rgb is None:
-            rgb = (255, 0, 0) if 'eu' in name.lower() else (0, 0, 255)
+            rgb = (255, 0, 0) if reseau == 'EU' else (0, 0, 255)
         pts = []
         for feat in lyr.getFeatures():
             geom = feat.geometry()
@@ -369,21 +369,78 @@ def _build_point_symbol_index():
             index[name.lower()] = {
                 'layer_name': name,
                 'role': role,
+                'reseau': reseau,
                 'rgb': rgb,
                 'features': pts,
             }
     return index
 
 
+# Préfixe des noms de blocs BET (pour les repérer au nettoyage)
+_BET_BLOCK_PREFIX = 'BET_'
+
+
+def _ensure_symbol_block(doc, role, reseau, rgb):
+    """Retourne le BlockLayout du symbole, en le créant s'il n'existe pas.
+
+    Noms : BET_REGARD_EU / BET_REGARD_EP / BET_TABOURET_EU / BET_TABOURET_EP.
+    Le bloc est centré sur (0,0) — l'INSERT place l'origine sur la feature.
+    """
+    block_name = f"BET_{'REGARD' if role == 'regard' else 'TABOURET'}_{reseau}"
+    if block_name in doc.blocks:
+        return doc.blocks[block_name], block_name
+
+    r, g, b = rgb
+    rgb_int = (r << 16) | (g << 8) | b
+    blk = doc.blocks.new(block_name)
+
+    if role == 'regard':
+        # Disque plein : HATCH arc + CIRCLE contour, centré sur (0,0)
+        try:
+            h = blk.add_hatch(color=1, dxfattribs={'true_color': rgb_int})
+            h.set_solid_fill()
+            ep = h.paths.add_edge_path()
+            ep.add_arc(center=(0, 0), radius=_REGARD_RADIUS,
+                       start_angle=0, end_angle=360, ccw=True)
+        except Exception as exc:
+            _log(f"Bloc {block_name} HATCH : {exc}", Qgis.Warning)
+        try:
+            blk.add_circle((0, 0), _REGARD_RADIUS,
+                           dxfattribs={'true_color': rgb_int,
+                                       'lineweight': _SYM_LINEWEIGHT})
+        except Exception as exc:
+            _log(f"Bloc {block_name} CIRCLE : {exc}", Qgis.Warning)
+    else:
+        # Carré plein : HATCH + LWPOLYLINE, centré sur (0,0)
+        h = _TABOURET_HALF
+        pts = [(-h, -h), (h, -h), (h, h), (-h, h)]
+        try:
+            hatch = blk.add_hatch(color=1, dxfattribs={'true_color': rgb_int})
+            hatch.set_solid_fill()
+            hatch.paths.add_polyline_path(pts, is_closed=True)
+        except Exception as exc:
+            _log(f"Bloc {block_name} HATCH : {exc}", Qgis.Warning)
+        try:
+            blk.add_lwpolyline(pts, close=True,
+                               dxfattribs={'true_color': rgb_int,
+                                           'lineweight': _SYM_LINEWEIGHT})
+        except Exception as exc:
+            _log(f"Bloc {block_name} LWPOLYLINE : {exc}", Qgis.Warning)
+
+    _log(f"Bloc {block_name} créé.")
+    return blk, block_name
+
+
 def add_point_symbols(dxf_path):
-    """Supprime les entités POINT/CIRCLE/HATCH incorrectes générées par
-    QgsDxfExport pour les couches regards/tabourets, et les remplace par
-    des symboles fidèles au plan QGIS :
-      - regard   → disque plein (HATCH arc) + contour CIRCLE, Ø 1.0 m
-      - tabouret → carré plein (HATCH polyline) + contour LWPOLYLINE, 0.4 m
+    """Remplace les entités ponctuelles incorrectes de QgsDxfExport par des
+    INSERT référençant des blocs BET_REGARD_EU/EP et BET_TABOURET_EU/EP.
+
+    Avantages vs entités individuelles :
+      - 1 INSERT par feature (vs HATCH + CIRCLE/LWPOLYLINE) → fichier plus léger
+      - Symbole modifiable une seule fois dans la définition de bloc
+      - Prêt pour l'ajout d'attributs ATTRIB (XDATA, étape suivante)
 
     Retourne le nombre de symboles écrits.
-    Lève RuntimeError si ezdxf est absent.
     """
     try:
         import ezdxf
@@ -405,9 +462,8 @@ def add_point_symbols(dxf_path):
     doc = ezdxf.readfile(dxf_path)
     msp = doc.modelspace()
 
-    # Supprime POINT, CIRCLE, HATCH exportés (incorrectement) par QgsDxfExport
-    # sur les calques cibles. On ne touche pas aux MTEXT (gérés par
-    # add_label_decorations) ni aux autres entités (LWPOLYLINE, LINE, TEXT).
+    # Nettoyage : supprime les entités ponctuelles QgsDxfExport (POINT, CIRCLE,
+    # HATCH) ET les éventuels INSERT BET_* d'un export précédent sur ces calques.
     target_lowers = set(sym_index.keys())
 
     def _is_target_layer(ent):
@@ -415,59 +471,36 @@ def add_point_symbols(dxf_path):
         return lay.lower() in target_lowers or any(
             lay.lower().startswith(p) for p in _TARGET_PREFIXES)
 
+    def _is_bet_insert(ent):
+        if ent.dxftype() != 'INSERT':
+            return False
+        bname = getattr(ent.dxf, 'name', '') or ''
+        return bname.startswith(_BET_BLOCK_PREFIX) and _is_target_layer(ent)
+
     to_del = [e for e in msp
-              if e.dxftype() in ('POINT', 'CIRCLE', 'HATCH')
-              and _is_target_layer(e)]
+              if (e.dxftype() in ('POINT', 'CIRCLE', 'HATCH') and _is_target_layer(e))
+              or _is_bet_insert(e)]
     for e in to_del:
         msp.delete_entity(e)
 
     n_written = 0
     for key, entry in sym_index.items():
         layer_name = entry['layer_name']
-        role = entry['role']
-        r, g, b = entry['rgb']
-        rgb_int = (r << 16) | (g << 8) | b
-        base = {'layer': layer_name, 'true_color': rgb_int}
+        _, block_name = _ensure_symbol_block(
+            doc, entry['role'], entry['reseau'], entry['rgb'])
 
         for x, y in entry['features']:
-            if role == 'regard':
-                # Disque plein : HATCH avec arc circulaire complet
-                try:
-                    h = msp.add_hatch(color=1, dxfattribs=dict(base))
-                    h.set_solid_fill()
-                    ep = h.paths.add_edge_path()
-                    ep.add_arc(center=(x, y), radius=_REGARD_RADIUS,
-                               start_angle=0, end_angle=360, ccw=True)
-                except Exception as exc:
-                    _log(f"HATCH regard ({x:.1f},{y:.1f}) : {exc}", Qgis.Warning)
-                # Contour CIRCLE
-                try:
-                    msp.add_circle((x, y), _REGARD_RADIUS,
-                                   dxfattribs={**base, 'lineweight': _SYM_LINEWEIGHT})
-                except Exception as exc:
-                    _log(f"CIRCLE regard ({x:.1f},{y:.1f}) : {exc}", Qgis.Warning)
-            else:
-                # Carré plein : HATCH + LWPOLYLINE
-                h = _TABOURET_HALF
-                pts = [(x - h, y - h), (x + h, y - h),
-                       (x + h, y + h), (x - h, y + h)]
-                try:
-                    hatch = msp.add_hatch(color=1, dxfattribs=dict(base))
-                    hatch.set_solid_fill()
-                    hatch.paths.add_polyline_path(pts, is_closed=True)
-                except Exception as exc:
-                    _log(f"HATCH tabouret ({x:.1f},{y:.1f}) : {exc}", Qgis.Warning)
-                try:
-                    msp.add_lwpolyline(
-                        pts, close=True,
-                        dxfattribs={**base, 'lineweight': _SYM_LINEWEIGHT})
-                except Exception as exc:
-                    _log(f"LWPOLYLINE tabouret ({x:.1f},{y:.1f}) : {exc}",
-                         Qgis.Warning)
-            n_written += 1
+            try:
+                msp.add_blockref(block_name, (x, y),
+                                 dxfattribs={'layer': layer_name})
+                n_written += 1
+            except Exception as exc:
+                _log(f"INSERT {block_name} ({x:.1f},{y:.1f}) : {exc}",
+                     Qgis.Warning)
 
     doc.saveas(dxf_path)
-    _log(f"add_point_symbols : {n_written} symboles écrits.")
+    _log(f"add_point_symbols : {n_written} INSERT écrits "
+         f"({len(sym_index)} blocs BET_*).")
     return n_written
 
 

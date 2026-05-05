@@ -641,6 +641,80 @@ def add_point_symbols(dxf_path):
     return n_written
 
 
+def apply_ltscale(dxf_path, export_scale):
+    """Ajuste l'échelle des types de ligne EU/EP dans le DXF post-export.
+
+    Deux niveaux :
+      • Global  : $LTSCALE dans le header — neutral (1.0) pour ne pas affecter
+        les linetypes simples déjà bien calibrés.
+      • Par entité : dxf.ltscale = export_scale / 1000 sur les entités dont le
+        linetype est détecté comme EU ou EP (complex linetypes avec texte).
+        Formule : coordonnées Lambert 93 en mètres → scale 200 donne 0.20 m de
+        motif, scale 500 → 0.50 m, etc.
+
+    Ne lève pas d'exception — les erreurs sont loggées et la fonction retourne
+    le nombre d'entités modifiées (0 si ezdxf absent ou aucun EU/EP trouvé).
+    """
+    try:
+        import ezdxf
+    except ImportError:
+        _log("apply_ltscale : ezdxf absent, ltscale ignoré.", Qgis.Warning)
+        return 0
+
+    if not os.path.exists(dxf_path):
+        _log(f"apply_ltscale : fichier absent {dxf_path}", Qgis.Warning)
+        return 0
+
+    try:
+        doc = ezdxf.readfile(dxf_path)
+    except Exception as exc:
+        _log(f"apply_ltscale lecture : {exc}", Qgis.Warning)
+        return 0
+
+    # ── Import local pour réutiliser _build_lt_reseau_map sans dépendance circulaire
+    try:
+        from tools.dxf_convert.services.conversion_service import _build_lt_reseau_map
+        lt_reseau = _build_lt_reseau_map(doc)
+    except Exception:
+        lt_reseau = {}
+
+    if not lt_reseau:
+        _log("apply_ltscale : aucun linetype EU/EP détecté — pas de modification.",
+             Qgis.Info)
+        return 0
+
+    # Header global : $LTSCALE = 1.0 (neutre ; per-entity fait le travail fin)
+    try:
+        doc.header['$LTSCALE'] = 1.0
+    except Exception as exc:
+        _log(f"apply_ltscale $LTSCALE header : {exc}", Qgis.Warning)
+
+    # Valeur per-entity : calibrée pour coordonnées en mètres (Lambert 93)
+    entity_scale = max(0.01, float(export_scale) / 1000.0)
+
+    msp = doc.modelspace()
+    n_modified = 0
+    lt_names_upper = {k.upper(): v for k, v in lt_reseau.items()}
+    for ent in msp:
+        try:
+            lt = getattr(ent.dxf, 'linetype', '') or ''
+            if lt.upper() in lt_names_upper:
+                ent.dxf.ltscale = entity_scale
+                n_modified += 1
+        except Exception:
+            continue
+
+    try:
+        doc.saveas(dxf_path)
+        _log(f"apply_ltscale : {n_modified} entité(s) → ltscale={entity_scale:.4f} "
+             f"(scale={export_scale}).")
+    except Exception as exc:
+        _log(f"apply_ltscale sauvegarde : {exc}", Qgis.Warning)
+        return 0
+
+    return n_modified
+
+
 def add_label_decorations(dxf_path):
     """Ajoute fond + cadre + callout autour de chaque MTEXT issu d'un
     calque regard_*/tabouret_*. Retourne le nombre d'étiquettes décorées.

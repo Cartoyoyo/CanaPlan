@@ -190,6 +190,15 @@ def run_export_dxf_with_ui(iface, dxf_path, extent, scale, *,
                 level=1, duration=6,
             )
         try:
+            from .dxf_postprocess import apply_ltscale
+            apply_ltscale(dxf_path, scale)
+        except Exception as exc:
+            iface.messageBar().pushMessage(
+                "Export DXF",
+                f"DXF écrit, mais ltscale EU/EP échoué : {exc}",
+                level=1, duration=6,
+            )
+        try:
             from .dxf_postprocess import add_label_decorations
             n_decorated = add_label_decorations(dxf_path)
         except Exception as exc:

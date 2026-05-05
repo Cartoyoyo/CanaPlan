@@ -159,6 +159,31 @@ def _build_lt_reseau_map(doc) -> Dict[str, str]:
     return result
 
 
+def _read_bet_xdata(xdata_tags) -> dict:
+    """Relit les XDATA BET_HUMIDE d'un INSERT en dict d'attributs.
+    Structure attendue : paires (1000, nom_champ), (code_valeur, valeur).
+    """
+    attrs = {}
+    it = iter(xdata_tags)
+    for tag in it:
+        if getattr(tag, 'code', None) == 1000:
+            name = tag.value
+            try:
+                vtag = next(it)
+                code = getattr(vtag, 'code', None)
+                if code == 1040:
+                    attrs[name] = float(vtag.value)
+                elif code == 1070:
+                    attrs[name] = int(vtag.value)
+                elif vtag.value == '':
+                    attrs[name] = None
+                else:
+                    attrs[name] = vtag.value
+            except StopIteration:
+                attrs[name] = None
+    return attrs
+
+
 def _coords_to_geom(coords: List[tuple]):
     """Convert coordinate sequence into (geom_type, shapely geom)."""
     from shapely.geometry import Point, LineString, Polygon
@@ -563,6 +588,15 @@ def _precise_convert_ezdxf(
                         say(f"[convert] …INSERT expanded: {ins_count}")
 
                     meta = _extract_block_meta(e)
+
+                    # Lecture XDATA BET_HUMIDE sur les INSERT BET_REGARD/TABOURET
+                    bname = meta.get('block_name', '') or ''
+                    if bname.startswith('BET_') and e.has_xdata('BET_HUMIDE'):
+                        try:
+                            xattrs = _read_bet_xdata(e.get_xdata('BET_HUMIDE'))
+                            meta.update({f"BET_{k}": v for k, v in xattrs.items()})
+                        except Exception:
+                            pass
                     mode = (block_mode or "explode").lower().strip()
 
                     if mode in ("keep-merge", "keep-merge-per"):

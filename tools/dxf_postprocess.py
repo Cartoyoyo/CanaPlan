@@ -125,6 +125,13 @@ _REGARD_RADIUS  = 0.5   # cercle Ø 1.0 m → rayon 0.5 m
 _TABOURET_HALF  = 0.2   # carré 0.4 m → demi-côté 0.2 m
 _SYM_LINEWEIGHT = 25    # 0.25 mm contour symbole
 
+# XDATA — attributs QGIS attachés à chaque INSERT regard/tabouret
+_XDATA_APPID = "BET_HUMIDE"
+_ROLE_FIELDS = {
+    'regard':   ['nom', 'tn', 'fe_radier', 'profondeur'],
+    'tabouret': ['nom', 'tn', 'fe_entree',  'profondeur'],
+}
+
 # Regex pour extraire la hauteur de char depuis le contenu MTEXT : "\H0.476319;"
 _RE_HEIGHT = re.compile(r'\\H([0-9.]+)\s*;')
 
@@ -334,10 +341,87 @@ def _read_symbol_color(lyr):
     return None
 
 
+def _feat_attrs(feat, role):
+    """Lit les champs métier d'une feature QGIS selon son rôle.
+    Retourne un dict {field: valeur_python} (None si NULL QGIS).
+    """
+    attrs = {}
+    for field in _ROLE_FIELDS.get(role, []):
+        try:
+            val = feat[field]
+            # QVariant NULL → None
+            if val is None or (hasattr(val, 'isNull') and val.isNull()):
+                attrs[field] = None
+            else:
+                # Convertit en type Python natif
+                try:
+                    attrs[field] = float(val)
+                except (TypeError, ValueError):
+                    attrs[field] = str(val) if val != '' else None
+        except Exception:
+            attrs[field] = None
+    # nom reste string
+    nom = attrs.get('nom')
+    if nom is not None:
+        attrs['nom'] = str(nom)
+    return attrs
+
+
+def _attrs_to_xdata(attrs):
+    """Sérialise un dict d'attributs en liste de tags XDATA.
+
+    Structure : paires (1000, nom_champ), (code_valeur, valeur).
+      - str  → code 1000
+      - float → code 1040
+      - int   → code 1070
+      - None  → (1000, '')
+    """
+    tags = []
+    for name, val in attrs.items():
+        tags.append((1000, name))
+        if val is None:
+            tags.append((1000, ''))
+        elif isinstance(val, float):
+            tags.append((1040, val))
+        elif isinstance(val, int):
+            tags.append((1070, val))
+        else:
+            tags.append((1000, str(val)))
+    return tags
+
+
+def _xdata_to_attrs(xdata_tags):
+    """Relit des tags XDATA (liste de GroupCode) en dict d'attributs.
+    Inverse de _attrs_to_xdata(). Utilisé à l'import.
+    """
+    attrs = {}
+    it = iter(xdata_tags)
+    for tag in it:
+        if getattr(tag, 'code', None) == 1000:
+            name = tag.value
+            try:
+                vtag = next(it)
+                code = getattr(vtag, 'code', None)
+                if code == 1040:
+                    attrs[name] = float(vtag.value)
+                elif code == 1070:
+                    attrs[name] = int(vtag.value)
+                elif vtag.value == '':
+                    attrs[name] = None
+                else:
+                    attrs[name] = vtag.value
+            except StopIteration:
+                attrs[name] = None
+    return attrs
+
+
 def _build_point_symbol_index():
     """Retourne {nom_lower: {'layer_name': str, 'role': str, 'reseau': str,
-                             'rgb': (r,g,b), 'features': [(x,y), ...]}}
+                             'rgb': (r,g,b),
+                             'features': [((x,y), attrs_dict), ...]}}
     pour toutes les couches regard_*/tabouret_* visibles.
+    attrs_dict contient les champs métier (nom, tn, fe_radier/fe_entree,
+    profondeur) lus depuis chaque feature QGIS.
     """
     index = {}
     root = QgsProject.instance().layerTreeRoot()
@@ -355,23 +439,25 @@ def _build_point_symbol_index():
         rgb = _read_symbol_color(lyr)
         if rgb is None:
             rgb = (255, 0, 0) if reseau == 'EU' else (0, 0, 255)
-        pts = []
+        features = []
         for feat in lyr.getFeatures():
             geom = feat.geometry()
             if geom is None or geom.isEmpty():
                 continue
             try:
                 pt = geom.asPoint()
-                pts.append((float(pt.x()), float(pt.y())))
+                xy = (float(pt.x()), float(pt.y()))
+                attrs = _feat_attrs(feat, role)
+                features.append((xy, attrs))
             except Exception:
                 continue
-        if pts:
+        if features:
             index[name.lower()] = {
                 'layer_name': name,
                 'role': role,
                 'reseau': reseau,
                 'rgb': rgb,
-                'features': pts,
+                'features': features,
             }
     return index
 
@@ -462,6 +548,10 @@ def add_point_symbols(dxf_path):
     doc = ezdxf.readfile(dxf_path)
     msp = doc.modelspace()
 
+    # Enregistre l'AppID BET_HUMIDE (nécessaire avant tout set_xdata)
+    if _XDATA_APPID not in doc.appids:
+        doc.appids.add(_XDATA_APPID)
+
     # Nettoyage : supprime les entités ponctuelles QgsDxfExport (POINT, CIRCLE,
     # HATCH) ET les éventuels INSERT BET_* d'un export précédent sur ces calques.
     target_lowers = set(sym_index.keys())
@@ -489,10 +579,17 @@ def add_point_symbols(dxf_path):
         _, block_name = _ensure_symbol_block(
             doc, entry['role'], entry['reseau'], entry['rgb'])
 
-        for x, y in entry['features']:
+        for (x, y), attrs in entry['features']:
             try:
-                msp.add_blockref(block_name, (x, y),
-                                 dxfattribs={'layer': layer_name})
+                ref = msp.add_blockref(block_name, (x, y),
+                                       dxfattribs={'layer': layer_name})
+                # Attache les attributs QGIS comme XDATA sur l'INSERT
+                if attrs:
+                    try:
+                        ref.set_xdata(_XDATA_APPID, _attrs_to_xdata(attrs))
+                    except Exception as exc:
+                        _log(f"XDATA {block_name} ({x:.1f},{y:.1f}) : {exc}",
+                             Qgis.Warning)
                 n_written += 1
             except Exception as exc:
                 _log(f"INSERT {block_name} ({x:.1f},{y:.1f}) : {exc}",

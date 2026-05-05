@@ -131,6 +131,12 @@ _ROLE_FIELDS = {
     'regard':   ['nom', 'tn', 'fe_radier', 'profondeur'],
     'tabouret': ['nom', 'tn', 'fe_entree',  'profondeur'],
 }
+# ATTDEF dans les blocs BET_* : (TAG_DXF, clé_dans_attrs_dict)
+# Visible au double-clic dans AutoCAD / AutoCAD Map.
+_ATTDEF_FIELDS = {
+    'regard':   [('NOM', 'nom'), ('TN', 'tn'), ('FE_RADIER', 'fe_radier'), ('PROFONDEUR', 'profondeur')],
+    'tabouret': [('NOM', 'nom'), ('TN', 'tn'), ('FE_ENTREE', 'fe_entree'), ('PROFONDEUR', 'profondeur')],
+}
 
 # Regex pour extraire la hauteur de char depuis le contenu MTEXT : "\H0.476319;"
 _RE_HEIGHT = re.compile(r'\\H([0-9.]+)\s*;')
@@ -467,14 +473,22 @@ _BET_BLOCK_PREFIX = 'BET_'
 
 
 def _ensure_symbol_block(doc, role, reseau, rgb):
-    """Retourne le BlockLayout du symbole, en le créant s'il n'existe pas.
+    """Retourne le BlockLayout du symbole BET_*, en (re)créant la définition.
 
     Noms : BET_REGARD_EU / BET_REGARD_EP / BET_TABOURET_EU / BET_TABOURET_EP.
     Le bloc est centré sur (0,0) — l'INSERT place l'origine sur la feature.
+    Les ATTDEFs sont invisibles (flags=1) mais visibles au double-clic AutoCAD.
+    Le bloc est toujours recréé pour inclure les ATTDEFs à jour.
     """
     block_name = f"BET_{'REGARD' if role == 'regard' else 'TABOURET'}_{reseau}"
+
+    # Supprime le bloc existant pour le recréer avec ATTDEFs à jour
     if block_name in doc.blocks:
-        return doc.blocks[block_name], block_name
+        try:
+            doc.blocks.delete_block(block_name, safe=False)
+        except Exception as exc:
+            _log(f"Impossible de supprimer {block_name} : {exc}", Qgis.Warning)
+            return doc.blocks[block_name], block_name
 
     r, g, b = rgb
     rgb_int = (r << 16) | (g << 8) | b
@@ -513,7 +527,15 @@ def _ensure_symbol_block(doc, role, reseau, rgb):
         except Exception as exc:
             _log(f"Bloc {block_name} LWPOLYLINE : {exc}", Qgis.Warning)
 
-    _log(f"Bloc {block_name} créé.")
+    # ATTDEFs invisibles (flags=1) — valeurs renseignées par add_auto_attribs()
+    for tag, _field in _ATTDEF_FIELDS.get(role, []):
+        try:
+            blk.add_attdef(tag, (0, 0),
+                           dxfattribs={'height': 0.25, 'flags': 1, 'prompt': tag})
+        except Exception as exc:
+            _log(f"Bloc {block_name} ATTDEF {tag} : {exc}", Qgis.Warning)
+
+    _log(f"Bloc {block_name} créé ({len(_ATTDEF_FIELDS.get(role, []))} ATTDEFs).")
     return blk, block_name
 
 
@@ -579,16 +601,34 @@ def add_point_symbols(dxf_path):
         _, block_name = _ensure_symbol_block(
             doc, entry['role'], entry['reseau'], entry['rgb'])
 
+        # Prépare le mapping TAG→valeur pour add_auto_attribs()
+        attdef_map = _ATTDEF_FIELDS.get(entry['role'], [])
+
         for (x, y), attrs in entry['features']:
             try:
                 ref = msp.add_blockref(block_name, (x, y),
                                        dxfattribs={'layer': layer_name})
-                # Attache les attributs QGIS comme XDATA sur l'INSERT
+                # XDATA : attributs QGIS attachés à l'INSERT (lecture par XDLIST)
                 if attrs:
                     try:
                         ref.set_xdata(_XDATA_APPID, _attrs_to_xdata(attrs))
                     except Exception as exc:
                         _log(f"XDATA {block_name} ({x:.1f},{y:.1f}) : {exc}",
+                             Qgis.Warning)
+                # ATTRIB : attributs visibles au double-clic dans AutoCAD Map
+                if attdef_map and attrs:
+                    try:
+                        attrib_values = {}
+                        for tag, field in attdef_map:
+                            val = attrs.get(field)
+                            attrib_values[tag] = (
+                                '' if val is None
+                                else f"{val:.3f}" if isinstance(val, float)
+                                else str(val)
+                            )
+                        ref.add_auto_attribs(attrib_values)
+                    except Exception as exc:
+                        _log(f"ATTRIB {block_name} ({x:.1f},{y:.1f}) : {exc}",
                              Qgis.Warning)
                 n_written += 1
             except Exception as exc:

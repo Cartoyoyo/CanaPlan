@@ -1,0 +1,33 @@
+● Voici mes propositions, classées par priorité pour le projet BET_HUMIDE :
+
+https://ezdxf.readthedocs.io/en/stable/addons/index.html
+                                                                                                                          ---
+  1. odafc — Export DWG natif ★★★                                                                                       
+  Aujourd'hui le plugin exporte en DXF. Avec odafc.export_dwg(), on pourrait proposer un vrai .dwg R2018 en un appel.     Pré-requis : ODA File Converter installé sur le poste (gratuit). Utile si les clients demandent du DWG plutôt que du    DXF.
+
+  ---                                                                                                                     2. acadctb — Fichier de tracé CTB ★★★                                                                                 
+  Génère un fichier .ctb (styles d'impression couleur → épaisseur crayon) livré avec le DXF exporté. Actuellement
+  AutoCAD Map charge un CTB par défaut qui peut mal interpréter les couleurs EU (rouge) / EP (bleu). On pourrait livrer
+  automatiquement un BET_HUMIDE.ctb calibré (EU = 0.35mm, EP = 0.35mm, étiquettes = 0.18mm, etc.).
+
+  ---
+  3. MTextExplode — Compatibilité DXF 2013 ★★
+
+  Le problème des étiquettes perdues en DXF 2013 (noté en mémoire). MTextExplode convertit les MTEXT en simples TEXT —
+  plus robuste sur les vieux logiciels. Pourrait être une option "export compatible" à côté de l'export 2018 actuel.
+
+  ---
+  4. Drawing/Export — Aperçu PNG/SVG avant export ★★
+
+  Permet de générer un aperçu raster du DXF sans ouvrir AutoCAD. Utile pour une miniature dans la boîte de dialogue
+  d'impression, ou pour générer automatiquement un PNG de contrôle après export.
+
+  ---
+  5. TablePainter — Cartouche / légende automatique ★
+
+  Génère un tableau DXF natif (lignes + TEXT) depuis Python. Pourrait servir à insérer automatiquement un cartouche de
+  plan (commune, maître d'ouvrage, échelle, date) ou une légende EU/EP directement dans le DXF exporté.
+
+  ---
+  Hors scope : text2path (vectorise les textes — utile uniquement pour des logos/tampons, pas pour des plans
+  techniques), PyCSG (géométrie 3D solide, inutile ici), r12writer / MTextSurrogate (trop anciens).

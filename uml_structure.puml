@@ -1,0 +1,740 @@
+@startuml BET_HUMIDE – Diagramme structurel
+
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam class {
+  BackgroundColor #FAFAFA
+  BorderColor #555
+  ArrowColor #333
+  FontSize 12
+}
+skinparam package {
+  BackgroundColor #F0F4FF
+  BorderColor #88A
+}
+skinparam note {
+  BackgroundColor #FFFFF0
+  BorderColor #AAA
+}
+
+' ─────────────────────────────────────────
+'  Classes externes QGIS (base)
+' ─────────────────────────────────────────
+package "QGIS API" <<external>> #EEF0EE {
+  class QObject       <<PyQt>>
+  class QDockWidget   <<PyQt>>
+  class QDialog       <<PyQt>>
+  class QLineEdit     <<PyQt>>
+  abstract class QgsMapTool         <<QGIS>>
+  abstract class QgsMapToolEmitPoint <<QGIS>>
+  QgsMapToolEmitPoint --|> QgsMapTool
+}
+
+' ─────────────────────────────────────────
+'  Plugin racine
+' ─────────────────────────────────────────
+package "BET_HUMIDE" #F0F4FF {
+
+  class ReseauAssainissementPlugin {
+    - iface : QgisInterface
+    - toolbar : QToolBar
+    - menu : QMenu
+    - action_dict : dict[str, QAction]
+    - tool_group : QActionGroup
+    - tools : dict[str, QgsMapTool]
+    - side_panel : SidePanel
+    .. Constantes ..
+    + LAYER_DEFINITIONS : dict
+    + COLORS : dict
+    .. Cycle de vie ..
+    + initGui()
+    + unload()
+    .. Outils de dessin ..
+    + run_conduite_eu(checked)
+    + run_conduite_ep(checked)
+    + run_branchement_eu(checked)
+    + run_branchement_ep(checked)
+    + run_insert_regard(checked)
+    .. Edition ..
+    + run_renseignement(checked)
+    + run_delete(checked)
+    + run_move(checked)
+    + run_copy_attributes(checked)
+    .. Analyse ..
+    + run_profil_eu(checked)
+    + run_profil_ep(checked)
+    + run_profil_groupe(checked)
+    + run_cubature(checked)
+    + run_remblai(checked)
+    .. Renumerotation ..
+    + run_renommer_eu(checked)
+    + run_renommer_ep(checked)
+    .. Etiquettes ..
+    + creer_etiquettes()
+    + toggle_affichage_etiquettes(checked)
+    + run_taille_etiquettes()
+    + run_forcer_etiquettes(checked)
+    + run_affichage_etiquettes()
+    .. Gestion de projet ..
+    + run_fond_projet()
+    + run_enregistrer_projet()
+    + run_enregistrer_projet_sous()
+    + run_charger_projet()
+    + run_imprimer()
+    + run_import_dxf()
+    .. Fonds de plan ..
+    + run_ban_vecteur()
+    + run_nom_voie()
+    + run_pci_emprise()
+    + run_ortho_2022()
+    + run_osm_desature()
+    .. Configuration ..
+    + show_config_dialog()
+    .. Privees ..
+    - _get_couches(reseau) : dict
+    - _get_or_create_group(reseau)
+    - _create_layer(role, reseau) : QgsVectorLayer
+    - _apply_style(layer, role, reseau)
+    - _ensure_fields(layer, role)
+    - _activate_tool(key, tool)
+    - _deactivate_current()
+    - _cleanup_tools()
+    - _add_action(...) : QAction
+    - _wfs_emprise(typename, layer_name, wfs_url)
+    - _style_pci_layer(layer, layer_name)
+  }
+
+  ' ─────────────────────────────────────────
+  '  Package GUI
+  ' ─────────────────────────────────────────
+  package "gui" #E8F0FF {
+
+    class SidePanel {
+      - plugin : ReseauAssainissementPlugin
+      - tree : QTreeWidget
+      + __init__(plugin, parent)
+      - _build_ui()
+      - _folder(title) : QTreeWidgetItem
+      - _item(parent, ...) : QTreeWidgetItem
+      - _on_item_clicked(item, column)
+    }
+
+    class RenseignementDialog {
+      - role : str
+      - feat : QgsFeature
+      - layer : QgsVectorLayer
+      - reseau : str
+      - couches : dict
+      - widgets : dict[str, QWidget]
+      - _fe_field : str
+      + __init__(role, feat, layer, reseau, couches)
+      - _build_ui()
+      - _make_widget(ftype, extra, val) : QWidget
+      - _connect_formula()
+      - _on_committed(changed)
+      - _save()
+      - _calculate_pente()
+      - _fe_at(point, tol) : float
+    }
+
+    class NumericEdit {
+      - _decimals : int
+      + committed : pyqtSignal
+      + value() : float
+      + setValue(v)
+      - _normalize()
+      + focusInEvent(event)
+      + keyPressEvent(event)
+    }
+
+    class PrintDialog {
+      + titre_edit : QLineEdit
+      + format_combo : QComboBox
+      + orient_combo : QComboBox
+      + scale_combo : QComboBox
+      + get_settings() : dict
+      + __init__(parent)
+    }
+
+    class ProfilDialog {
+      - data : dict
+      - color : str
+      + __init__(data, parent)
+      - _build_ui()
+      - _draw()
+      - _draw_regard_band(ax, ...)
+      - _draw_piquage_band(ax, ...)
+      - _draw_profile(ax, ...)
+      - _draw_cartouche(ax, ...)
+      - _export(fmt)
+    }
+
+    class ProfilGroupeDialog {
+      - eu_regards : list[QgsFeature]
+      - eu_conduites : list[QgsFeature]
+      - eu_branchements : list[QgsFeature]
+      - ep_regards : list[QgsFeature]
+      - ep_conduites : list[QgsFeature]
+      - ep_branchements : list[QgsFeature]
+      + __init__(eu_feats, ep_feats, parent)
+      - _draw(fig)
+      - _export_pdf()
+    }
+
+    class EtiquetteTailleDialog {
+      + __init__(parent)
+      + get_result() : tuple[str, float]
+    }
+
+    class CoupeTransversaleDialog {
+      - crossings : list[dict]
+      - config : dict
+      - _scale : int
+      - _cut_line_pts : list[QgsPointXY]
+      - figure : Figure
+      - canvas : FigureCanvas
+      - fmt_combo : QComboBox
+      - lbl_scale : QLabel
+      + __init__(crossings, config, parent, cut_line_pts)
+      - _render_situation_plan(ax_sit)
+      - _refresh()
+      - _export_pdf()
+    }
+
+    class CubatureDialog {
+      - results : list[dict]
+      - config : dict
+      - show_remblai : bool
+      - bfs_prefix : str
+      - table : QTableWidget
+      - total_label : QLabel
+      + __init__(results, config, parent, bfs_prefix, show_remblai)
+      - _build_ui()
+      - _populate_table()
+      - _set_row(row, data)
+      - _default_filename(ext) : str
+      - _export_csv()
+      - _export_pdf()
+      - _export_pdf_reportlab(path)
+      - _export_xlsx()
+      - _open_folder(path)
+    }
+
+    class CubatureOptionsDialog {
+      - rb_tout : QRadioButton
+      - rb_eu : QRadioButton
+      - rb_ep : QRadioButton
+      - cb_conduites : QCheckBox
+      - cb_branchements : QCheckBox
+      - cb_bfs : QCheckBox
+      + __init__(parent)
+      + options() : dict
+      - _build_ui()
+      - _validate_and_accept()
+    }
+
+    class EtiquetteAffichageDialog {
+      + __init__(prefs, parent)
+      + get_prefs() : dict
+    }
+
+    class StarDtDialog {
+      + __init__(parent)
+      + file_path() : str
+      + output_path() : str
+      + get_selected_types() : list
+    }
+
+    class "etiquettes" <<module>> {
+      + LBL_X = "lbl_x"
+      + LBL_Y = "lbl_y"
+      + LBL_VISIBLE = "lbl_visible"
+      + apply_etiquettes(layer, role)
+      + remove_etiquettes(layer)
+      + apply_label_size_all(plugin, mode, value)
+      + apply_label_display_prefs(plugin, visibility)
+      + get_label_display_prefs(plugin) : dict
+      + apply_label_fields(plugin, fields_prefs)
+      + build_expression(role, active_fields) : str
+      + set_force_all_labels(enabled, canvas)
+      + get_force_all_labels() : bool
+    }
+
+    class WelcomeDialog {
+      + NEW    = 1
+      + OPEN   = 2
+      + CANCEL = 0
+      + __init__(parent)
+      + chosen() : int
+      - _build_ui()
+      - _pick(result)
+    }
+
+    class ConfigDialog {
+      - iface : QgisInterface
+      - combos : dict[str, QComboBox]
+      - _def_widgets : dict
+      - _cub_widgets : dict
+      - _remblai_widgets : dict
+      - _remblai_mat : dict
+      - _remblai_cb : dict
+      - _network_schemas : dict
+      + __init__(iface, parent)
+      - _build_ui()
+      - _populate_combo(combo, geom_type)
+      - _load_settings()
+      - _save_and_accept()
+      - _refresh_schema()
+      - _refresh_network_schemas()
+      - _refresh_cubature_schema()
+    }
+
+    RenseignementDialog *-- "0..*" NumericEdit : contient
+    NumericEdit --|> QLineEdit
+  }
+
+  ' ─────────────────────────────────────────
+  '  Package Tools
+  ' ─────────────────────────────────────────
+  package "tools" #FFF0F4 {
+
+    class "graph_utils" <<module>> {
+      + _to_float(val) : float
+      + build_graph(conduite_layer, regard_layer, tol) : tuple
+      + bfs(graph, start_id, end_id) : tuple
+    }
+
+    class "layer_ok" <<module>> {
+      + layer_ok(layer) : bool
+    }
+
+    class "calc_pentes" <<module>> {
+      + recalc_pentes(conduite_layer, regard_layer, tol, branchement_layer, tabouret_layer)
+    }
+
+    class "calc_cubature" <<module>> {
+      + calculer_cubature_troncon(conduite_feat, r_start, r_end, config) : dict
+      + calculer_cubature_branchement(br_feat, tabouret_feat, config, regard_layer, conduite_layer) : dict
+      + calculer_cubature_bfs(start_regard, end_regard, couches, config) : list[dict]
+      + _calc_remblai_volumes(largeur, l3d, diametre_mm, volume, config) : tuple
+      + _build_graph(conduite_layer, regard_layer, tol) : tuple
+      + _bfs(graph, start_id, end_id) : tuple
+      + _profondeur_regard(feat, ep_lit_pose) : float
+      + _profondeur_tabouret(feat, ep_lit_pose) : float
+      + _longueur_3d(geom, z_start, z_end) : float
+      + _to_float(val) : float
+      + _nom_regard(feat) : str
+    }
+
+    class "projet_bet" <<module>> {
+      + save_projet(plugin, iface)
+      + save_projet_sous(plugin, iface)
+      + load_projet(plugin, iface)
+      + cleanup_plugin_resources(plugin)
+      + project_dir() : str
+      - _copy_to_memory(layer) : QgsVectorLayer
+      - _ask_bet_path(iface) : tuple
+      - _do_save(plugin, iface, gpkg_path, bet_path)
+      - _load_v2(plugin, iface, bet_path) : tuple
+      - _load_v1(iface, bet_path) : tuple
+      - _remove_temp_gpkg(gpkg_path)
+      - _get_or_create_group(project, reseau)
+      - _read_label_size(project, s) : dict
+    }
+
+    class DrawConduiteTool {
+      - reseau : str
+      - conduite_layer : QgsVectorLayer
+      - regard_layer : QgsVectorLayer
+      - last_point : QgsPointXY
+      - regard_ids : list
+      - conduite_ids : list
+      - rubber : QgsRubberBand
+      + finished : pyqtSignal
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      + keyPressEvent(event)
+      - _add_point(point)
+      - _create_regard(point) : int
+      - _create_troncon(pt_from, pt_to) : int
+      - _undo_last()
+      - _cancel()
+      - _reset()
+      - _snap_to_regard(point) : QgsPointXY
+    }
+
+    class DrawBranchementTool {
+      - reseau : str
+      - conduite_layer : QgsVectorLayer
+      - regard_layer : QgsVectorLayer
+      - tabouret_layer : QgsVectorLayer
+      - branchement_layer : QgsVectorLayer
+      - points : list
+      - snapped_points : list
+      - id_conduite : int
+      - pk_debut : float
+      - rubber : QgsRubberBand
+      - snap_cross : QgsRubberBand
+      - snap_ticks : QgsRubberBand
+      + finished : pyqtSignal
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      + keyPressEvent(event)
+      - _snap_to_conduite(point)
+      - _snap_to_ouvrage(point)
+      - _finish()
+      - _create_tabouret(point)
+      - _create_branchement()
+      - _validate_topology() : bool
+      - _compute_pk(line_geom, point) : float
+      - _update_snap_indicator(point)
+    }
+
+    class InsertRegardTool {
+      - couches : dict
+      - snap_cross : QgsRubberBand
+      - snap_line : QgsRubberBand
+      + finished : pyqtSignal
+      + {static} DETECT_TOLERANCE_PX = 50
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      - _find_closest_conduite(point)
+      - _split_conduite(layer, feat, split_point)
+    }
+
+    class RenseignementTool {
+      - couches : dict
+      - _hover : tuple
+      - _hover_band : QgsRubberBand
+      + finished : pyqtSignal
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      - _update_hover(pixel_pos)
+      - _find_label_feature(click_pt, tol)
+      - _make_hover_band(feat, layer) : QgsRubberBand
+      - _clear_hover()
+    }
+
+    class MoveTool {
+      - couches : dict
+      - _mode : str
+      - _hover : tuple
+      - _hover_band : QgsRubberBand
+      - _label_hover : QgsLabelPosition
+      - _sel_feat : QgsFeature
+      - _sel_layer : QgsVectorLayer
+      - _preview : QgsRubberBand
+      - _line_previews : list
+      + finished : pyqtSignal
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      + keyPressEvent(event)
+      - _start_geom_move()
+      - _apply_geom_move(new_point)
+      - _start_label_move()
+      - _apply_label_move(new_point)
+      - _collect_line_previews(line_layer)
+      - _update_connected_lines(...)
+      - _reproject_branchements(...)
+      - _set_label_hidden(lbl, hidden)
+      - _update_hover(pixel_pos)
+      - _reset()
+    }
+
+    class DeleteTool {
+      - couches : dict
+      - _pending : list
+      - _highlights : list
+      - _lasso : QgsRubberBand
+      - _hover : tuple
+      - _hover_band : QgsRubberBand
+      - _hover_label : tuple
+      + finished : pyqtSignal
+      + canvasPressEvent(event)
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      - _update_hover(pixel_pos)
+      - _delete_hovered()
+      - _erase_label()
+      - _add_lasso_selection(sel_geom)
+      - _confirm_and_delete_lasso()
+      - _find_label_hover(click_pt, tol)
+      - _find_point_at(layer, point)
+    }
+
+    class CopyAttributesTool {
+      - couches : dict
+      - _mode : str
+      - _copied_role : str
+      - _copied_attrs : dict
+      - _hover : tuple
+      - _hover_band : QgsRubberBand
+      - _source_band : QgsRubberBand
+      - _targets : list
+      - _highlights : list
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      + keyPressEvent(event)
+      - _copy_source(role, feat, layer)
+      - _apply()
+      - _find_best(click_pt, tol, roles)
+      - _reset()
+    }
+
+    class ProfilTool {
+      - reseau : str
+      - couches : dict
+      - _start : QgsFeature
+      - _start_band : QgsRubberBand
+      - _hover_band : QgsRubberBand
+      + {static} _SNAP_TOL_PX = 20
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      + keyPressEvent(event)
+      - _build_graph() : dict
+      - _bfs(graph, start_id, end_id) : tuple
+      - _open_profil(start, end)
+      - _nearest_regard(point) : QgsFeature
+      - _make_pt_band(color) : QgsRubberBand
+      - _reset()
+    }
+
+    class ProfilGroupeTool {
+      - couches_eu : dict
+      - couches_ep : dict
+      - _start : QgsFeature
+      - _start_reseau : str
+      - _start_band : QgsRubberBand
+      - _hover_band : QgsRubberBand
+      + {static} _SNAP_TOL_PX = 20
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      + keyPressEvent(event)
+      - _build_graph(couches) : dict
+      - _bfs(graph, start_id, end_id) : tuple
+      - _open_profil(start_eu, end_eu, start_ep, end_ep)
+      - _nearest_regard(point, couches) : QgsFeature
+      - _make_pt_band(color) : QgsRubberBand
+      - _reset()
+    }
+
+    class RenommerTool {
+      - reseau : str
+      - couches : dict
+      - _start : QgsFeature
+      - _start_band : QgsRubberBand
+      - _hover_band : QgsRubberBand
+      + {static} _SNAP_TOL_PX = 20
+      + {static} _SNAP_TOL_M  = 0.05
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      + keyPressEvent(event)
+      - _build_graph() : dict
+      - _bfs(graph, start_id, end_id) : tuple
+      - _rename_path(start, end)
+      - _nearest_regard(point) : QgsFeature
+      - _make_pt_band(color) : QgsRubberBand
+      - _reset()
+    }
+
+    class CubatureTool {
+      - canvas : QgsMapCanvas
+      - iface : QgisInterface
+      - couches_eu : dict
+      - couches_ep : dict
+      - opts : dict
+      - show_remblai : bool
+      - _start : QgsFeature
+      - _reseau_start : str
+      - _start_band : QgsRubberBand
+      - _hover_band : QgsRubberBand
+      - _dialog : CubatureDialog
+      + {static} _SNAP_TOL_PX = 20
+      + activate()
+      + deactivate()
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      + keyPressEvent(event)
+      - _compute_bfs(start_feat, end_feat, reseau)
+      - _nearest_regard_any(point) : tuple
+      - _find_layer_for_feat(feat) : QgsVectorLayer
+      - _make_pt_band(color) : QgsRubberBand
+      - _clear_band(attr)
+      - _reset()
+    }
+
+    class CoupeTransversaleTool {
+      - canvas : QgsMapCanvas
+      - iface : QgisInterface
+      - couches_eu : dict
+      - couches_ep : dict
+      - _points : list[QgsPointXY]
+      - _band : QgsRubberBand
+      + activate()
+      + deactivate()
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      + canvasDoubleClickEvent(event)
+      + keyPressEvent(event)
+      - _update_band(cursor_pt)
+      - _compute_and_show()
+      - _reset()
+    }
+
+    class CoupeTransversaleSingleTool {
+      - _reseau_label : str
+      + __init__(canvas, iface, reseau, couches)
+      + activate()
+    }
+
+    class PrintTool {
+      - iface : QgisInterface
+      - s : dict
+      - _w : float
+      - _h : float
+      - _state : int
+      - _anchor : QgsPointXY
+      - _cur_rot : float
+      - _sheets : list[dict]
+      - _bands : list[QgsRubberBand]
+      - _preview : QgsRubberBand
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      + keyPressEvent(event)
+      - _place_sheet(center, rot)
+      - _generate_pdf(pdf_path)
+      - _add_overview_page(layout, n, ech)
+      - {static} _split_two_lines(text) : str
+      - {static} _ask_overview_settings(n) : bool
+      - _reset()
+    }
+
+    class "dxf_export" <<module>> {
+      + run_export_dxf_with_ui(iface, path, extent, scale, ...)
+    }
+
+    class "dxf_postprocess" <<module>> {
+      + postprocess_dxf(path, ...)
+    }
+
+    class "star_dt_import" <<module>> {
+      + import_star_dt(path, out, selected_types) : list
+    }
+
+    package "dxf_convert" #FFE8E8 {
+      class CadToGisDialog {
+        - iface : QgisInterface
+        + __init__(iface)
+        + exec_()
+      }
+    }
+  }
+}
+
+' ─────────────────────────────────────────
+'  Heritages
+' ─────────────────────────────────────────
+ReseauAssainissementPlugin  --|> QObject
+SidePanel                   --|> QDockWidget
+RenseignementDialog         --|> QDialog
+WelcomeDialog               --|> QDialog
+StarDtDialog                --|> QDialog
+ConfigDialog                --|> QDialog
+PrintDialog                 --|> QDialog
+ProfilDialog                --|> QDialog
+ProfilGroupeDialog          --|> QDialog
+EtiquetteTailleDialog       --|> QDialog
+EtiquetteAffichageDialog    --|> QDialog
+DrawConduiteTool            --|> QgsMapToolEmitPoint
+DrawBranchementTool         --|> QgsMapToolEmitPoint
+InsertRegardTool            --|> QgsMapToolEmitPoint
+RenseignementTool           --|> QgsMapTool
+MoveTool                    --|> QgsMapTool
+DeleteTool                  --|> QgsMapTool
+CopyAttributesTool          --|> QgsMapTool
+ProfilTool                  --|> QgsMapTool
+ProfilGroupeTool            --|> QgsMapTool
+RenommerTool                --|> QgsMapTool
+CubatureTool                --|> QgsMapTool
+PrintTool                   --|> QgsMapTool
+CubatureDialog              --|> QDialog
+CubatureOptionsDialog       --|> QDialog
+CoupeTransversaleDialog     --|> QDialog
+CoupeTransversaleSingleTool --|> CoupeTransversaleTool
+CoupeTransversaleTool       --|> QgsMapTool
+
+' ─────────────────────────────────────────
+'  Associations
+' ─────────────────────────────────────────
+
+' Plugin -> GUI
+ReseauAssainissementPlugin "1" *-down- "1" SidePanel         : cree / possede
+ReseauAssainissementPlugin       ..>       ConfigDialog       : instancie et ouvre
+ReseauAssainissementPlugin       ..>       "etiquettes"       : apply_etiquettes()
+ReseauAssainissementPlugin       ..>       PrintDialog        : instancie et ouvre
+ReseauAssainissementPlugin       ..>       EtiquetteTailleDialog    : ouvre
+ReseauAssainissementPlugin       ..>       EtiquetteAffichageDialog : ouvre
+ReseauAssainissementPlugin       ..>       "projet_bet"       : save / load
+
+' Panel -> Plugin (back-reference)
+SidePanel                  "-plugin" --> "1" ReseauAssainissementPlugin
+
+' Plugin -> Tools (activation)
+ReseauAssainissementPlugin ..> DrawConduiteTool    : active
+ReseauAssainissementPlugin ..> DrawBranchementTool : active
+ReseauAssainissementPlugin ..> InsertRegardTool    : active
+ReseauAssainissementPlugin ..> RenseignementTool   : active
+ReseauAssainissementPlugin ..> MoveTool            : active
+ReseauAssainissementPlugin ..> DeleteTool          : active
+ReseauAssainissementPlugin ..> CopyAttributesTool  : active
+ReseauAssainissementPlugin ..> ProfilTool          : active
+ReseauAssainissementPlugin ..> ProfilGroupeTool    : active
+ReseauAssainissementPlugin ..> RenommerTool        : active
+ReseauAssainissementPlugin ..> CubatureTool        : active
+ReseauAssainissementPlugin ..> PrintTool                : active
+ReseauAssainissementPlugin ..> CoupeTransversaleTool    : active (coupe_transversale)
+ReseauAssainissementPlugin ..> CoupeTransversaleSingleTool : active (coupe_eu / coupe_ep)
+
+' Tool -> Dialog
+RenseignementTool   ..> RenseignementDialog   : ouvre
+ProfilTool          ..> ProfilDialog          : ouvre
+ProfilGroupeTool    ..> ProfilGroupeDialog    : ouvre
+CubatureTool        ..> CubatureDialog        : ouvre
+CubatureTool        ..> CubatureOptionsDialog : ouvre
+CubatureTool        ..> "calc_cubature"       : calculs BFS + volumes
+CubatureTool        ..> "calc_cubature"       : _build_graph / _bfs
+
+' Coupe transversale
+CoupeTransversaleTool       ..> CoupeTransversaleDialog : ouvre
+CoupeTransversaleTool       ..> "graph_utils"           : _to_float / QGIS_NULL
+
+' Plugin -> DXF / Star-DT
+ReseauAssainissementPlugin ..> CadToGisDialog  : ouvre
+ReseauAssainissementPlugin ..> StarDtDialog    : ouvre
+ReseauAssainissementPlugin ..> "dxf_export"    : run_export_dxf_with_ui()
+ReseauAssainissementPlugin ..> "star_dt_import": import_star_dt()
+ReseauAssainissementPlugin ..> WelcomeDialog   : _ensure_project_loaded()
+
+' Tools -> utilitaires partages
+RenseignementTool  ..> "layer_ok" : _ok()
+MoveTool           ..> "layer_ok" : _ok()
+DeleteTool         ..> "layer_ok" : _ok()
+CopyAttributesTool ..> "layer_ok" : _ok()
+RenommerTool       ..> "layer_ok" : _ok()
+
+' Tools -> etiquettes
+MoveTool   ..> "etiquettes" : LBL_X / LBL_Y / LBL_VISIBLE
+DeleteTool ..> "etiquettes" : LBL_X / LBL_Y / LBL_VISIBLE
+
+' graph_utils -> utilise par les outils BFS
+ProfilTool      ..> "graph_utils" : build_graph / bfs
+RenommerTool    ..> "graph_utils" : build_graph / bfs
+"calc_cubature" ..> "graph_utils" : build_graph / bfs
+"calc_pentes"   ..> "graph_utils" : _to_float
+
+' projet_bet -> calc_pentes
+"projet_bet" ..> "calc_pentes" : recalc_pentes() + cote_piquage apres chargement
+
+@enduml

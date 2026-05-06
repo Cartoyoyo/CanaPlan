@@ -1,0 +1,9 @@
+[general]
+name=Réseau Assainissement
+description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets.
+version=1.0
+qgisMinimumVersion=3.28
+author=Ton nom
+email=ton@email.com
+
+about=Plugin de dessin de réseaux d'assainissement avec continuité topologique, recalage automatique des branchements et validation à l'enregistrement.

@@ -419,15 +419,19 @@ class PrintTool(QgsMapTool):
         extent = QgsRectangle(min(xs), min(ys), max(xs), max(ys))
 
         default_name = self.s["titre"].replace(" ", "_") + ".dxf"
-        start_dir    = project_dir() or os.path.expanduser("~")
-        dxf_path, _  = QFileDialog.getSaveFileName(
-            self.iface.mainWindow(),
-            "Exporter le plan en DXF 2018",
-            os.path.join(start_dir, default_name),
-            "DXF (*.dxf)",
-        )
-        if not dxf_path:
-            return
+        out_dir = self.s.get("output_dir")
+        if out_dir and os.path.isdir(out_dir):
+            dxf_path = os.path.join(out_dir, default_name)
+        else:
+            start_dir   = project_dir() or os.path.expanduser("~")
+            dxf_path, _ = QFileDialog.getSaveFileName(
+                self.iface.mainWindow(),
+                "Exporter le plan en DXF 2018",
+                os.path.join(start_dir, default_name),
+                "DXF (*.dxf)",
+            )
+            if not dxf_path:
+                return
 
         run_export_dxf_with_ui(
             self.iface, dxf_path, extent, float(self.s["echelle"]),
@@ -449,15 +453,19 @@ class PrintTool(QgsMapTool):
         else:
             projet_nom = "Plan_de_reseau"
         default_name = projet_nom + ".pdf"
-        start_dir = project_dir() or os.path.expanduser("~")
-        pdf_path, _ = QFileDialog.getSaveFileName(
-            self.iface.mainWindow(),
-            "Exporter le plan en PDF",
-            os.path.join(start_dir, default_name),
-            "PDF (*.pdf)",
-        )
-        if not pdf_path:
-            return
+        out_dir = self.s.get("output_dir")
+        if out_dir and os.path.isdir(out_dir):
+            pdf_path = os.path.join(out_dir, default_name)
+        else:
+            start_dir = project_dir() or os.path.expanduser("~")
+            pdf_path, _ = QFileDialog.getSaveFileName(
+                self.iface.mainWindow(),
+                "Exporter le plan en PDF",
+                os.path.join(start_dir, default_name),
+                "PDF (*.pdf)",
+            )
+            if not pdf_path:
+                return
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
@@ -659,8 +667,12 @@ class PrintTool(QgsMapTool):
         exporter     = QgsLayoutExporter(layout)
         pdf_settings = QgsLayoutExporter.PdfExportSettings()
         pdf_settings.dpi = float(self.s.get("dpi", 150))
+        pdf_settings.forceVectorOutput = True
+        pdf_settings.simplifyGeometries = False   # fidélité géométrique
+        # Compression JPEG des rasters embarqués (QGIS 3.30+)
         try:
-            pdf_settings.forceVectorOutput = True
+            pdf_settings.imageCompression = (
+                QgsLayoutExporter.PdfImageCompression.Lossy)
         except AttributeError:
             pass
         result = exporter.exportToPdf(pdf_path, pdf_settings)

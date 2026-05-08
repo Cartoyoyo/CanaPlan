@@ -369,7 +369,7 @@ class ProfilGroupeDialog(QDialog):
                     if diam_m > r['diam_m']:
                         r['diam_m'] = diam_m
 
-        w       = ref_len * 0.006
+        w       = min(ref_len * 0.006, 0.6)   # demi-largeur fût plafonnée à 0.6 m
         w_hat   = w * 2.5
 
         for r in regards_by_x.values():
@@ -608,11 +608,13 @@ class ProfilGroupeDialog(QDialog):
         ep_s, ep_e = _ends('EP')
         eu_s, eu_e = _ends('EU')
 
-        parts = ['profil_groupe']
-        for val in (ep_s, ep_e, eu_s, eu_e):
+        parts = []
+        for val in (eu_s, eu_e, ep_s, ep_e):
             if val:
                 parts.append(val)
-        default_name = '_'.join(parts) + f'.{fmt}'
+        if not parts:
+            parts = ['profil_groupe']
+        default_name = '_'.join(parts) + f'_PROFIL.{fmt}'
 
         path, _ = QFileDialog.getSaveFileName(
             self,

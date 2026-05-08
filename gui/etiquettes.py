@@ -4,6 +4,7 @@ from qgis.core import (
     QgsPalLayerSettings,
     QgsTextFormat,
     QgsTextBackgroundSettings,
+    QgsTextBufferSettings,
     QgsVectorLayerSimpleLabeling,
     QgsProperty,
     QgsPropertyCollection,
@@ -133,6 +134,14 @@ def apply_etiquettes(layer, role, reseau=None):
         bg.setSizeUnit(QgsUnitTypes.RenderMapUnits)
         bg.setSize(QSizeF(LABEL_PADDING_MAP_UNITS, LABEL_PADDING_MAP_UNITS))
         fmt.setBackground(bg)
+    else:
+        buf = QgsTextBufferSettings()
+        buf.setEnabled(True)
+        buf.setSize(0.8)
+        buf.setSizeUnit(QgsUnitTypes.RenderMillimeters)
+        buf.setColor(QColor(255, 255, 255))
+        buf.setOpacity(0.9)
+        fmt.setBuffer(buf)
 
     pal.setFormat(fmt)
 

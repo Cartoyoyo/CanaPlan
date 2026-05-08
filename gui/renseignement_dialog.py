@@ -5,8 +5,12 @@ from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit,
     QComboBox, QDialogButtonBox, QLabel, QMessageBox, QPushButton,
 )
-from qgis.PyQt.QtGui import QFont, QDoubleValidator, QKeyEvent
-from qgis.PyQt.QtCore import Qt, QTimer, QEvent, QLocale, pyqtSignal
+from qgis.PyQt.QtGui import QFont, QRegExpValidator, QKeyEvent
+from qgis.PyQt.QtCore import Qt, QTimer, QEvent, QLocale, QRegExp, pyqtSignal
+
+import re
+
+_NUM_TOKEN_RE = re.compile(r'[+-]?\d*\.?\d+')
 
 # label, type, (decimals,) ou liste de suggestions
 FIELD_CONFIG = {
@@ -47,10 +51,9 @@ class NumericEdit(QLineEdit):
         super().__init__(parent)
         self._decimals = decimals
         self.setAlignment(Qt.AlignRight)
-        validator = QDoubleValidator()
-        validator.setLocale(QLocale(QLocale.C))
-        validator.setDecimals(decimals)
-        validator.setNotation(QDoubleValidator.StandardNotation)
+        # Accepte chiffres, point, virgule, +, -, espaces — l'évaluation
+        # additive est faite dans value(). Permet ex: "1-0.25" → 0.75.
+        validator = QRegExpValidator(QRegExp(r'[\d+\-.,\s]*'))
         self.setValidator(validator)
         self.editingFinished.connect(self._normalize)
 
@@ -65,9 +68,14 @@ class NumericEdit(QLineEdit):
         super().keyPressEvent(event)
 
     def value(self):
-        txt = self.text().strip().replace(',', '.')
+        txt = self.text().replace(',', '.').replace(' ', '')
+        if not txt:
+            return None
+        tokens = _NUM_TOKEN_RE.findall(txt)
+        if not tokens:
+            return None
         try:
-            return float(txt)
+            return sum(float(t) for t in tokens)
         except ValueError:
             return None
 

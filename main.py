@@ -180,6 +180,12 @@ class ReseauAssainissementPlugin(QObject):
             self.run_affichage_etiquettes,
             checkable=False
         )
+        self.action_dict['annotation'] = self._add_action(
+            "etiquettes.svg",
+            "Placer une annotation texte",
+            self.run_annotation,
+            checkable=True
+        )
         for key, label, cb in [
             ('fond_projet',            'Mise en place fond de projet',  self.run_fond_projet),
             ('enregistrer_projet_sous','Enregistrer sous',              self.run_enregistrer_projet_sous),
@@ -790,6 +796,14 @@ class ReseauAssainissementPlugin(QObject):
         apply_label_display_prefs(self, new_prefs['visibility'])
         apply_label_fields(self, new_prefs['fields'])
         self.iface.mapCanvas().refresh()
+
+    def run_annotation(self, checked):
+        if not checked:
+            self._deactivate_current()
+            return
+        from .tools.annotation_tool import AnnotationTool
+        tool = AnnotationTool(self.iface.mapCanvas(), self.iface)
+        self._activate_tool("annotation", tool)
 
     def run_forcer_etiquettes(self, checked):
         from .gui.etiquettes import set_force_all_labels
@@ -1504,35 +1518,38 @@ class ReseauAssainissementPlugin(QObject):
         load_projet(self, self.iface)
 
     def run_imprimer(self):
-        # 1. Choix du format d'export (avant PrintDialog)
-        from qgis.PyQt.QtWidgets import QCheckBox, QDialog, QVBoxLayout, QLabel, QDialogButtonBox
+        from .gui.export_dialog import ExportDialog
+        from .tools.projet_bet import project_dir
 
-        dlg_fmt = QDialog(self.iface.mainWindow())
-        dlg_fmt.setWindowTitle("Format d'export")
-        layout = QVBoxLayout(dlg_fmt)
-        layout.addWidget(QLabel("Choisissez le(s) format(s) d'export :"))
-        cb_pdf = QCheckBox("PDF")
-        cb_pdf.setChecked(True)
-        cb_dxf = QCheckBox("DXF 2018")
-        layout.addWidget(cb_pdf)
-        layout.addWidget(cb_dxf)
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.accepted.connect(dlg_fmt.accept)
-        btns.rejected.connect(dlg_fmt.reject)
-        layout.addWidget(btns)
-        if dlg_fmt.exec_() != QDialog.Accepted:
+        dlg_export = ExportDialog(self.iface.mainWindow(),
+                                  default_dir=project_dir())
+        if dlg_export.exec_() != ExportDialog.Accepted:
             return
-        do_pdf = cb_pdf.isChecked()
-        do_dxf = cb_dxf.isChecked()
-        if not do_pdf and not do_dxf:
+        choices = dlg_export.get_choices()
+
+        do_plan_pdf  = choices['plan_pdf']
+        do_plan_dxf  = choices['plan_dxf']
+        do_profil_eu  = choices['profil_eu']
+        do_profil_ep  = choices['profil_ep']
+        do_profil_grp = choices['profil_groupe']
+
+        if not any([do_plan_pdf, do_plan_dxf, do_profil_eu, do_profil_ep, do_profil_grp]):
             return
 
-        # 2. DXF seul → export direct sans PrintDialog ni placement canvas
-        if do_dxf and not do_pdf:
-            self._export_dxf_direct()
+        # ── Profils en long (export immédiat, sans interaction carte) ──────
+        if do_profil_eu or do_profil_ep or do_profil_grp:
+            self._export_profils_batch(choices)
+
+        # ── Plan PDF/DXF → PrintDialog + PrintTool ─────────────────────────
+        if not do_plan_pdf and not do_plan_dxf:
             return
 
-        # 3. PDF (ou les deux) → PrintDialog + PrintTool
+        out_dir = choices.get('output_dir')
+
+        if do_plan_dxf and not do_plan_pdf:
+            self._export_dxf_direct(out_dir=out_dir)
+            return
+
         from .gui.print_dialog import PrintDialog
         from .tools.print_tool import PrintTool
         from qgis.core import QgsUnitTypes
@@ -1542,8 +1559,9 @@ class ReseauAssainissementPlugin(QObject):
             return
 
         settings = dlg.get_settings()
-        settings['do_pdf'] = do_pdf
-        settings['do_dxf'] = do_dxf
+        settings['do_pdf']     = do_plan_pdf
+        settings['do_dxf']     = do_plan_dxf
+        settings['output_dir'] = out_dir
 
         crs = self.iface.mapCanvas().mapSettings().destinationCrs()
         if crs.mapUnits() != QgsUnitTypes.DistanceMeters:
@@ -1570,11 +1588,66 @@ class ReseauAssainissementPlugin(QObject):
             level=0, duration=0,
         )
 
-    def _export_dxf_direct(self):
+    def _export_profils_batch(self, choices):
+        """Export batch des profils en long vers des PDF dans le dossier choisi."""
+        import os
+        from qgis.PyQt.QtWidgets import QApplication, QMessageBox
+        from qgis.PyQt.QtCore import Qt
+
+        out_dir = choices.get('output_dir')
+        if not out_dir or not os.path.isdir(out_dir):
+            return
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        msgs = []
+        try:
+            from .tools.profil_batch import export_profils_eu_ep, export_profils_groupe
+
+            if choices['profil_eu']:
+                couches_eu = self._get_couches("EU")
+                n_ok, n_skip, out_path = export_profils_eu_ep(
+                    couches_eu, "EU", choices['profil_eu_format'], out_dir)
+                if n_ok:
+                    msgs.append(f"Profils EU : {n_ok} page(s) → {os.path.basename(out_path)}")
+                else:
+                    msgs.append("Profils EU : aucune conduite trouvée")
+
+            if choices['profil_ep']:
+                couches_ep = self._get_couches("EP")
+                n_ok, n_skip, out_path = export_profils_eu_ep(
+                    couches_ep, "EP", choices['profil_ep_format'], out_dir)
+                if n_ok:
+                    msgs.append(f"Profils EP : {n_ok} page(s) → {os.path.basename(out_path)}")
+                else:
+                    msgs.append("Profils EP : aucune conduite trouvée")
+
+            if choices['profil_groupe']:
+                couches_eu = self._get_couches("EU")
+                couches_ep = self._get_couches("EP")
+                ok, out_path = export_profils_groupe(
+                    couches_eu, couches_ep, choices['profil_groupe_format'], out_dir,
+                    reseau_ref=choices['profil_groupe_reseau'])
+                msgs.append(
+                    f"Profil groupé → {os.path.basename(out_path)}" if ok
+                    else "Profil groupé : aucune conduite trouvée")
+
+        except Exception as e:
+            msgs.append(f"Erreur : {e}")
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        if msgs:
+            QMessageBox.information(
+                self.iface.mainWindow(),
+                "Export profils terminé",
+                "\n".join(msgs) + f"\n\nDossier : {out_dir}",
+            )
+
+    def _export_dxf_direct(self, out_dir=None):
         """Export DXF direct sans PrintDialog ni placement de feuilles.
         Utilise l'emprise visible du canvas et l'échelle de tracé 1/200.
+        Si out_dir est fourni et valide, écrit directement dedans sans demander.
         """
-        from qgis.PyQt.QtWidgets import QFileDialog
         from qgis.core import QgsRectangle
         from .tools.projet_bet import project_dir
         from .tools.dxf_export import run_export_dxf_with_ui
@@ -1587,15 +1660,20 @@ class ReseauAssainissementPlugin(QObject):
 
         titre = project.title() or "Plan_de_reseau"
         default_name = titre.replace(" ", "_") + ".dxf"
-        start_dir = project_dir() or os.path.expanduser("~")
-        dxf_path, _ = QFileDialog.getSaveFileName(
-            self.iface.mainWindow(),
-            "Exporter le plan en DXF 2018",
-            os.path.join(start_dir, default_name),
-            "DXF (*.dxf)",
-        )
-        if not dxf_path:
-            return
+
+        if out_dir and os.path.isdir(out_dir):
+            dxf_path = os.path.join(out_dir, default_name)
+        else:
+            from qgis.PyQt.QtWidgets import QFileDialog
+            start_dir = project_dir() or os.path.expanduser("~")
+            dxf_path, _ = QFileDialog.getSaveFileName(
+                self.iface.mainWindow(),
+                "Exporter le plan en DXF 2018",
+                os.path.join(start_dir, default_name),
+                "DXF (*.dxf)",
+            )
+            if not dxf_path:
+                return
 
         run_export_dxf_with_ui(
             self.iface, dxf_path, extent, scale_denom,

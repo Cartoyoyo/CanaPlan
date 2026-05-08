@@ -18,8 +18,8 @@ Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees
 
 | Outil | Description |
 |---|---|
-| **Renseigner** | Survol pour mettre en evidence un element (orange), clic pour ouvrir son formulaire d'attributs. |
-| **Deplacer** | Deplace un ouvrage (regard ou tabouret) et recale automatiquement les conduites et branchements connectes. |
+| **Renseigner** | Survol pour mettre en evidence un element (orange), clic pour ouvrir son formulaire d'attributs. Les champs numeriques (TN, FE, profondeur, diametre, longueur, pente, cote piquage) acceptent des **expressions additives** : ex. `1-0.25` -> `0.750`, `2+0.5-0.1` -> `2.400`. Pas de multiplication / division. Le champ recalcule TN / FE / P automatiquement quand l'un des trois est modifie. |
+| **Deplacer** | Deplace un ouvrage (regard ou tabouret) et recale automatiquement les conduites et branchements connectes. Permet aussi de deplacer une etiquette (regard / tabouret) sans toucher a l'ouvrage. |
 | **Effacer** | Supprime un element et ses etiquettes associees. Lasso possible pour une selection multiple. |
 | **Copier les attributs** | Copie les attributs (diametre, materiau...) d'un element vers un ou plusieurs autres du meme type. |
 
@@ -27,11 +27,11 @@ Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees
 
 | Outil | Description |
 |---|---|
-| **Profil en long EU / EP** | Selectionner deux regards pour tracer le profil en long du troncon (BFS). Affiche les cotes TN, radier et la pente. Necessite **matplotlib**. |
-| **Profil groupe EU + EP** | Superpose les profils EU et EP sur le meme graphique. Un premier clic selectionne le regard de depart du premier reseau, le second le regard d'arrivee, puis idem pour le second reseau. |
+| **Profil en long EU / EP** | Selectionner deux regards pour tracer le profil en long du troncon (BFS). Affiche les cotes TN, radier et la pente. Dialogue d'options (cartouche, fleches piquages, noms, distances, format papier A3/A4). Export PDF/SVG/PNG. Nom de fichier : `{nom_dep}_{nom_arr}_PROFIL.{fmt}`. Necessite **matplotlib**. |
+| **Profil groupe EU + EP** | Superpose les profils EU et EP sur le meme graphique. Premier clic = regard depart du reseau de reference, second clic = regard arrivee. Le second reseau est automatiquement projete sur l'axe (buffer 3 m). Nom de fichier : `{eu_dep}_{eu_arr}_{ep_dep}_{ep_arr}_PROFIL.{fmt}`. |
 | **Coupe transversale EU** | Trace un axe de coupe sur le reseau EU uniquement. Les conduites croisees sont representees en section avec TN, FE, lit de pose, enrobage, remblai et chaussee. |
 | **Coupe transversale EP** | Meme principe sur le reseau EP uniquement. |
-| **Coupe transversale des tranchees** | Trace un axe de coupe croisant les reseaux EU et EP simultanement. Genere un plan de coupe A4/A3 (portrait ou paysage) avec : profil de coupe (tranchees empilees par largeur configuree, cotes NGF), plan de situation (couches QGIS visibles + trait de coupe), titre et cartouche. Export PDF. |
+| **Coupe transversale des tranchees** | Trace un axe de coupe croisant les reseaux EU et EP simultanement. Genere un plan de coupe A4/A3 (**paysage par defaut**) avec : profil de coupe (tranchees empilees par largeur configuree, cotes NGF), plan de situation (couches QGIS visibles + trait de coupe), titre et cartouche. Export PDF. |
 
 ### Cubature et Remblai
 
@@ -50,11 +50,19 @@ Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees
 
 | Outil | Description |
 |---|---|
-| **Creer les etiquettes** | Configure le moteur d'etiquettes QGIS sur toutes les couches EU et EP. |
+| **Creer les etiquettes** | Configure le moteur d'etiquettes QGIS sur toutes les couches EU et EP. Regards / tabourets : fond rectangulaire blanc + cadre + ligne de rappel (callout). Conduites / branchements : **halo blanc** (buffer 0.8 mm) pour la lisibilite sur fond cadastre. |
 | **Afficher / Masquer** | Bascule la visibilite des etiquettes sans reconfigurer le moteur. |
 | **Taille des etiquettes** | Regle la taille des etiquettes (points ecran ou metres carte) sur toutes les couches. |
 | **Forcer toutes les etiquettes visibles** | Active le decalage automatique pour qu'aucune etiquette ne soit supprimee par le moteur de placement. |
 | **Gestion de l'affichage** | Dialogue pour activer/desactiver les etiquettes par reseau et par role, et choisir les champs affiches. |
+
+### Annotations
+
+| Outil | Description |
+|---|---|
+| **Annotation texte** | Pose un texte libre sur la carte (mainAnnotationLayer du projet). Clic sur zone vide = creation, clic sur annotation existante = edition. Police, taille, couleur, gras / italique / souligne, alignement gauche / centre / droite. Taille en **metres** (RenderMapUnits) : l'annotation suit le zoom comme les conduites, ne grossit plus relativement au plan au dezoom. |
+| **Copier / coller** | `Ctrl + clic` sur une annotation = duplication immediate avec leger decalage. `Ctrl + C` (curseur sur l'annotation) = copie dans un presse-papier interne au plugin. `Ctrl + V` puis clic = collage au point clique. `Echap` annule un coller en attente. |
+| **Figer en map units** | Fonction `freeze_annotations_to_map_units(canvas)` exposable dans la console Python : convertit toutes les annotations existantes (qui seraient en pt) vers map units, calcule a la vue courante du canvas — regle la vue sur 1:200 avant de lancer pour avoir une taille coherente. |
 
 ### Gestion de projet
 
@@ -64,7 +72,9 @@ Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees
 | **Enregistrer sous** | Choisit un dossier et un nom, cree un fichier `.bet`. |
 | **Charger un projet** | Charge un fichier `.bet` (v2 ZIP ou v1 JSON legacy) et restaure les couches, etiquettes et visibilite. |
 | **Importer DXF / DWG** | Convertit un fichier DXF/DWG en couches vectorielles (points, polylignes, polygones). |
-| **Imprimer / Exporter PDF** | Positionne les feuilles d'impression sur la carte (clic + rotation), puis genere un PDF multi-pages avec cartouche et page de vue d'ensemble optionnelle. |
+| **Importer Star-DT (GML)** | Lit un fichier GML Star-DT (releve topographique) et cree les couches points / polylignes correspondantes, filtrees par type d'objet. |
+| **Imprimer / Exporter PDF / DXF** | Positionne les feuilles d'impression sur la carte (clic + rotation), puis genere un PDF multi-pages avec cartouche et page de vue d'ensemble optionnelle. Export DXF 2018 fidele en parallele : symbologie, etiquettes (MTEXT + decoration ezdxf : fond + cadre + callout), symboles ponctuels, pattern de tirets EU/EP. Encodage CP1252 (compatibilite AutoCAD). |
+| **Export combine** | Dialogue unique pour generer en une passe : plan PDF, plan DXF, profils EU, profils EP, profil groupe (avec choix du reseau de reference EU ou EP). Tous les exports vont dans un dossier choisi, noms de fichiers automatiques (1er regard / dernier regard). |
 
 ### Fonds de plan
 
@@ -125,14 +135,18 @@ Le plugin gere 4 types de couches, declinees pour chaque reseau (`_EU` / `_EP`) 
 
 ## Symbologie
 
+Toutes les dimensions sont en **map units (metres)** — la symbologie suit le zoom et reste proportionnelle au plan a 1:200.
+
 - **EU** — Eaux Usees : couleur **rouge**
-  - Conduites : ligne epaisse (1.2 pt)
-  - Branchements : ligne fine (0.6 pt)
-  - Regards : cercle
-  - Tabourets : carre
+  - Conduites : largeur data-defined `coalesce("diametre", 200) / 1000` m (epaisseur reelle de la conduite a l'echelle du plan)
+  - Branchements : largeur data-defined identique
+  - Regards : cercle (1 m de diametre)
+  - Tabourets : carre (0.4 m de cote)
 
 - **EP** — Eaux Pluviales : couleur **bleue**
   - Meme logique que EU
+
+Etiquettes : couleur du reseau (rouge EU / bleu EP), halo blanc 0.8 mm pour les conduites / branchements, fond rectangulaire blanc + cadre + ligne de rappel pour regards / tabourets.
 
 ---
 
@@ -175,6 +189,28 @@ Le plugin gere 4 types de couches, declinees pour chaque reseau (`_EU` / `_EP`) 
 | **Clic droit** | Appliquer les attributs copies aux cibles |
 | **Echap** | Annuler |
 
+### Outil Annotation
+
+| Touche / Action | Effet |
+|---|---|
+| **Clic gauche** (zone vide) | Ouvre le dialogue de creation |
+| **Clic gauche** (sur une annotation) | Ouvre le dialogue d'edition pre-rempli |
+| **Ctrl + clic** (sur une annotation) | Duplication immediate avec decalage de ~30 px |
+| **Ctrl + C** (curseur sur une annotation) | Copie dans le presse-papier interne du plugin |
+| **Ctrl + V** | Active le mode coller — le prochain clic gauche depose la copie |
+| **Echap** | Annule le coller en attente |
+
+### Champs numeriques (Renseigner)
+
+| Saisie | Resultat |
+|---|---|
+| `1.5` | `1.500` |
+| `1-0.25` | `0.750` |
+| `2+0.5-0.1` | `2.400` |
+| `-1.5+2` | `0.500` |
+
+Les operateurs `*` et `/` ne sont pas supportes — uniquement `+` et `-`.
+
 ---
 
 ## Format de projet .bet
@@ -201,8 +237,10 @@ La compatibilite ascendante est assuree avec le format v1 (JSON brut + GPKG exte
 ### Prerequis
 
 - QGIS **>= 3.28** (recommande >= 3.38 pour eviter les avertissements `QMetaType`)
-- **matplotlib** (optionnel) — requis pour le profil en long
-- Aucune autre dependance Python externe
+- **matplotlib** (optionnel) — requis pour le profil en long et la coupe transversale
+- **ezdxf** (deja inclus dans `libs/`) — utilise pour le post-traitement de l'export DXF (fonds + cadres + lignes de rappel + symboles ponctuels)
+- **reportlab** (optionnel) — requis pour les exports PDF de cubature / remblai
+- **openpyxl** (optionnel) — requis pour les exports Excel de cubature / remblai
 
 ---
 
@@ -225,7 +263,12 @@ BET_HUMIDE/
 │   ├── coupe_transversale_dialog.py# Plan de coupe transversale (matplotlib) + plan de situation QGIS
 │   ├── cubature_dialog.py          # Tableau resultats cubature/remblai + exports CSV/PDF/Excel
 │   ├── etiquette_taille_dialog.py  # Dialogue de reglage de la taille des etiquettes
-│   └── etiquette_affichage_dialog.py # Dialogue de gestion de l'affichage des etiquettes
+│   ├── etiquette_affichage_dialog.py # Dialogue de gestion de l'affichage des etiquettes
+│   ├── annotation_dialog.py        # Dialogue d'annotation (texte, police, couleur, alignement)
+│   ├── export_dialog.py            # Dialogue d'export combine (plan PDF/DXF + profils)
+│   ├── welcome_dialog.py           # Dialogue d'accueil (nouveau / ouvrir / annuler)
+│   ├── star_dt_dialog.py           # Dialogue d'import GML Star-DT
+│   └── config_dialog.py            # Dialogue de configuration (reseaux, couches, cubature, remblai)
 ├── tools/
 │   ├── __init__.py                 # Utilitaire partage layer_ok()
 │   ├── draw_conduite_tool.py       # Trace des conduites
@@ -242,7 +285,13 @@ BET_HUMIDE/
 │   ├── calc_cubature.py            # Calcul cubature (volumes, BFS, remblai par couche)
 │   ├── print_tool.py               # Impression PDF multi-feuilles
 │   ├── coupe_transversale_tool.py  # Outil de trace de l'axe de coupe (EU+EP ou mono-reseau)
+│   ├── annotation_tool.py          # Outil d'annotation texte (clic / ctrl+clic / ctrl+c-v)
+│   ├── profil_batch.py             # Export batch profils EU/EP/groupe (ExportDialog)
+│   ├── dxf_export.py               # Export DXF 2018 (pattern QgsDxfExport canonique)
+│   ├── dxf_postprocess.py          # Decoration ezdxf (fond + cadre + callout etiquettes, symboles, ltscale)
+│   ├── star_dt_import.py           # Import GML Star-DT
 │   ├── projet_bet.py               # Sauvegarde / chargement .bet (archive ZIP)
+│   ├── graph_utils.py              # Construction graphe + BFS (partages par tous les outils BFS)
 │   ├── calc_pentes.py              # Recalcul des pentes a partir des FE radier
 │   └── dxf_convert/                # Conversion DXF/DWG vers couches vectorielles
 │       ├── ui_dialog.py            # Dialogue principal

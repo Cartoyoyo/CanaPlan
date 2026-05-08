@@ -46,10 +46,10 @@ RESEAU_EDGE_COLORS = {
 # ------------------------------------------------------------------ formats papier (mm, portrait)
 
 PAPER_SIZES = {
-    'A4 portrait':  (210, 297),
     'A4 paysage':   (297, 210),
-    'A3 portrait':  (297, 420),
     'A3 paysage':   (420, 297),
+    'A4 portrait':  (210, 297),
+    'A3 portrait':  (297, 420),
 }
 
 _MARGIN_MM    = 10

@@ -2,7 +2,7 @@
 
 import math
 
-from qgis.core import QgsPointXY, QgsWkbTypes, QgsRectangle, QgsProject
+from qgis.core import QgsPointXY, QgsWkbTypes, QgsRectangle, QgsProject, QgsGeometry
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor
@@ -13,6 +13,7 @@ class RenseignementTool(QgsMapTool):
     """
     Survol (< 20 px) : mise en évidence orange de l'élément le plus proche.
     Clic gauche : ouvre le formulaire de saisie des attributs.
+    Fonctionne aussi sur les annotations texte du calque d'annotations principal.
     """
     finished = pyqtSignal()
 
@@ -20,8 +21,9 @@ class RenseignementTool(QgsMapTool):
         super().__init__(canvas)
         self.canvas = canvas
         self.couches = {'EU': couches_eu, 'EP': couches_ep}
-        self._hover = None       # (role, feat, layer, reseau)
+        self._hover = None            # (role, feat, layer, reseau)
         self._hover_band = None
+        self._hover_annotation = None  # (item_id, item)
 
     def activate(self):
         super().activate()
@@ -37,6 +39,7 @@ class RenseignementTool(QgsMapTool):
         from qgis.utils import iface
         iface.messageBar().clearWidgets()
         self._clear_hover()
+        self._hover_annotation = None
         super().deactivate()
 
     # ------------------------------------------------------------------ events
@@ -47,8 +50,44 @@ class RenseignementTool(QgsMapTool):
     def canvasReleaseEvent(self, event):
         if event.button() != Qt.LeftButton:
             return
-        if self._hover is None:
+        if self._hover is None and self._hover_annotation is None:
             self._update_hover(event.pos())
+
+        # Annotation prioritaire
+        if self._hover_annotation is not None:
+            item_id, item = self._hover_annotation
+            fmt  = item.format()
+            font = fmt.font()
+            from ..gui.annotation_dialog import AnnotationDialog
+            from .annotation_tool import make_text_format, _get_alignment, _set_alignment
+            dlg = AnnotationDialog(
+                None,
+                text=item.text(),
+                font_name=font.family(),
+                size=fmt.size(),
+                size_unit=fmt.sizeUnit(),
+                color=fmt.color(),
+                bold=font.bold(),
+                italic=font.italic(),
+                underline=font.underline(),
+                alignment=_get_alignment(item),
+            )
+            dlg.move(event.globalPos().x() + 20, event.globalPos().y() - 100)
+            if dlg.exec_() == AnnotationDialog.Accepted:
+                vals = dlg.get_values()
+                from qgis.core import QgsProject, QgsAnnotationPointTextItem
+                ann_layer = QgsProject.instance().mainAnnotationLayer()
+                old_pt = item.point()
+                ann_layer.removeItem(item_id)
+                if vals['text']:
+                    new_item = QgsAnnotationPointTextItem(vals['text'], old_pt)
+                    new_item.setFormat(make_text_format(vals))
+                    _set_alignment(new_item, vals['alignment'])
+                    ann_layer.addItem(new_item)
+                self.canvas.refresh()
+            self._clear_hover()
+            return
+
         if self._hover is None:
             return
         role, feat, layer, reseau = self._hover
@@ -69,6 +108,26 @@ class RenseignementTool(QgsMapTool):
     def _update_hover(self, pixel_pos):
         click_pt = self.toMapCoordinates(pixel_pos)
         tol = 20 * self.canvas.mapUnitsPerPixel()
+
+        # Passe 0 : annotations texte (priorité maximale)
+        from .annotation_tool import find_annotation_at
+        ann = find_annotation_at(self.canvas, click_pt)
+        if ann is not None:
+            if self._hover_annotation is None or self._hover_annotation[0] != ann[0]:
+                self._clear_hover()
+                self._hover_annotation = ann
+                # Rubber band de mise en évidence
+                pt = ann[1].point()
+                geom = QgsGeometry.fromPointXY(QgsPointXY(pt.x(), pt.y()))
+                rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+                rb.setToGeometry(geom)
+                rb.setColor(QColor(255, 165, 0))
+                rb.setIconSize(14)
+                rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+                self._hover_band = rb
+            return
+        elif self._hover_annotation is not None:
+            self._clear_hover()
 
         # Passe 1 : regards et tabourets (prioritaires)
         best_pt = None
@@ -187,3 +246,4 @@ class RenseignementTool(QgsMapTool):
             self.canvas.scene().removeItem(self._hover_band)
             self._hover_band = None
         self._hover = None
+        self._hover_annotation = None

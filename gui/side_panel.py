@@ -55,6 +55,7 @@ class SidePanel(QDockWidget):
         self._item(folder_etiquettes, icon_dir, "etiquettes.svg",        "Taille des étiquettes",             "taille_etiquettes")
         self._item(folder_etiquettes, icon_dir, "etiquettes_toggle.svg", "Forcer toutes les étiquettes visibles",   "forcer_etiquettes")
         self._item(folder_etiquettes, icon_dir, "etiquettes.svg",        "Gestion de l'affichage des étiquettes",  "affichage_etiquettes")
+        self._item(folder_etiquettes, icon_dir, "etiquettes.svg",        "Placer une annotation texte",            "annotation")
 
         folder_projet = self._folder("Projet")
         self._item(folder_projet, icon_dir, "config.svg", "Mise en place fond de projet", "fond_projet")

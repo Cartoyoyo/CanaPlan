@@ -52,6 +52,17 @@ class MoveTool(QgsMapTool):
         self._label_h = 0.0
         self._label_hidden = False  # True si l'étiquette est temporairement masquée
 
+        # Survol annotation
+        self._hover_annotation = None       # (item_id, item)
+        self._hover_annotation_band = None
+
+        # Déplacement annotation
+        self._sel_ann_id = None
+        self._sel_ann_text = None
+        self._sel_ann_fmt = None
+        self._sel_ann_alignment = None
+        self._sel_ann_orig_pt = None        # QgsPointXY original
+
         # Rubber band de prévisualisation
         self._preview = None
         # Prévisualisations des conduites/branchements connectés (mode 'geom')
@@ -78,7 +89,12 @@ class MoveTool(QgsMapTool):
     # ------------------------------------------------------------------ events
 
     def canvasMoveEvent(self, event):
-        if self._mode == 'geom':
+        if self._mode == 'annotation':
+            pt = self.toMapCoordinates(event.pos())
+            if self._preview is not None:
+                self._preview.setToGeometry(QgsGeometry.fromPointXY(pt), None)
+
+        elif self._mode == 'geom':
             pt = self.toMapCoordinates(event.pos())
             if self._preview is not None:
                 self._preview.setToGeometry(QgsGeometry.fromPointXY(pt), None)
@@ -107,12 +123,16 @@ class MoveTool(QgsMapTool):
             return
         pt = self.toMapCoordinates(event.pos())
 
-        if self._mode == 'geom':
+        if self._mode == 'annotation':
+            self._apply_annotation_move(pt)
+        elif self._mode == 'geom':
             self._apply_geom_move(pt)
         elif self._mode == 'label':
             self._apply_label_move(pt)
         else:
-            if self._hover is not None:
+            if self._hover_annotation is not None:
+                self._start_annotation_move()
+            elif self._hover is not None:
                 self._start_geom_move()
             elif self._label_hover is not None:
                 self._start_label_move()
@@ -126,6 +146,21 @@ class MoveTool(QgsMapTool):
     def _update_hover(self, pixel_pos):
         click_pt = self.toMapCoordinates(pixel_pos)
         tol = 20 * self.canvas.mapUnitsPerPixel()
+
+        # Passe 0 : annotations texte (priorité maximale)
+        from .annotation_tool import find_annotation_at
+        ann = find_annotation_at(self.canvas, click_pt)
+        if ann is not None:
+            if (self._hover_annotation is None
+                    or self._hover_annotation[0] != ann[0]):
+                self._clear_annotation_hover()
+                self._clear_geom_hover()
+                self._clear_label_hover()
+                self._hover_annotation = ann
+                self._hover_annotation_band = self._make_ann_band(ann[1])
+            return
+        elif self._hover_annotation is not None:
+            self._clear_annotation_hover()
 
         # Passe 1 : regards et tabourets (prioritaires)
         best_pt = None
@@ -407,6 +442,58 @@ class MoveTool(QgsMapTool):
         self._reset()
         self.canvas.refresh()
 
+    # ------------------------------------------------------------------ déplacement annotation
+
+    def _make_ann_band(self, item):
+        pt = item.point()
+        rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        rb.setToGeometry(QgsGeometry.fromPointXY(QgsPointXY(pt.x(), pt.y())), None)
+        rb.setColor(QColor(255, 165, 0))
+        rb.setIconSize(14)
+        rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+        return rb
+
+    def _clear_annotation_hover(self):
+        if self._hover_annotation_band is not None:
+            self.canvas.scene().removeItem(self._hover_annotation_band)
+            self._hover_annotation_band = None
+        self._hover_annotation = None
+
+    def _start_annotation_move(self):
+        item_id, item = self._hover_annotation
+        pt = item.point()
+        # Copie des données avant tout removeItem
+        self._sel_ann_id = item_id
+        self._sel_ann_text = item.text()
+        self._sel_ann_fmt = item.format()
+        from .annotation_tool import _get_alignment
+        self._sel_ann_alignment = _get_alignment(item)
+        self._sel_ann_orig_pt = QgsPointXY(pt.x(), pt.y())
+        self._mode = 'annotation'
+        self._clear_annotation_hover()
+
+        self._preview = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        self._preview.setColor(QColor(0, 200, 0))
+        self._preview.setIconSize(12)
+        self._preview.setIcon(QgsRubberBand.ICON_CIRCLE)
+        self._preview.setToGeometry(
+            QgsGeometry.fromPointXY(self._sel_ann_orig_pt), None)
+
+    def _apply_annotation_move(self, new_point):
+        from qgis.core import QgsAnnotationPointTextItem
+        from .annotation_tool import _set_alignment
+
+        ann_layer = QgsProject.instance().mainAnnotationLayer()
+        ann_layer.removeItem(self._sel_ann_id)
+
+        new_item = QgsAnnotationPointTextItem(self._sel_ann_text, new_point)
+        new_item.setFormat(self._sel_ann_fmt)
+        _set_alignment(new_item, self._sel_ann_alignment)
+        ann_layer.addItem(new_item)
+
+        self._reset()
+        self.canvas.refresh()
+
     # ------------------------------------------------------------------ reset
 
     def _reset(self):
@@ -414,6 +501,7 @@ class MoveTool(QgsMapTool):
             self._set_label_hidden(self._sel_label, False)
         self._clear_geom_hover()
         self._clear_label_hover()
+        self._clear_annotation_hover()
         if self._preview is not None:
             self.canvas.scene().removeItem(self._preview)
             self._preview = None
@@ -428,6 +516,11 @@ class MoveTool(QgsMapTool):
         self._orig_pt = None
         self._sel_label = None
         self._label_hidden = False
+        self._sel_ann_id = None
+        self._sel_ann_text = None
+        self._sel_ann_fmt = None
+        self._sel_ann_alignment = None
+        self._sel_ann_orig_pt = None
 
     # ------------------------------------------------------------------ helpers géométrie
 

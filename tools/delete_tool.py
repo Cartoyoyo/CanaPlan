@@ -41,6 +41,10 @@ class DeleteTool(QgsMapTool):
         self._hover_label = None   # (feat, layer) ou None
         self._hover_label_band = None
 
+        # --- survol annotation ---
+        self._hover_annotation = None       # (item_id, item) ou None
+        self._hover_annotation_band = None
+
     # ------------------------------------------------------------------ cycle de vie
 
     def activate(self):
@@ -59,6 +63,7 @@ class DeleteTool(QgsMapTool):
         self._clear_lasso()
         self._clear_highlights()
         self._clear_hover()
+        self._clear_annotation_hover()
         self._pending.clear()
         self._lasso_pts.clear()
         super().deactivate()
@@ -106,8 +111,10 @@ class DeleteTool(QgsMapTool):
                     self._add_lasso_selection(QgsGeometry.fromPolygonXY([pts]))
                 self._lasso_pts = []
             else:
-                # Clic simple : supprimer l'élément ou effacer l'étiquette
-                if self._hover is not None:
+                # Clic simple : supprimer l'élément, l'annotation ou l'étiquette
+                if self._hover_annotation is not None:
+                    self._delete_annotation()
+                elif self._hover is not None:
                     self._delete_hovered()
                 elif self._hover_label is not None:
                     self._erase_label()
@@ -121,6 +128,27 @@ class DeleteTool(QgsMapTool):
     def _update_hover(self, pixel_pos):
         click_pt = self.toMapCoordinates(pixel_pos)
         tol = 20 * self.canvas.mapUnitsPerPixel()
+
+        # Passe 0 : annotations (priorité maximale)
+        from .annotation_tool import find_annotation_at
+        ann = find_annotation_at(self.canvas, click_pt)
+        if ann is not None:
+            if (self._hover_annotation is None
+                    or self._hover_annotation[0] != ann[0]):
+                self._clear_annotation_hover()
+                self._clear_hover()
+                pt = ann[1].point()
+                rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+                rb.setToGeometry(
+                    QgsGeometry.fromPointXY(QgsPointXY(pt.x(), pt.y())), None)
+                rb.setColor(QColor(255, 60, 60))
+                rb.setIconSize(14)
+                rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+                self._hover_annotation = ann
+                self._hover_annotation_band = rb
+            return
+        elif self._hover_annotation is not None:
+            self._clear_annotation_hover()
 
         # Passe 1 : regards et tabourets (prioritaires)
         best_pt = None
@@ -415,6 +443,27 @@ class DeleteTool(QgsMapTool):
 
         self._clear_highlights()
         self._pending.clear()
+        self.canvas.refresh()
+
+    # ------------------------------------------------------------------ effacement annotation
+
+    def _clear_annotation_hover(self):
+        if self._hover_annotation_band is not None:
+            self.canvas.scene().removeItem(self._hover_annotation_band)
+            self._hover_annotation_band = None
+        self._hover_annotation = None
+
+    def _delete_annotation(self):
+        item_id, item = self._hover_annotation
+        preview = item.text()[:40] + ('…' if len(item.text()) > 40 else '')
+        if QMessageBox.question(
+                None, "Effacer l'annotation",
+                f"Supprimer l'annotation « {preview} » ?",
+                QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+            return
+        ann_layer = QgsProject.instance().mainAnnotationLayer()
+        ann_layer.removeItem(item_id)
+        self._clear_annotation_hover()
         self.canvas.refresh()
 
     # ------------------------------------------------------------------ helpers

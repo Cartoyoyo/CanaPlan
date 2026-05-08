@@ -403,8 +403,8 @@ class ProfilDialog(QDialog):
                     label='FE radier', zorder=4)
 
         # Regards (cheminées, sans les noms)
-        w      = total_l * 0.006   # demi-largeur du fût
-        w_hat  = w * 2.5           # demi-largeur du chapeau (tampon) au niveau TN
+        w      = min(total_l * 0.006, 0.6)   # demi-largeur du fût plafonnée à 0.6 m (regard ≈ 1.2 m)
+        w_hat  = w * 2.5                     # demi-largeur du chapeau (tampon) au niveau TN
 
         def _gen_sup(i):
             fe = fe_vals[i]
@@ -552,7 +552,7 @@ class ProfilDialog(QDialog):
         # Nettoie les caractères interdits dans un nom de fichier
         def _safe(s):
             return ''.join(c for c in s if c not in r'\/:*?"<>|').strip()
-        default_name = f"profil_{_safe(nom_dep)}_{_safe(nom_arr)}.{fmt}"
+        default_name = f"{_safe(nom_dep)}_{_safe(nom_arr)}_PROFIL.{fmt}"
         from ..tools.projet_bet import project_dir
         import os
         start_dir = project_dir() or os.path.expanduser("~")

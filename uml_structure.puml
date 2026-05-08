@@ -68,22 +68,28 @@ package "BET_HUMIDE" #F0F4FF {
     + run_profil_groupe(checked)
     + run_cubature(checked)
     + run_remblai(checked)
+    + run_coupe_transversale(checked)
+    + run_coupe_eu(checked)
+    + run_coupe_ep(checked)
     .. Renumerotation ..
     + run_renommer_eu(checked)
     + run_renommer_ep(checked)
-    .. Etiquettes ..
+    .. Etiquettes / Annotations ..
     + creer_etiquettes()
     + toggle_affichage_etiquettes(checked)
     + run_taille_etiquettes()
     + run_forcer_etiquettes(checked)
     + run_affichage_etiquettes()
+    + run_annotation(checked)
     .. Gestion de projet ..
     + run_fond_projet()
     + run_enregistrer_projet()
     + run_enregistrer_projet_sous()
     + run_charger_projet()
     + run_imprimer()
+    + run_export()
     + run_import_dxf()
+    + run_import_star_dt()
     .. Fonds de plan ..
     + run_ban_vecteur()
     + run_nom_voie()
@@ -147,6 +153,10 @@ package "BET_HUMIDE" #F0F4FF {
       - _normalize()
       + focusInEvent(event)
       + keyPressEvent(event)
+      .. Note ..
+      ' Validator regex permissif : accepte chiffres, point,
+      ' virgule, +, -, espaces. value() tokenise et somme :
+      ' "1-0.25" -> 0.75, "2+0.5-0.1" -> 2.4. Pas d eval.
     }
 
     class PrintDialog {
@@ -160,8 +170,9 @@ package "BET_HUMIDE" #F0F4FF {
 
     class ProfilDialog {
       - data : dict
+      - opts : dict
       - color : str
-      + __init__(data, parent)
+      + __init__(data, opts, parent)
       - _build_ui()
       - _draw()
       - _draw_regard_band(ax, ...)
@@ -169,23 +180,67 @@ package "BET_HUMIDE" #F0F4FF {
       - _draw_profile(ax, ...)
       - _draw_cartouche(ax, ...)
       - _export(fmt)
+      .. Note ..
+      ' Nom de fichier exporte : {nom_dep}_{nom_arr}_PROFIL.{fmt}
+    }
+
+    class ProfilOptionsDialog {
+      - cb_cartouche : QCheckBox
+      - cb_fleches : QCheckBox
+      - cb_noms : QCheckBox
+      - cb_distances : QCheckBox
+      - format_combo : QComboBox
+      + __init__(parent)
+      + get_options() : dict
+    }
+
+    class ExportDialog {
+      - cb_plan_pdf : QCheckBox
+      - cb_plan_dxf : QCheckBox
+      - cb_eu : QCheckBox
+      - cb_ep : QCheckBox
+      - cb_grp : QCheckBox
+      - fmt_eu / fmt_ep / fmt_grp : QComboBox
+      - ref_grp : QComboBox
+      - output_dir : str
+      + __init__(parent)
+      + get_choices() : dict
+      - _profil_row(layout, label) : tuple
+      - _profil_groupe_row(layout) : tuple
     }
 
     class ProfilGroupeDialog {
-      - eu_regards : list[QgsFeature]
-      - eu_conduites : list[QgsFeature]
-      - eu_branchements : list[QgsFeature]
-      - ep_regards : list[QgsFeature]
-      - ep_conduites : list[QgsFeature]
-      - ep_branchements : list[QgsFeature]
-      + __init__(eu_feats, ep_feats, parent)
+      - data : dict
+      - opts : dict
+      + __init__(data, options, parent)
       - _draw(fig)
-      - _export_pdf()
+      - _export(fmt)
+      .. Note ..
+      ' Nom de fichier exporte :
+      ' {eu_dep}_{eu_arr}_{ep_dep}_{ep_arr}_PROFIL.{fmt}
     }
 
     class EtiquetteTailleDialog {
       + __init__(parent)
       + get_result() : tuple[str, float]
+    }
+
+    class AnnotationDialog {
+      - _color : QColor
+      - text_edit : QTextEdit
+      - font_combo : QFontComboBox
+      - size_spin : QDoubleSpinBox
+      - color_btn : QPushButton
+      - btn_bold / btn_italic / btn_underline : QToolButton
+      - _align_group : QButtonGroup
+      + __init__(parent, text, font_name, size=2.0, ...)
+      + get_values() : dict
+      - _pick_color()
+      - _refresh_color_btn()
+      - {static} _fmt_btn(...) : QToolButton
+      .. Note ..
+      ' Taille en metres (RenderMapUnits) : suit le zoom,
+      ' ne grossit plus relativement aux conduites au dezoom.
     }
 
     class CoupeTransversaleDialog {
@@ -611,12 +666,49 @@ package "BET_HUMIDE" #F0F4FF {
       - _reset()
     }
 
+    class AnnotationTool {
+      - iface : QgisInterface
+      - _paste_pending : bool
+      - _cursor_pt : QgsPointXY
+      + {static} _clipboard : dict
+      + canvasMoveEvent(event)
+      + canvasReleaseEvent(event)
+      + keyPressEvent(event)
+      + deactivate()
+      - _annotation_at_cursor() : tuple
+      - _paste_at(point) : bool
+      .. Note ..
+      ' Clic = creer/editer ; Ctrl+clic = duplique ;
+      ' Ctrl+C / Ctrl+V = presse-papier interne (clipboard
+      ' partage par variable de classe).
+    }
+
+    class "annotation_tool" <<module>> {
+      + freeze_annotations_to_map_units(canvas) : int
+      + find_annotation_at(canvas, click_pt) : tuple
+      + make_text_format(vals) : QgsTextFormat
+    }
+
+    class "profil_batch" <<module>> {
+      + export_profils_eu_ep(couches, reseau, fmt, output_dir) : tuple
+      + export_profils_groupe(eu, ep, fmt, output_dir, reseau_ref) : tuple
+      - _main_trunk_chain(couches) : tuple
+      - _compute_piquages(conduites, abscisses, couches) : dict
+      - _compute_groupe_data(eu, ep, pts) : dict
+      - _safe_name(s) : str
+      - _regard_name(feat) : str
+    }
+
     class "dxf_export" <<module>> {
       + run_export_dxf_with_ui(iface, path, extent, scale, ...)
+      + collect_visible_vector_layers() : list
+      + open_dxf_externally(path)
     }
 
     class "dxf_postprocess" <<module>> {
-      + postprocess_dxf(path, ...)
+      + add_label_decorations(dxf_path) : int
+      + add_point_symbols(dxf_path) : int
+      + apply_ltscale(dxf_path, scale)
     }
 
     class "star_dt_import" <<module>> {
@@ -664,6 +756,10 @@ CubatureOptionsDialog       --|> QDialog
 CoupeTransversaleDialog     --|> QDialog
 CoupeTransversaleSingleTool --|> CoupeTransversaleTool
 CoupeTransversaleTool       --|> QgsMapTool
+AnnotationTool              --|> QgsMapTool
+AnnotationDialog            --|> QDialog
+ProfilOptionsDialog         --|> QDialog
+ExportDialog                --|> QDialog
 
 ' ─────────────────────────────────────────
 '  Associations
@@ -696,6 +792,9 @@ ReseauAssainissementPlugin ..> CubatureTool        : active
 ReseauAssainissementPlugin ..> PrintTool                : active
 ReseauAssainissementPlugin ..> CoupeTransversaleTool    : active (coupe_transversale)
 ReseauAssainissementPlugin ..> CoupeTransversaleSingleTool : active (coupe_eu / coupe_ep)
+ReseauAssainissementPlugin ..> AnnotationTool              : active (annotation)
+ReseauAssainissementPlugin ..> ExportDialog                : ouvre (export combine)
+ReseauAssainissementPlugin ..> "profil_batch"              : export_profils_eu_ep / export_profils_groupe
 
 ' Tool -> Dialog
 RenseignementTool   ..> RenseignementDialog   : ouvre
@@ -709,6 +808,19 @@ CubatureTool        ..> "calc_cubature"       : _build_graph / _bfs
 ' Coupe transversale
 CoupeTransversaleTool       ..> CoupeTransversaleDialog : ouvre
 CoupeTransversaleTool       ..> "graph_utils"           : _to_float / QGIS_NULL
+
+' Annotation
+AnnotationTool              ..> AnnotationDialog        : ouvre
+AnnotationTool              ..> "annotation_tool"       : find_annotation_at / make_text_format
+
+' Profil dialogs
+ProfilTool                  ..> ProfilOptionsDialog     : ouvre (options export)
+ProfilGroupeTool            ..> ProfilOptionsDialog     : ouvre (options export)
+
+' Export combine et chaine DXF
+ExportDialog                ..> "profil_batch"          : delegue exports profils
+PrintTool                   ..> "dxf_export"            : run_export_dxf_with_ui()
+"dxf_export"                ..> "dxf_postprocess"       : decorations etiquettes / symboles
 
 ' Plugin -> DXF / Star-DT
 ReseauAssainissementPlugin ..> CadToGisDialog  : ouvre

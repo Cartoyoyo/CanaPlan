@@ -71,6 +71,7 @@ package "BET_HUMIDE" #F0F4FF {
     + run_coupe_transversale(checked)
     + run_coupe_eu(checked)
     + run_coupe_ep(checked)
+    + run_coupe_tranchee_composee()
     .. Renumerotation ..
     + run_renommer_eu(checked)
     + run_renommer_ep(checked)
@@ -164,8 +165,21 @@ package "BET_HUMIDE" #F0F4FF {
       + format_combo : QComboBox
       + orient_combo : QComboBox
       + scale_combo : QComboBox
-      + get_settings() : dict
+      + dpi_combo : QComboBox
+      - _custom_spin : QSpinBox
+      - _custom_widget : QWidget
+      - _dpi_custom_spin : QSpinBox
+      - _dpi_custom_widget : QWidget
+      - _dpi_note : QLabel
       + __init__(parent)
+      - _on_scale_changed(index)
+      - _on_dpi_changed()
+      - _suggest_dpi()
+      + get_settings() : dict
+      .. Note ..
+      ' Resolution PDF : 96/150/200/300 dpi ou personnalisee.
+      ' Suggestion automatique selon format : A4->300, A2/A3->200,
+      ' A0/A1->150. N ecrase pas une saisie personnalisee active.
     }
 
     class ProfilDialog {
@@ -221,8 +235,13 @@ package "BET_HUMIDE" #F0F4FF {
     }
 
     class EtiquetteTailleDialog {
-      + __init__(parent)
+      + __init__(init_mode, init_value, parent)
+      - _restore_scale_combo(value_m)
       + get_result() : tuple[str, float]
+      .. Note ..
+      ' init_mode = "map_units" | "points". Lit QSettings
+      ' BET_HUMIDE/label_size_mode et label_size_value pour
+      ' restaurer le dernier reglage a l ouverture.
     }
 
     class AnnotationDialog {
@@ -302,10 +321,62 @@ package "BET_HUMIDE" #F0F4FF {
       + get_selected_types() : list
     }
 
+    class CoupeTrancheeComposeeDialog {
+      - _tranches : list[dict]
+      - _current : int
+      - _updating : bool
+      - _list : QListWidget
+      - _form_widget : QWidget
+      - _fig : Figure
+      - _canvas : FigureCanvas
+      - _btn_add / _btn_del / _btn_up / _btn_dn : QPushButton
+      - _btn_pdf / _btn_png / _btn_close : QPushButton
+      .. Formulaire canalisation ..
+      - _rb_eu / _rb_ep : QRadioButton
+      - _sp_dn / _sp_prof : QDoubleSpinBox
+      - _cb_mat : QComboBox
+      .. Formulaire tranchee ..
+      - _sp_esp_g / _sp_ecg / _sp_ecd : QDoubleSpinBox
+      .. Formulaire remblai ..
+      - _sp_ep_lit / _sp_ep_enr : QDoubleSpinBox
+      - _cb_mat_lit / _cb_mat_enr / _cb_mat_rem : QComboBox
+      .. Formulaire chaussee ..
+      - _chk_inf / _chk_sup : QCheckBox
+      - _sp_ep_ci / _sp_ep_cs : QDoubleSpinBox
+      - _cb_mat_ci / _cb_mat_cs : QComboBox
+      + __init__(parent)
+      - _build_ui()
+      - _build_form()
+      - _update_ch_enabled()
+      - _add_tranche()
+      - _remove_tranche()
+      - _move_up()
+      - _move_down()
+      - _refresh_list()
+      - _on_selection_changed(row)
+      - _populate_form(t)
+      - _on_field_changed(*_)
+      - _draw()
+      - _export(fmt)
+      - _load_settings()
+      - _save_settings()
+      + closeEvent(event)
+      .. Note ..
+      ' N tranches juxtaposees (EU / EP). Apercu matplotlib
+      ' temps reel : lit de pose, enrobage, remblai, chaussee
+      ' inf/sup avec couleurs conventionnelles. Colonnes de cotes
+      ' verticales (droite) et sous-cotes horizontales (bas).
+      ' Valeurs par defaut heritees de ConfigDialog (cubature).
+      ' Memorisation QgsSettings : BET_HUMIDE/coupe_tranchee_composee.
+      ' Export PDF / PNG via matplotlib (200 dpi).
+      ' Necessite matplotlib ; affiche un message si absent.
+    }
+
     class "etiquettes" <<module>> {
       + LBL_X = "lbl_x"
       + LBL_Y = "lbl_y"
       + LBL_VISIBLE = "lbl_visible"
+      + LBL_ROT = "lbl_rot"
       + apply_etiquettes(layer, role)
       + remove_etiquettes(layer)
       + apply_label_size_all(plugin, mode, value)
@@ -315,6 +386,17 @@ package "BET_HUMIDE" #F0F4FF {
       + build_expression(role, active_fields) : str
       + set_force_all_labels(enabled, canvas)
       + get_force_all_labels() : bool
+      - _make_conduite_labeling(reseau, expression, size, unit) : QgsRuleBasedLabeling
+      - _conduite_text_format() : QgsTextFormat
+      - _conduite_current_settings(labeling) : QgsPalLayerSettings
+      - _ensure_label_fields(plugin)
+      .. Note ..
+      ' Conduites : rule-based labeling (QgsRuleBasedLabeling).
+      ' Regle 1 (lbl_x IS NULL) : placement Curved (curviligne).
+      ' Regle 2 (lbl_x IS NOT NULL) : placement OverPoint epingle,
+      '   orientation figee via LBL_ROT, callout active.
+      ' LBL_ROT est ecrit par MoveTool (_conduite_angle_at) et
+      ' efface par DeleteTool (_erase_label).
     }
 
     class WelcomeDialog {
@@ -482,10 +564,23 @@ package "BET_HUMIDE" #F0F4FF {
       - _sel_layer : QgsVectorLayer
       - _preview : QgsRubberBand
       - _line_previews : list
+      .. Piquage mode ..
+      - _hover_piquage : QgsFeature
+      - _hover_piquage_band : QgsRubberBand
+      - _piquage_feat : QgsFeature
+      - _piquage_layer : QgsVectorLayer
+      - _piquage_reseau : str
+      - _piquage_cond_layer : QgsVectorLayer
+      - _piquage_reg_layer : QgsVectorLayer
+      - _piquage_snap_pt : QgsPointXY
+      - _piquage_snap_cond : QgsFeature
+      - _piquage_snap_band : QgsRubberBand
+      - _piquage_line_prev : QgsRubberBand
       + finished : pyqtSignal
       + canvasMoveEvent(event)
       + canvasReleaseEvent(event)
       + keyPressEvent(event)
+      - _find_geom_near(pixel_pos) : tuple
       - _start_geom_move()
       - _apply_geom_move(new_point)
       - _start_label_move()
@@ -495,7 +590,20 @@ package "BET_HUMIDE" #F0F4FF {
       - _reproject_branchements(...)
       - _set_label_hidden(lbl, hidden)
       - _update_hover(pixel_pos)
+      - _find_piquage_near(pixel_pos) : tuple
+      - _start_piquage_move()
+      - _apply_piquage_move(snap_pt, snap_cond)
+      - _update_piquage_snap(cursor_pt)
+      - _clear_piquage_hover()
+      - {static} _conduite_angle_at(geom, pt) : float
       - _reset()
+      .. Note ..
+      ' Mode piquage : deplace le point de piquage d un
+      ' branchement le long de sa conduite. Met a jour
+      ' id_conduite, pk_debut, cote_piquage et geometrie.
+      ' _conduite_angle_at() calcule LBL_ROT (angle en degres)
+      ' pour les etiquettes de conduites epinglees.
+      ' conduites incluses dans _find_geom_near (role conduite).
     }
 
     class DeleteTool {
@@ -517,6 +625,10 @@ package "BET_HUMIDE" #F0F4FF {
       - _confirm_and_delete_lasso()
       - _find_label_hover(click_pt, tol)
       - _find_point_at(layer, point)
+      .. Note ..
+      ' _erase_label() remet a NULL : LBL_X, LBL_Y, LBL_ROT,
+      ' LBL_VISIBLE. Conduites incluses dans la detection de
+      ' label hover (en plus de regards / tabourets).
     }
 
     class CopyAttributesTool {
@@ -649,6 +761,7 @@ package "BET_HUMIDE" #F0F4FF {
       - s : dict
       - _w : float
       - _h : float
+      - _dpi : int
       - _state : int
       - _anchor : QgsPointXY
       - _cur_rot : float
@@ -660,10 +773,21 @@ package "BET_HUMIDE" #F0F4FF {
       + keyPressEvent(event)
       - _place_sheet(center, rot)
       - _generate_pdf(pdf_path)
-      - _add_overview_page(layout, n, ech)
+      - {static} _render_map(cx, cy, rot, w_m, h_m, w_px, h_px) : QImage
       - {static} _split_two_lines(text) : str
-      - {static} _ask_overview_settings(n) : bool
+      - {static} _ask_overview_settings(n, dpi) : bool
       - _reset()
+      .. Note ..
+      ' PDF multi-pages : pre-rendu de toutes les images
+      ' (QgsMapRendererSequentialJob) avant ouverture QPrinter,
+      ' evite les interactions rendu/PDF Qt5.
+      ' Zone carte = h_mm - carto_h_mm ; centre ajuste :
+      '   cx_c = cx + (carto_h_m/2)*sin(rot),
+      '   cy_c = cy + (carto_h_m/2)*cos(rot).
+      ' painter.save()/restore() obligatoire autour du dessin
+      ' des polygones semi-transparents (contours feuilles) :
+      ' Qt5 PDF writer ouvre un transparency group pour alpha<255
+      ' et ne le ferme pas sans restore(), causant un voile blanc.
     }
 
     class AnnotationTool {
@@ -760,6 +884,7 @@ AnnotationTool              --|> QgsMapTool
 AnnotationDialog            --|> QDialog
 ProfilOptionsDialog         --|> QDialog
 ExportDialog                --|> QDialog
+CoupeTrancheeComposeeDialog --|> QDialog
 
 ' ─────────────────────────────────────────
 '  Associations
@@ -828,6 +953,7 @@ ReseauAssainissementPlugin ..> StarDtDialog    : ouvre
 ReseauAssainissementPlugin ..> "dxf_export"    : run_export_dxf_with_ui()
 ReseauAssainissementPlugin ..> "star_dt_import": import_star_dt()
 ReseauAssainissementPlugin ..> WelcomeDialog   : _ensure_project_loaded()
+ReseauAssainissementPlugin ..> CoupeTrancheeComposeeDialog : ouvre (coupe tranchees composee)
 
 ' Tools -> utilitaires partages
 RenseignementTool  ..> "layer_ok" : _ok()
@@ -837,8 +963,8 @@ CopyAttributesTool ..> "layer_ok" : _ok()
 RenommerTool       ..> "layer_ok" : _ok()
 
 ' Tools -> etiquettes
-MoveTool   ..> "etiquettes" : LBL_X / LBL_Y / LBL_VISIBLE
-DeleteTool ..> "etiquettes" : LBL_X / LBL_Y / LBL_VISIBLE
+MoveTool   ..> "etiquettes" : LBL_X / LBL_Y / LBL_ROT / LBL_VISIBLE
+DeleteTool ..> "etiquettes" : LBL_X / LBL_Y / LBL_ROT / LBL_VISIBLE
 
 ' graph_utils -> utilise par les outils BFS
 ProfilTool      ..> "graph_utils" : build_graph / bfs

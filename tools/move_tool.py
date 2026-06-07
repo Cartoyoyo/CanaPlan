@@ -68,6 +68,19 @@ class MoveTool(QgsMapTool):
         # Prévisualisations des conduites/branchements connectés (mode 'geom')
         self._line_previews = []
 
+        # ── Mode 'piquage' : déplacement du point de piquage d'un branchement ──
+        self._hover_piquage      = None   # (feat, br_layer, reseau, cond_layer, reg_layer)
+        self._hover_piquage_band = None
+        self._piquage_feat       = None
+        self._piquage_layer      = None
+        self._piquage_reseau     = None
+        self._piquage_cond_layer = None
+        self._piquage_reg_layer  = None
+        self._piquage_snap_pt    = None   # QgsPointXY courant snappé
+        self._piquage_snap_cond  = None   # QgsFeature conduite snappée
+        self._piquage_snap_band  = None   # croix verte indicateur
+        self._piquage_line_prev  = None   # prévisualisation branchement
+
     # ------------------------------------------------------------------ cycle
 
     def activate(self):
@@ -76,7 +89,7 @@ class MoveTool(QgsMapTool):
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             "Déplacer",
-            "Clic gauche sur un ouvrage ou une étiquette pour le saisir  ·  2e clic : poser  ·  Échap : annuler",
+            "Clic gauche sur un ouvrage, un piquage de branchement ou une étiquette  ·  2e clic : poser  ·  Échap : annuler",
             level=0, duration=0,
         )
 
@@ -93,6 +106,9 @@ class MoveTool(QgsMapTool):
             pt = self.toMapCoordinates(event.pos())
             if self._preview is not None:
                 self._preview.setToGeometry(QgsGeometry.fromPointXY(pt), None)
+
+        elif self._mode == 'piquage':
+            self._update_piquage_snap(self.toMapCoordinates(event.pos()))
 
         elif self._mode == 'geom':
             pt = self.toMapCoordinates(event.pos())
@@ -125,6 +141,8 @@ class MoveTool(QgsMapTool):
 
         if self._mode == 'annotation':
             self._apply_annotation_move(pt)
+        elif self._mode == 'piquage':
+            self._apply_piquage_move()
         elif self._mode == 'geom':
             self._apply_geom_move(pt)
         elif self._mode == 'label':
@@ -134,6 +152,8 @@ class MoveTool(QgsMapTool):
                 self._start_annotation_move()
             elif self._hover is not None:
                 self._start_geom_move()
+            elif self._hover_piquage is not None:
+                self._start_piquage_move()
             elif self._label_hover is not None:
                 self._start_label_move()
 
@@ -190,6 +210,26 @@ class MoveTool(QgsMapTool):
 
         self._clear_geom_hover()
 
+        # Passe 1b : piquage de branchement (point[0] d'un branchement)
+        piq = self._find_piquage_near(click_pt, tol)
+        if piq is not None:
+            self._clear_label_hover()
+            if (self._hover_piquage is None
+                    or self._hover_piquage[0].id() != piq[0].id()):
+                self._clear_piquage_hover()
+                self._hover_piquage = piq
+                pt0 = QgsPointXY(piq[0].geometry().asPolyline()[0])
+                self._hover_piquage_band = QgsRubberBand(
+                    self.canvas, QgsWkbTypes.PointGeometry)
+                self._hover_piquage_band.setColor(QColor(255, 165, 0))
+                self._hover_piquage_band.setIconSize(16)
+                self._hover_piquage_band.setIcon(QgsRubberBand.ICON_X)
+                self._hover_piquage_band.setToGeometry(
+                    QgsGeometry.fromPointXY(pt0), None)
+            return
+        else:
+            self._clear_piquage_hover()
+
         # Passe 2 : étiquettes (uniquement si aucune géométrie proche)
         lbl = self._find_label_near(click_pt, tol)
         if lbl is not None:
@@ -211,7 +251,7 @@ class MoveTool(QgsMapTool):
         valid_ids = {
             couches[role].id()
             for couches in self.couches.values()
-            for role in ('regard', 'tabouret')
+            for role in ('regard', 'tabouret', 'conduite')
             if _ok(couches.get(role))
         }
 
@@ -384,6 +424,33 @@ class MoveTool(QgsMapTool):
         self._label_hidden = hidden
         self.canvas.refresh()
 
+    @staticmethod
+    def _conduite_angle_at(geom, pt):
+        """Valeur de LBL_ROT (degrés) pour aligner l'étiquette épinglée sur la
+        conduite au point pt.
+
+        L'angle lisible de la conduite est normalisé dans [-90, 90], puis
+        décalé de -90° : le placement OverPoint de QGIS ajoute +90° à la
+        rotation data-defined (sinon le texte sort perpendiculaire à la
+        conduite). affiché = (angle-90) + 90 = angle."""
+        try:
+            if geom is None or geom.isEmpty():
+                return -90.0
+            _, _, after, _ = geom.closestSegmentWithContext(pt)
+            line = geom.asPolyline()
+            if len(line) < 2:
+                return -90.0
+            i = max(1, min(after, len(line) - 1))
+            p1, p2 = line[i - 1], line[i]
+            angle = math.degrees(math.atan2(p2.y() - p1.y(), p2.x() - p1.x()))
+            if angle > 90:
+                angle -= 180
+            elif angle < -90:
+                angle += 180
+            return round(angle - 90, 2)
+        except Exception:
+            return -90.0
+
     def _apply_label_move(self, new_point):
         lbl = self._sel_label
         layer = QgsProject.instance().mapLayer(lbl.layerID)
@@ -427,8 +494,9 @@ class MoveTool(QgsMapTool):
         new_x = cur_anchor_x + dx
         new_y = cur_anchor_y + dy
 
-        from ..gui.etiquettes import LBL_VISIBLE
+        from ..gui.etiquettes import LBL_VISIBLE, LBL_ROT
         idx_v = fields.indexFromName(LBL_VISIBLE)
+        idx_r = fields.indexFromName(LBL_ROT)
 
         if not layer.isEditable():
             layer.startEditing()
@@ -436,6 +504,11 @@ class MoveTool(QgsMapTool):
         layer.changeAttributeValue(lbl.featureId, idx_y, new_y)
         if idx_v >= 0:
             layer.changeAttributeValue(lbl.featureId, idx_v, None)
+        # Conduites : fige l'orientation = angle de la conduite au point d'origine
+        if idx_r >= 0:
+            rot_deg = self._conduite_angle_at(
+                feat.geometry(), QgsPointXY(cur_cx, cur_cy))
+            layer.changeAttributeValue(lbl.featureId, idx_r, rot_deg)
         layer.commitChanges()
         self._label_hidden = False
 
@@ -502,12 +575,26 @@ class MoveTool(QgsMapTool):
         self._clear_geom_hover()
         self._clear_label_hover()
         self._clear_annotation_hover()
+        self._clear_piquage_hover()
         if self._preview is not None:
             self.canvas.scene().removeItem(self._preview)
             self._preview = None
         for item in self._line_previews:
             self.canvas.scene().removeItem(item['rb'])
         self._line_previews = []
+        # piquage rubber bands
+        for rb in (self._piquage_snap_band, self._piquage_line_prev):
+            if rb is not None:
+                self.canvas.scene().removeItem(rb)
+        self._piquage_snap_band = None
+        self._piquage_line_prev = None
+        self._piquage_feat      = None
+        self._piquage_layer     = None
+        self._piquage_reseau    = None
+        self._piquage_cond_layer= None
+        self._piquage_reg_layer = None
+        self._piquage_snap_pt   = None
+        self._piquage_snap_cond = None
         self._mode = None
         self._sel_feat = None
         self._sel_layer = None
@@ -643,3 +730,202 @@ class MoveTool(QgsMapTool):
             branchement_layer.commitChanges()
         else:
             branchement_layer.rollBack()
+
+    # ------------------------------------------------------------------ piquage
+
+    def _find_piquage_near(self, click_pt, tol):
+        """Retourne (feat, br_layer, reseau, cond_layer, reg_layer) ou None."""
+        best, best_d = None, float('inf')
+        for reseau, couches in self.couches.items():
+            br_layer = couches.get('branchement')
+            if not _ok(br_layer):
+                continue
+            for feat in br_layer.getFeatures():
+                geom = feat.geometry()
+                if geom.isEmpty():
+                    continue
+                line = geom.asPolyline()
+                if not line:
+                    continue
+                d = click_pt.distance(QgsPointXY(line[0]))
+                if d <= tol and d < best_d:
+                    best_d = d
+                    best = (feat, br_layer, reseau,
+                            couches.get('conduite'), couches.get('regard'))
+        return best
+
+    def _clear_piquage_hover(self):
+        if self._hover_piquage_band is not None:
+            self.canvas.scene().removeItem(self._hover_piquage_band)
+            self._hover_piquage_band = None
+        self._hover_piquage = None
+
+    def _start_piquage_move(self):
+        feat, br_layer, reseau, cond_layer, reg_layer = self._hover_piquage
+        self._piquage_feat       = feat
+        self._piquage_layer      = br_layer
+        self._piquage_reseau     = reseau
+        self._piquage_cond_layer = cond_layer
+        self._piquage_reg_layer  = reg_layer
+        self._mode = 'piquage'
+        self._clear_piquage_hover()
+
+        self._piquage_snap_band = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self._piquage_snap_band.setColor(QColor(0, 200, 0))
+        self._piquage_snap_band.setWidth(2)
+
+        self._piquage_line_prev = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        col = QColor(200, 80, 0) if reseau == 'EU' else QColor(0, 80, 200)
+        self._piquage_line_prev.setColor(col)
+        self._piquage_line_prev.setWidth(2)
+        self._piquage_line_prev.setLineStyle(Qt.DotLine)
+
+        from qgis.utils import iface
+        iface.messageBar().pushMessage(
+            f"Déplacer piquage {reseau}",
+            "Déplacer vers la conduite ou un regard  ·  Clic : confirmer  ·  Échap : annuler",
+            level=0, duration=0,
+        )
+
+    def _update_piquage_snap(self, cursor_pt):
+        """Snap curseur → regard ou conduite du même réseau."""
+        cond_layer = self._piquage_cond_layer
+        if not _ok(cond_layer):
+            return
+
+        self._piquage_snap_band.reset(QgsWkbTypes.LineGeometry)
+        snap_pt   = None
+        snap_cond = None
+
+        # Priorité 1 : regard proche (10 px)
+        reg_layer = self._piquage_reg_layer
+        if _ok(reg_layer):
+            reg_tol = 10 * self.canvas.mapUnitsPerPixel()
+            best_rpt, best_rd = None, float('inf')
+            for r in reg_layer.getFeatures():
+                g = r.geometry()
+                if g.isEmpty():
+                    continue
+                pt = QgsPointXY(g.asPoint())
+                d  = cursor_pt.distance(pt)
+                if d < best_rd:
+                    best_rd, best_rpt = d, pt
+            if best_rpt and best_rd <= reg_tol:
+                snap_pt = best_rpt
+                best_cf, best_cd = None, float('inf')
+                for c in cond_layer.getFeatures():
+                    sq, _, _, _ = c.geometry().closestSegmentWithContext(snap_pt)
+                    d = math.sqrt(sq)
+                    if d < best_cd:
+                        best_cd, best_cf = d, c
+                snap_cond = best_cf
+
+        # Priorité 2 : projection sur conduite
+        if snap_pt is None:
+            cond_tol = 200 * self.canvas.mapUnitsPerPixel()
+            best_cf, best_cd, best_proj = None, float('inf'), None
+            for c in cond_layer.getFeatures():
+                sq, proj, _, _ = c.geometry().closestSegmentWithContext(cursor_pt)
+                d = math.sqrt(sq)
+                if d < best_cd:
+                    best_cd, best_cf, best_proj = d, c, QgsPointXY(proj)
+            if best_cf and best_cd <= cond_tol:
+                snap_pt   = best_proj
+                snap_cond = best_cf
+
+        self._piquage_snap_pt   = snap_pt
+        self._piquage_snap_cond = snap_cond
+
+        if snap_pt is None:
+            if self._piquage_line_prev:
+                self._piquage_line_prev.reset(QgsWkbTypes.LineGeometry)
+            return
+
+        # Croix verte au point snappé
+        cs = 15 * self.canvas.mapUnitsPerPixel()
+        cross = QgsGeometry.fromMultiPolylineXY([
+            [QgsPointXY(snap_pt.x() - cs, snap_pt.y()),
+             QgsPointXY(snap_pt.x() + cs, snap_pt.y())],
+            [QgsPointXY(snap_pt.x(), snap_pt.y() - cs),
+             QgsPointXY(snap_pt.x(), snap_pt.y() + cs)],
+        ])
+        self._piquage_snap_band.setToGeometry(cross, None)
+
+        # Prévisualisation branchement
+        old_line = self._piquage_feat.geometry().asPolyline()
+        new_line = [snap_pt] + [QgsPointXY(p) for p in old_line[1:]]
+        self._piquage_line_prev.setToGeometry(
+            QgsGeometry.fromPolylineXY(new_line), None)
+
+    def _apply_piquage_move(self):
+        """Confirme le déplacement du piquage et met à jour tous les attributs."""
+        snap_pt   = self._piquage_snap_pt
+        snap_cond = self._piquage_snap_cond
+        if snap_pt is None or snap_cond is None:
+            self._reset()
+            return
+
+        feat  = self._piquage_feat
+        layer = self._piquage_layer
+
+        old_line = feat.geometry().asPolyline()
+        new_line = [snap_pt] + [QgsPointXY(p) for p in old_line[1:]]
+        new_geom = QgsGeometry.fromPolylineXY(new_line)
+
+        cond_geom = snap_cond.geometry()
+        new_pk  = round(cond_geom.lineLocatePoint(
+                        QgsGeometry.fromPointXY(snap_pt)), 3)
+        new_lon = round(new_geom.length(), 2)
+
+        fields = layer.fields()
+        if not layer.isEditable():
+            layer.startEditing()
+
+        layer.changeGeometry(feat.id(), new_geom)
+
+        for attr, val in (('pk_debut',    new_pk),
+                          ('id_conduite', snap_cond.id()),
+                          ('longueur',    new_lon)):
+            idx = fields.indexOf(attr)
+            if idx >= 0:
+                layer.changeAttributeValue(feat.id(), idx, val)
+
+        idx_cote = fields.indexOf('cote_piquage')
+        if idx_cote >= 0 and _ok(self._piquage_reg_layer):
+            cote = self._interp_cote_piquage(snap_cond, new_pk)
+            if cote is not None:
+                layer.changeAttributeValue(feat.id(), idx_cote, round(cote, 3))
+
+        layer.commitChanges()
+        self._reset()
+        self.canvas.refresh()
+
+    def _interp_cote_piquage(self, cond_feat, pk):
+        """Interpolation linéaire FE_dep → FE_arr au PK donné sur la conduite."""
+        cond_geom = cond_feat.geometry()
+        if cond_geom.isEmpty():
+            return None
+        cond_len = cond_geom.length()
+        if cond_len <= 0:
+            return None
+        line   = cond_geom.asPolyline()
+        pt_dep = QgsPointXY(line[0])
+        pt_arr = QgsPointXY(line[-1])
+        tol    = 0.05
+        fe_dep = fe_arr = None
+        for r in self._piquage_reg_layer.getFeatures():
+            g = r.geometry()
+            if g.isEmpty():
+                continue
+            pt = QgsPointXY(g.asPoint())
+            try:
+                v = float(r['fe_radier'])
+            except (TypeError, ValueError):
+                continue
+            if pt_dep.distance(pt) <= tol:
+                fe_dep = v
+            if pt_arr.distance(pt) <= tol:
+                fe_arr = v
+        if fe_dep is None or fe_arr is None:
+            return None
+        return fe_dep + (fe_arr - fe_dep) * (pk / cond_len)

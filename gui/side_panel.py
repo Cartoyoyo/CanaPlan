@@ -76,6 +76,8 @@ class SidePanel(QDockWidget):
                    "Cubature tranchées", "cubature")
         self._item(folder_impression, icon_dir, "config.svg",
                    "Remblai tranchées", "remblai")
+        self._item(folder_impression, icon_dir, "profil.svg",
+                   "Dessinateur – Coupe de tranchées", "coupe_tranchee_composee")
 
         folder_fdc = self._folder("Fond de carte")
         self._item(folder_fdc, icon_dir, "config.svg",

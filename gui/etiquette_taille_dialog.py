@@ -23,13 +23,15 @@ _SCALES = [
 
 class EtiquetteTailleDialog(QDialog):
 
-    def __init__(self, current_size_pt=9, parent=None):
+    def __init__(self, init_mode='map_units', init_value=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Taille des étiquettes")
         self.setMinimumWidth(340)
-        self._build_ui(current_size_pt)
+        self._init_mode  = init_mode
+        self._init_value = init_value
+        self._build_ui()
 
-    def _build_ui(self, current_size_pt):
+    def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
@@ -47,7 +49,8 @@ class EtiquetteTailleDialog(QDialog):
         self.radio_pt = QRadioButton("Taille en points")
         self.spin_pt  = QSpinBox()
         self.spin_pt.setRange(4, 30)
-        self.spin_pt.setValue(current_size_pt)
+        init_pt = int(self._init_value) if self._init_mode == 'points' and self._init_value else 9
+        self.spin_pt.setValue(init_pt)
         self.spin_pt.setSuffix(" pt")
 
         row_pt = QHBoxLayout()
@@ -70,7 +73,7 @@ class EtiquetteTailleDialog(QDialog):
         self.combo_sc = QComboBox()
         for label, _ in _SCALES:
             self.combo_sc.addItem(label)
-        self.combo_sc.setCurrentIndex(4)   # 1/1000 par défaut
+        self.combo_sc.setCurrentIndex(4)   # 1/1000 par défaut (surchargé ci-dessous si init)
 
         row_sc = QHBoxLayout()
         row_sc.addWidget(self.radio_sc)
@@ -114,10 +117,30 @@ class EtiquetteTailleDialog(QDialog):
         self.combo_sc.currentIndexChanged.connect(self._on_scale_combo_changed)
         self._custom_spin.valueChanged.connect(self._update_map_units_label)
 
-        # État initial
-        self.radio_sc.setChecked(True)
+        # État initial : restaure le dernier choix utilisateur
+        if self._init_mode == 'points':
+            self.radio_pt.setChecked(True)
+        else:
+            self.radio_sc.setChecked(True)
+            if self._init_value is not None:
+                self._restore_scale_combo(self._init_value)
         self._on_mode_changed()
         self._update_map_units_label()
+
+    # ------------------------------------------------------------------ helpers
+
+    def _restore_scale_combo(self, value_m):
+        """Sélectionne dans la combo l'entrée correspondant à value_m (mètres)."""
+        if _TARGET_MM <= 0:
+            return
+        scale = value_m * 1000.0 / _TARGET_MM
+        for i, (_, s) in enumerate(_SCALES[:-1]):   # ignore 'Personnalisée'
+            if s is not None and abs(s - scale) < 0.5:
+                self.combo_sc.setCurrentIndex(i)
+                return
+        # Valeur personnalisée
+        self.combo_sc.setCurrentIndex(len(_SCALES) - 1)
+        self._custom_spin.setValue(int(round(scale)))
 
     # ------------------------------------------------------------------ slots
 

@@ -150,6 +150,12 @@ class ReseauAssainissementPlugin(QObject):
             self.run_remblai,
             checkable=True
         )
+        self.action_dict['coupe_tranchee_composee'] = self._add_action(
+            "profil.svg",
+            "Dessinateur – Coupe de tranchées composée",
+            self.run_coupe_tranchee_composee,
+            checkable=False
+        )
         self.action_dict['creer_etiquettes'] = self._add_action(
             "etiquettes.svg",
             "Créer les étiquettes",
@@ -273,17 +279,26 @@ class ReseauAssainissementPlugin(QObject):
 
     def unload(self):
         """Supprime la barre d'outils, les actions et les rubber bands."""
+        import sip
         self._cleanup_tools()
         from .tools.projet_bet import cleanup_plugin_resources
         cleanup_plugin_resources(self)
         self.iface.removeDockWidget(self.side_panel)
         self.side_panel.deleteLater()
-        self.toolbar.deleteLater()
-        self.menu.deleteLater()
         for action in self.actions:
             self.iface.removePluginMenu("Réseau Assainissement", action)
-            action.deleteLater()
         self.actions.clear()
+        # Suppression synchrone (sip.delete) pour éviter le warning de
+        # widget dupliqué au rechargement : deleteLater() est asynchrone et
+        # laisse l'ancienne toolbar vivante quand le nouveau initGui s'exécute.
+        for widget in (self.menu, self.toolbar):
+            try:
+                if widget is not None and not sip.isdeleted(widget):
+                    sip.delete(widget)
+            except Exception:
+                pass
+        self.menu = None
+        self.toolbar = None
 
     def _cleanup_tools(self):
         """Nettoie tous les rubber bands des outils actifs."""
@@ -736,6 +751,11 @@ class ReseauAssainissementPlugin(QObject):
             dlg_result.show()
             self.action_dict['remblai'].setChecked(False)
 
+    def run_coupe_tranchee_composee(self):
+        from .gui.coupe_tranchee_composee_dialog import CoupeTrancheeComposeeDialog
+        dlg = CoupeTrancheeComposeeDialog(self.iface.mainWindow())
+        dlg.show()
+
     def creer_etiquettes(self):
         """Configure le moteur d'étiquettes sur toutes les couches."""
         from .gui.etiquettes import apply_etiquettes, apply_label_size_all, get_force_all_labels
@@ -812,10 +832,22 @@ class ReseauAssainissementPlugin(QObject):
     def run_taille_etiquettes(self):
         from .gui.etiquette_taille_dialog import EtiquetteTailleDialog
         from .gui.etiquettes import apply_label_size_all
-        dlg = EtiquetteTailleDialog(parent=self.iface.mainWindow())
+        from qgis.PyQt.QtCore import QSettings
+        s          = QSettings()
+        last_mode  = s.value("BET_HUMIDE/label_size_mode",  "map_units")
+        last_value = s.value("BET_HUMIDE/label_size_value", None)
+        if last_value is not None:
+            try:
+                last_value = float(last_value)
+            except (ValueError, TypeError):
+                last_value = None
+        dlg = EtiquetteTailleDialog(last_mode, last_value,
+                                    parent=self.iface.mainWindow())
         if dlg.exec_() != EtiquetteTailleDialog.Accepted:
             return
         mode, value = dlg.get_result()
+        s.setValue("BET_HUMIDE/label_size_mode",  mode)
+        s.setValue("BET_HUMIDE/label_size_value", value)
         apply_label_size_all(self, mode, value)
 
     def toggle_affichage_etiquettes(self, checked):

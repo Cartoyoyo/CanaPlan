@@ -19,7 +19,7 @@ Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees
 | Outil | Description |
 |---|---|
 | **Renseigner** | Survol pour mettre en evidence un element (orange), clic pour ouvrir son formulaire d'attributs. Les champs numeriques (TN, FE, profondeur, diametre, longueur, pente, cote piquage) acceptent des **expressions additives** : ex. `1-0.25` -> `0.750`, `2+0.5-0.1` -> `2.400`. Pas de multiplication / division. Le champ recalcule TN / FE / P automatiquement quand l'un des trois est modifie. |
-| **Deplacer** | Deplace un ouvrage (regard ou tabouret) et recale automatiquement les conduites et branchements connectes. Permet aussi de deplacer une etiquette (regard / tabouret) sans toucher a l'ouvrage. |
+| **Deplacer** | Deplace un ouvrage (regard ou tabouret) et recale automatiquement les conduites et branchements connectes. Permet aussi de deplacer une etiquette (regard / tabouret / conduite) sans toucher a l'ouvrage. Mode **piquage** : survol du point de piquage d'un branchement (surligne en orange) puis glisser-deposer pour repositionner le piquage le long de la conduite ; met a jour `id_conduite`, `pk_debut`, `cote_piquage` et recale la geometrie du branchement. |
 | **Effacer** | Supprime un element et ses etiquettes associees. Lasso possible pour une selection multiple. |
 | **Copier les attributs** | Copie les attributs (diametre, materiau...) d'un element vers un ou plusieurs autres du meme type. |
 
@@ -32,6 +32,7 @@ Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees
 | **Coupe transversale EU** | Trace un axe de coupe sur le reseau EU uniquement. Les conduites croisees sont representees en section avec TN, FE, lit de pose, enrobage, remblai et chaussee. |
 | **Coupe transversale EP** | Meme principe sur le reseau EP uniquement. |
 | **Coupe transversale des tranchees** | Trace un axe de coupe croisant les reseaux EU et EP simultanement. Genere un plan de coupe A4/A3 (**paysage par defaut**) avec : profil de coupe (tranchees empilees par largeur configuree, cotes NGF), plan de situation (couches QGIS visibles + trait de coupe), titre et cartouche. Export PDF. |
+| **Dessinateur – Coupe de tranchees composee** | Dialogue de dessin de coupes de tranchees composees (EU et EP cote a cote). Gestion de N tranches juxtaposees : reseau (EU/EP), DN, materiau, profondeur fil d'eau, ecarts gauche/droit, lit de pose, enrobage, remblai, chaussee inferieure (GB/GC) et superieure (enrobe). Apercu matplotlib temps reel avec cotes, annotations de couches et couleurs conventionnelles. Export PDF et PNG (200 dpi). Les valeurs par defaut des couches de remblai heritent de la configuration rapide. Memorisation automatique des dernieres tranches saisies (QgsSettings). Necessite **matplotlib**. |
 
 ### Cubature et Remblai
 
@@ -50,9 +51,9 @@ Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees
 
 | Outil | Description |
 |---|---|
-| **Creer les etiquettes** | Configure le moteur d'etiquettes QGIS sur toutes les couches EU et EP. Regards / tabourets : fond rectangulaire blanc + cadre + ligne de rappel (callout). Conduites / branchements : **halo blanc** (buffer 0.8 mm) pour la lisibilite sur fond cadastre. |
+| **Creer les etiquettes** | Configure le moteur d'etiquettes QGIS sur toutes les couches EU et EP. Regards / tabourets : fond rectangulaire blanc + cadre + ligne de rappel (callout). Conduites : moteur **regle** (rule-based labeling) avec deux regles : **Regle 1** (etiquette non deplacee, `lbl_x IS NULL`) placement curviligne automatique le long de la conduite ; **Regle 2** (etiquette deplacee / epinglee, `lbl_x IS NOT NULL`) placement au-dessus du point d'ancrage avec callout et orientation figee via le champ `lbl_rot`. Branchements : halo blanc 0.8 mm. |
 | **Afficher / Masquer** | Bascule la visibilite des etiquettes sans reconfigurer le moteur. |
-| **Taille des etiquettes** | Regle la taille des etiquettes (points ecran ou metres carte) sur toutes les couches. |
+| **Taille des etiquettes** | Regle la taille des etiquettes (points ecran ou metres carte) sur toutes les couches. Memorise le dernier reglage (mode + valeur) et le restaure a l'ouverture du dialogue. |
 | **Forcer toutes les etiquettes visibles** | Active le decalage automatique pour qu'aucune etiquette ne soit supprimee par le moteur de placement. |
 | **Gestion de l'affichage** | Dialogue pour activer/desactiver les etiquettes par reseau et par role, et choisir les champs affiches. |
 
@@ -73,7 +74,7 @@ Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees
 | **Charger un projet** | Charge un fichier `.bet` (v2 ZIP ou v1 JSON legacy) et restaure les couches, etiquettes et visibilite. |
 | **Importer DXF / DWG** | Convertit un fichier DXF/DWG en couches vectorielles (points, polylignes, polygones). |
 | **Importer Star-DT (GML)** | Lit un fichier GML Star-DT (releve topographique) et cree les couches points / polylignes correspondantes, filtrees par type d'objet. |
-| **Imprimer / Exporter PDF / DXF** | Positionne les feuilles d'impression sur la carte (clic + rotation), puis genere un PDF multi-pages avec cartouche et page de vue d'ensemble optionnelle. Export DXF 2018 fidele en parallele : symbologie, etiquettes (MTEXT + decoration ezdxf : fond + cadre + callout), symboles ponctuels, pattern de tirets EU/EP. Encodage CP1252 (compatibilite AutoCAD). |
+| **Imprimer / Exporter PDF / DXF** | Positionne les feuilles d'impression sur la carte (clic + rotation), puis genere un PDF multi-pages avec cartouche, barre d'echelle et page de vue d'ensemble optionnelle. Resolution PDF parametrable (96 / 150 / 200 / 300 dpi ou personnalisee) avec suggestion automatique selon le format (A4 → 300 dpi, A2/A3 → 200 dpi, A0/A1 → 150 dpi). Export DXF 2018 fidele en parallele : symbologie, etiquettes (MTEXT + decoration ezdxf : fond + cadre + callout), symboles ponctuels, pattern de tirets EU/EP. Encodage CP1252 (compatibilite AutoCAD). |
 | **Export combine** | Dialogue unique pour generer en une passe : plan PDF, plan DXF, profils EU, profils EP, profil groupe (avec choix du reseau de reference EU ou EP). Tous les exports vont dans un dossier choisi, noms de fichiers automatiques (1er regard / dernier regard). |
 
 ### Fonds de plan
@@ -100,6 +101,10 @@ Le plugin gere 4 types de couches, declinees pour chaque reseau (`_EU` / `_EP`) 
 | `materiau` | String | Materiau |
 | `longueur` | Double | Longueur en m (calculee automatiquement) |
 | `pente` | Double | Pente en % |
+| `lbl_x` | Double | X du point d'ancrage de l'etiquette (NULL = placement auto) |
+| `lbl_y` | Double | Y du point d'ancrage de l'etiquette (NULL = placement auto) |
+| `lbl_rot` | Double | Angle de l'etiquette epinglee en degres (suit l'angle de la conduite au point d'ancrage) |
+| `lbl_visible` | Int | Visibilite forcee de l'etiquette (0 = masquee) |
 
 ### Branchement *(LineString)*
 | Champ | Type | Description |
@@ -237,7 +242,7 @@ La compatibilite ascendante est assuree avec le format v1 (JSON brut + GPKG exte
 ### Prerequis
 
 - QGIS **>= 3.28** (recommande >= 3.38 pour eviter les avertissements `QMetaType`)
-- **matplotlib** (optionnel) — requis pour le profil en long et la coupe transversale
+- **matplotlib** (optionnel) — requis pour le profil en long, la coupe transversale et le dessinateur de coupes de tranchees composees
 - **ezdxf** (deja inclus dans `libs/`) — utilise pour le post-traitement de l'export DXF (fonds + cadres + lignes de rappel + symboles ponctuels)
 - **reportlab** (optionnel) — requis pour les exports PDF de cubature / remblai
 - **openpyxl** (optionnel) — requis pour les exports Excel de cubature / remblai
@@ -264,6 +269,7 @@ BET_HUMIDE/
 │   ├── cubature_dialog.py          # Tableau resultats cubature/remblai + exports CSV/PDF/Excel
 │   ├── etiquette_taille_dialog.py  # Dialogue de reglage de la taille des etiquettes
 │   ├── etiquette_affichage_dialog.py # Dialogue de gestion de l'affichage des etiquettes
+│   ├── coupe_tranchee_composee_dialog.py # Dessinateur de coupes de tranchees composees (matplotlib)
 │   ├── annotation_dialog.py        # Dialogue d'annotation (texte, police, couleur, alignement)
 │   ├── export_dialog.py            # Dialogue d'export combine (plan PDF/DXF + profils)
 │   ├── welcome_dialog.py           # Dialogue d'accueil (nouveau / ouvrir / annuler)

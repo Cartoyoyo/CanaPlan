@@ -1,11 +1,13 @@
 # gui/etiquettes.py
 
 from qgis.core import (
+    Qgis,
     QgsPalLayerSettings,
     QgsTextFormat,
     QgsTextBackgroundSettings,
     QgsTextBufferSettings,
     QgsVectorLayerSimpleLabeling,
+    QgsRuleBasedLabeling,
     QgsProperty,
     QgsPropertyCollection,
     QgsField,
@@ -43,21 +45,36 @@ LABEL_PADDING_MAP_UNITS = 0.4
 LBL_X       = 'lbl_x'
 LBL_Y       = 'lbl_y'
 LBL_VISIBLE = 'lbl_visible'   # 1 = affichée, 0 = masquée
+LBL_ROT     = 'lbl_rot'       # rotation en degrés (conduites déplacées)
 
 _POINT_ROLES = ('regard', 'tabouret')
 _LINE_ROLES  = ('conduite', 'branchement')
 
 
 def _ensure_label_fields(layer, role):
-    """Ajoute lbl_x / lbl_y / lbl_visible (points) ou lbl_visible seul (lignes)."""
+    """Ajoute lbl_x / lbl_y / lbl_visible selon le rôle.
+
+    Points (regard, tabouret) et conduites : lbl_x + lbl_y + lbl_visible.
+    Branchements et autres lignes : lbl_visible seul.
+    """
     fields = layer.fields()
-    needed = [
-        (LBL_X,       _DOUBLE),
-        (LBL_Y,       _DOUBLE),
-        (LBL_VISIBLE, _INT),
-    ] if role in _POINT_ROLES else [
-        (LBL_VISIBLE, _INT),
-    ]
+    if role == 'conduite':
+        needed = [
+            (LBL_X,       _DOUBLE),
+            (LBL_Y,       _DOUBLE),
+            (LBL_ROT,     _DOUBLE),
+            (LBL_VISIBLE, _INT),
+        ]
+    elif role in _POINT_ROLES:
+        needed = [
+            (LBL_X,       _DOUBLE),
+            (LBL_Y,       _DOUBLE),
+            (LBL_VISIBLE, _INT),
+        ]
+    else:
+        needed = [
+            (LBL_VISIBLE, _INT),
+        ]
     missing = [(n, t) for n, t in needed if fields.indexFromName(n) < 0]
     if not missing:
         return
@@ -84,6 +101,116 @@ def _reset_label_visibility(layer):
     layer.commitChanges()
 
 
+_TEXT_COLORS = {'EU': QColor(180, 0, 0), 'EP': QColor(0, 0, 180)}
+
+
+def _conduite_text_format(color, size=LABEL_SIZE_MAP_UNITS,
+                          unit=QgsUnitTypes.RenderMapUnits,
+                          bold=False, buffer_mm=0.8):
+    """Format texte des conduites (buffer blanc)."""
+    fmt = QgsTextFormat()
+    font = QFont('Arial', 9)
+    font.setBold(bold)
+    fmt.setFont(font)
+    fmt.setSizeUnit(unit)
+    fmt.setSize(size)
+    fmt.setColor(color)
+    buf = QgsTextBufferSettings()
+    buf.setEnabled(True)
+    buf.setSize(buffer_mm)
+    buf.setSizeUnit(QgsUnitTypes.RenderMillimeters)
+    buf.setColor(QColor(255, 255, 255))
+    buf.setOpacity(0.9)
+    fmt.setBuffer(buf)
+    return fmt
+
+
+def _make_conduite_labeling(reseau, expression, size=LABEL_SIZE_MAP_UNITS,
+                            unit=QgsUnitTypes.RenderMapUnits):
+    """Rule-based labeling pour conduites :
+      - règle 1 (lbl_x IS NULL)     : Curved auto, le texte suit la conduite.
+      - règle 2 (lbl_x IS NOT NULL) : OverPoint épinglé à lbl_x/lbl_y avec
+        l'orientation figée lbl_rot (conserve l'angle de la conduite) + callout.
+    """
+    fmt  = _conduite_text_format(_TEXT_COLORS.get(reseau, QColor(0, 0, 0)),
+                                 size, unit,
+                                 bold=reseau == 'EP',
+                                 buffer_mm=1.4 if reseau == 'EP' else 0.8)
+    show = QgsProperty.fromExpression(f'coalesce("{LBL_VISIBLE}", 1)')
+
+    def _base():
+        pal = QgsPalLayerSettings()
+        pal.enabled = True
+        pal.isExpression = True
+        pal.fieldName = expression
+        pal.setFormat(fmt)
+        return pal
+
+    # ── Règle 1 : curviligne automatique ─────────────────────────────────
+    pal_auto = _base()
+    pal_auto.placement = QgsPalLayerSettings.Curved
+    pal_auto.placementFlags = (QgsPalLayerSettings.BelowLine |
+                               QgsPalLayerSettings.MapOrientation)
+    pc1 = QgsPropertyCollection()
+    pc1.setProperty(QgsPalLayerSettings.Show, show)
+    pal_auto.setDataDefinedProperties(pc1)
+    rule_auto = QgsRuleBasedLabeling.Rule(pal_auto)
+    rule_auto.setFilterExpression(f'"{LBL_X}" IS NULL')
+    rule_auto.setDescription('Conduite – auto')
+
+    # ── Règle 2 : épinglée, orientation conservée ────────────────────────
+    pal_pin = _base()
+    # OverPoint entre en collision avec un autre enum sous QgsPalLayerSettings
+    # en QGIS 3.44 : on passe par Qgis.LabelPlacement.
+    try:
+        pal_pin.placement = Qgis.LabelPlacement.OverPoint
+    except AttributeError:
+        pal_pin.placement = QgsPalLayerSettings.OverPoint
+    pc2 = QgsPropertyCollection()
+    pc2.setProperty(QgsPalLayerSettings.Show, show)
+    pc2.setProperty(QgsPalLayerSettings.PositionX, QgsProperty.fromField(LBL_X))
+    pc2.setProperty(QgsPalLayerSettings.PositionY, QgsProperty.fromField(LBL_Y))
+    pc2.setProperty(QgsPalLayerSettings.Hali, QgsProperty.fromValue('Center'))
+    pc2.setProperty(QgsPalLayerSettings.Vali, QgsProperty.fromValue('Half'))
+    pc2.setProperty(QgsPalLayerSettings.LabelRotation,
+                    QgsProperty.fromField(LBL_ROT))
+    pal_pin.setDataDefinedProperties(pc2)
+    try:
+        callout = QgsSimpleLineCallout()
+        callout.setEnabled(True)
+        callout.setMinimumLength(5.0)
+        callout.setMinimumLengthUnit(QgsUnitTypes.RenderMapUnits)
+        callout.setLineSymbol(QgsLineSymbol.createSimple({
+            'line_color': '100,100,100,200',
+            'line_width': '0.3',
+            'line_width_unit': 'MM',
+            'line_style': 'dash',
+        }))
+        pal_pin.setCallout(callout)
+    except Exception:
+        pass
+    rule_pin = QgsRuleBasedLabeling.Rule(pal_pin)
+    rule_pin.setFilterExpression(f'"{LBL_X}" IS NOT NULL')
+    rule_pin.setDescription('Conduite – épinglée')
+
+    root = QgsRuleBasedLabeling.Rule(None)
+    root.appendChild(rule_auto)
+    root.appendChild(rule_pin)
+    return QgsRuleBasedLabeling(root)
+
+
+def _conduite_current_settings(labeling):
+    """Extrait (expression, size, unit) de la 1re règle d'un labeling conduite."""
+    try:
+        rules = labeling.rootRule().children()
+        if rules:
+            s = rules[0].settings()
+            return s.fieldName, s.format().size(), s.format().sizeUnit()
+    except Exception:
+        pass
+    return None
+
+
 def apply_etiquettes(layer, role, reseau=None):
     """Active les étiquettes sur la couche selon son rôle (point ou ligne).
 
@@ -91,6 +218,13 @@ def apply_etiquettes(layer, role, reseau=None):
     """
     _ensure_label_fields(layer, role)
     _reset_label_visibility(layer)
+
+    # ── Conduites : rule-based (auto curviligne / épinglée orientée) ──────
+    if role == 'conduite':
+        layer.setLabeling(_make_conduite_labeling(reseau, _expression('conduite')))
+        layer.setLabelsEnabled(True)
+        layer.triggerRepaint()
+        return
 
     pal = QgsPalLayerSettings()
     pal.enabled = True
@@ -114,8 +248,7 @@ def apply_etiquettes(layer, role, reseau=None):
     pal.setDataDefinedProperties(pc)
 
     # Couleur du texte selon le réseau
-    TEXT_COLORS = {'EU': QColor(180, 0, 0), 'EP': QColor(0, 0, 180)}
-    text_color = TEXT_COLORS.get(reseau, QColor(0, 0, 0))
+    text_color = _TEXT_COLORS.get(reseau, QColor(0, 0, 0))
 
     fmt = QgsTextFormat()
     fmt.setFont(QFont('Arial', 9))
@@ -149,12 +282,11 @@ def apply_etiquettes(layer, role, reseau=None):
         callout = QgsSimpleLineCallout()
         callout.setEnabled(True)
         callout.setMinimumLength(0.0)
-        line_symbol = QgsLineSymbol.createSimple({
+        callout.setLineSymbol(QgsLineSymbol.createSimple({
             'line_color': '120,120,120,255',
             'line_width': '0.3',
             'line_width_unit': 'MM',
-        })
-        callout.setLineSymbol(line_symbol)
+        }))
         pal.setCallout(callout)
 
     layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
@@ -244,6 +376,16 @@ def apply_label_size_all(plugin, mode, value):
             labeling = layer.labeling()
             if labeling is None:
                 continue
+
+            # Conduites : rule-based → reconstruire avec la nouvelle taille
+            if role == 'conduite' or isinstance(labeling, QgsRuleBasedLabeling):
+                cur = _conduite_current_settings(labeling)
+                expression = cur[0] if cur else _expression('conduite')
+                layer.setLabeling(
+                    _make_conduite_labeling(reseau, expression, value, unit))
+                layer.triggerRepaint()
+                continue
+
             pal = labeling.settings()
             fmt = pal.format()
             fmt.setSize(value)
@@ -340,8 +482,20 @@ def apply_label_fields(plugin, fields_prefs):
             labeling = layer.labeling()
             if labeling is None:
                 continue
+            expression = build_expression(role, fields_prefs.get(role))
+
+            # Conduites : rule-based → reconstruire avec la taille courante
+            if role == 'conduite' or isinstance(labeling, QgsRuleBasedLabeling):
+                cur = _conduite_current_settings(labeling)
+                size = cur[1] if cur else LABEL_SIZE_MAP_UNITS
+                unit = cur[2] if cur else QgsUnitTypes.RenderMapUnits
+                layer.setLabeling(
+                    _make_conduite_labeling(reseau, expression, size, unit))
+                layer.triggerRepaint()
+                continue
+
             pal = labeling.settings()
-            pal.fieldName   = build_expression(role, fields_prefs.get(role))
+            pal.fieldName   = expression
             pal.isExpression = True
             layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
             layer.triggerRepaint()

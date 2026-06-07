@@ -48,7 +48,16 @@ def _read_label_size(project, s):
         labeling = layer.labeling()
         if labeling is None:
             continue
-        fmt  = labeling.settings().format()
+        # Conduites = rule-based : lire le format depuis la 1re règle
+        try:
+            fmt = labeling.settings().format()
+        except AttributeError:
+            try:
+                fmt = labeling.rootRule().children()[0].settings().format()
+            except Exception:
+                continue
+        unit = ('points' if fmt.sizeUnit() == QgsUnitTypes.RenderPoints
+                else 'map_units')
         unit = ('points' if fmt.sizeUnit() == QgsUnitTypes.RenderPoints
                 else 'map_units')
         return {'unit': unit, 'value': fmt.size()}
@@ -56,12 +65,14 @@ def _read_label_size(project, s):
 
 
 def _get_or_create_group(project, reseau):
-    """Retourne le groupe EU ou EP dans la légende (le crée en tête si absent)."""
+    """Retourne le groupe EU ou EP au premier niveau de la légende (le crée en tête si absent).
+    Ne cherche PAS récursivement pour éviter de tomber sur un groupe homonyme imbriqué."""
+    from qgis.core import QgsLayerTreeGroup
     root = project.layerTreeRoot()
-    group = root.findGroup(reseau)
-    if group is None:
-        group = root.insertGroup(0, reseau)
-    return group
+    for child in root.children():
+        if isinstance(child, QgsLayerTreeGroup) and child.name() == reseau:
+            return child
+    return root.insertGroup(0, reseau)
 
 
 def project_dir():
@@ -158,6 +169,14 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
 
     # Capture des préférences d'affichage
     label_size = _read_label_size(project, s)
+    if label_size is None:
+        _mode  = s.value("BET_HUMIDE/label_size_mode")
+        _val   = s.value("BET_HUMIDE/label_size_value")
+        if _mode and _val is not None:
+            try:
+                label_size = {'unit': _mode, 'value': float(_val)}
+            except (ValueError, TypeError):
+                pass
     from ..gui.etiquettes import get_force_all_labels, get_label_display_prefs
     force_all_labels    = get_force_all_labels()
     label_display_prefs = getattr(plugin, '_label_display_prefs', None) or {
@@ -429,7 +448,10 @@ def load_projet(plugin, iface):
                 continue
 
             plugin._apply_style(new_layer, role, reseau)
-            apply_etiquettes(new_layer, role, reseau)
+            try:
+                apply_etiquettes(new_layer, role, reseau)
+            except Exception as e:
+                errors.append(f"{layer_name} : étiquettes non configurées ({e})")
             new_layer.setLabelsEnabled(labels_enabled)
             project.addMapLayer(new_layer, False)
             _get_or_create_group(project, reseau).addLayer(new_layer)
@@ -448,23 +470,26 @@ def load_projet(plugin, iface):
             grp.setItemVisibilityChecked(groups_visibility.get(reseau, True))
 
     # Restaurer taille, flag et préférences d'affichage des étiquettes
-    from ..gui.etiquettes import (apply_label_size_all, set_force_all_labels,
-                                   apply_label_display_prefs, apply_label_fields)
-    from ..gui.etiquette_affichage_dialog import prefs_from_dict
-    if label_size:
-        apply_label_size_all(plugin, label_size['unit'], label_size['value'])
-    set_force_all_labels(force_all_labels)
-    if label_display_prefs:
-        full = prefs_from_dict(label_display_prefs)
-        plugin._label_display_prefs = full
-        apply_label_display_prefs(plugin, full['visibility'])
-        if full.get('fields'):
-            apply_label_fields(plugin, full['fields'])
-    action_force = plugin.action_dict.get('forcer_etiquettes')
-    if action_force is not None:
-        action_force.blockSignals(True)
-        action_force.setChecked(force_all_labels)
-        action_force.blockSignals(False)
+    try:
+        from ..gui.etiquettes import (apply_label_size_all, set_force_all_labels,
+                                       apply_label_display_prefs, apply_label_fields)
+        from ..gui.etiquette_affichage_dialog import prefs_from_dict
+        if label_size:
+            apply_label_size_all(plugin, label_size['unit'], label_size['value'])
+        set_force_all_labels(force_all_labels)
+        if label_display_prefs:
+            full = prefs_from_dict(label_display_prefs)
+            plugin._label_display_prefs = full
+            apply_label_display_prefs(plugin, full['visibility'])
+            if full.get('fields'):
+                apply_label_fields(plugin, full['fields'])
+        action_force = plugin.action_dict.get('forcer_etiquettes')
+        if action_force is not None:
+            action_force.blockSignals(True)
+            action_force.setChecked(force_all_labels)
+            action_force.blockSignals(False)
+    except Exception as e:
+        errors.append(f"Restauration des préférences d'étiquettes : {e}")
 
     # Centrer la vue sur l'étendue des couches chargées
     canvas     = iface.mapCanvas()

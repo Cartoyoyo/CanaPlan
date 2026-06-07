@@ -217,7 +217,7 @@ class DeleteTool(QgsMapTool):
             return None
         layers_by_id = {}
         for couches in self.couches.values():
-            for role in ('regard', 'tabouret'):
+            for role in ('regard', 'tabouret', 'conduite'):
                 lyr = couches.get(role)
                 if _ok(lyr):
                     layers_by_id[lyr.id()] = lyr
@@ -288,13 +288,14 @@ class DeleteTool(QgsMapTool):
                 f"Supprimer l'étiquette de « {nom} » ?",
                 QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
             return
-        from ..gui.etiquettes import LBL_X, LBL_Y, LBL_VISIBLE
+        from ..gui.etiquettes import LBL_X, LBL_Y, LBL_VISIBLE, LBL_ROT
         fields = layer.fields()
         if not layer.isEditable():
             layer.startEditing()
         fid = feat.id()
-        # Masque l'étiquette et efface sa position stockée
-        for name, val in ((LBL_VISIBLE, 0), (LBL_X, None), (LBL_Y, None)):
+        # Masque l'étiquette et efface position + orientation stockées
+        for name, val in ((LBL_VISIBLE, 0), (LBL_X, None),
+                          (LBL_Y, None), (LBL_ROT, None)):
             idx = fields.indexFromName(name)
             if idx >= 0:
                 layer.changeAttributeValue(fid, idx, val)

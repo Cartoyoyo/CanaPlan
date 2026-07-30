@@ -126,19 +126,15 @@ class InsertRegardTool(QgsMapToolEmitPoint):
         best_dist = float('inf')
         best_reseau = None
 
+        from .spatial_utils import nearest_line_feature
         for reseau, couches in self.couches.items():
             layer = couches['conduite']
-            for feat in layer.getFeatures():
-                geom = feat.geometry()
-                if geom.isEmpty():
-                    continue
-                (sq_dist, proj_point, av, lo) = geom.closestSegmentWithContext(point)
-                dist = math.sqrt(sq_dist)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_feat = feat
-                    best_proj = QgsPointXY(proj_point)
-                    best_reseau = reseau
+            feat, proj, dist = nearest_line_feature(layer, point, tolerance)
+            if feat is not None and dist < best_dist:
+                best_dist = dist
+                best_feat = feat
+                best_proj = proj
+                best_reseau = reseau
 
         if best_feat is None or best_dist > tolerance:
             return None

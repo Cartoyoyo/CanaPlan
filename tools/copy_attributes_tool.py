@@ -7,6 +7,7 @@ from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
 from . import layer_ok as _ok
+from .spatial_utils import nearest_point_feature, nearest_line_feature
 
 # Champs jamais copiés : identifiant, géométrie-dépendants, étiquettes, relations
 _SKIP = frozenset({
@@ -166,13 +167,9 @@ class CopyAttributesTool(QgsMapTool):
                 layer = couches.get(role)
                 if not _ok(layer):
                     continue
-                for feat in layer.getFeatures():
-                    geom = feat.geometry()
-                    if geom.isEmpty():
-                        continue
-                    dist = click_pt.distance(QgsPointXY(geom.asPoint()))
-                    if dist <= tol and (best_pt is None or dist < best_pt[4]):
-                        best_pt = (role, feat, layer, reseau, dist)
+                feat, dist = nearest_point_feature(layer, click_pt, tol)
+                if feat is not None and (best_pt is None or dist < best_pt[4]):
+                    best_pt = (role, feat, layer, reseau, dist)
 
         if best_pt is not None:
             return best_pt
@@ -183,14 +180,9 @@ class CopyAttributesTool(QgsMapTool):
                 layer = couches.get(role)
                 if not _ok(layer):
                     continue
-                for feat in layer.getFeatures():
-                    geom = feat.geometry()
-                    if geom.isEmpty():
-                        continue
-                    sq_d, _, _, _ = geom.closestSegmentWithContext(click_pt)
-                    dist = math.sqrt(sq_d)
-                    if dist <= tol and (best_line is None or dist < best_line[4]):
-                        best_line = (role, feat, layer, reseau, dist)
+                feat, _, dist = nearest_line_feature(layer, click_pt, tol)
+                if feat is not None and (best_line is None or dist < best_line[4]):
+                    best_line = (role, feat, layer, reseau, dist)
         return best_line
 
     # ------------------------------------------------------------------ helpers

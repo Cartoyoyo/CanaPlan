@@ -39,9 +39,9 @@ _KEY_BET_PATH = _PREFIX + "current_bet_path"
 def _read_label_size(project, s):
     """Lit la taille des étiquettes depuis la première couche disponible.
     Retourne un dict {'unit': 'points'|'map_units', 'value': float} ou None."""
+    from .layer_keys import get_layer_id
     for reseau in _RESEAUX:
-        key      = _PREFIX + f"couche_conduite_{reseau.lower()}"
-        layer_id = s.value(key)
+        layer_id = get_layer_id('conduite', reseau)
         layer    = project.mapLayer(layer_id) if layer_id else None
         if layer is None:
             continue
@@ -56,8 +56,6 @@ def _read_label_size(project, s):
                 fmt = labeling.rootRule().children()[0].settings().format()
             except Exception:
                 continue
-        unit = ('points' if fmt.sizeUnit() == QgsUnitTypes.RenderPoints
-                else 'map_units')
         unit = ('points' if fmt.sizeUnit() == QgsUnitTypes.RenderPoints
                 else 'map_units')
         return {'unit': unit, 'value': fmt.size()}
@@ -147,10 +145,10 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
         QApplication.processEvents()
 
     # État des étiquettes avant de toucher aux couches
+    from .layer_keys import get_layer_id, set_layer_id
     labels_state = {}
     for reseau in _RESEAUX:
-        key      = _PREFIX + f"couche_conduite_{reseau.lower()}"
-        layer_id = s.value(key)
+        layer_id = get_layer_id('conduite', reseau)
         layer    = project.mapLayer(layer_id) if layer_id else None
         labels_state[reseau] = bool(layer.labelsEnabled()) if layer else False
 
@@ -158,14 +156,13 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
     to_save = []
     for reseau in _RESEAUX:
         for role in _ROLES:
-            key      = _PREFIX + f"couche_{role}_{reseau.lower()}"
-            layer_id = s.value(key)
+            layer_id = get_layer_id(role, reseau)
             layer    = project.mapLayer(layer_id) if layer_id else None
             if layer is None:
                 step(f"Préparation {role}_{reseau} (ignoré)")
                 continue
             step(f"Copie mémoire : {role}_{reseau}")
-            to_save.append((reseau, role, key, layer_id, _copy_to_memory(layer)))
+            to_save.append((reseau, role, layer_id, _copy_to_memory(layer)))
 
     # Capture des préférences d'affichage
     label_size = _read_label_size(project, s)
@@ -186,12 +183,12 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
 
     # Capture de la visibilité individuelle avant suppression
     visibility_state = {}
-    for reseau, role, key, layer_id, _ in to_save:
+    for reseau, role, layer_id, _ in to_save:
         node = project.layerTreeRoot().findLayer(layer_id)
         visibility_state[f"{role}_{reseau}"] = node.isVisible() if node else True
 
     # Phase 2 : retrait des couches du projet
-    for reseau, role, key, layer_id, _ in to_save:
+    for reseau, role, layer_id, _ in to_save:
         step(f"Libération : {role}_{reseau}")
         if project.mapLayer(layer_id):
             project.removeMapLayer(layer_id)
@@ -209,7 +206,7 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
     first  = True
     errors = []
 
-    for reseau, role, key, layer_id, mem_layer in to_save:
+    for reseau, role, layer_id, mem_layer in to_save:
         layer_name = f"{role}_{reseau}"
         step(f"Écriture GPKG : {layer_name}")
         opts = QgsVectorFileWriter.SaveVectorOptions()
@@ -308,7 +305,7 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
                                    apply_label_display_prefs)
     from ..gui.etiquette_affichage_dialog import prefs_from_dict
 
-    for reseau, role, key, layer_id, _ in to_save:
+    for reseau, role, layer_id, _ in to_save:
         layer_name = f"{role}_{reseau}"
         step(f"Rechargement : {layer_name}")
         if not layers_meta.get(reseau, {}).get(role):
@@ -320,7 +317,7 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
             plugin._apply_style(new_layer, role, reseau)
             project.addMapLayer(new_layer, False)
             _get_or_create_group(project, reseau).addLayer(new_layer)
-            s.setValue(key, new_layer.id())
+            set_layer_id(role, reseau, new_layer.id())
             apply_etiquettes(new_layer, role, reseau)
             new_layer.setLabelsEnabled(labels_state.get(reseau, False))
             node = project.layerTreeRoot().findLayer(new_layer.id())
@@ -416,6 +413,7 @@ def load_projet(plugin, iface):
 
     plugin._cleanup_tools()
 
+    from .layer_keys import get_layer_id, set_layer_id
     s                 = QSettings()
     project           = QgsProject.instance()
     layers_meta       = bet_data.get('layers', {})
@@ -435,9 +433,8 @@ def load_projet(plugin, iface):
         labels_enabled = labels_state.get(reseau, False)
         for role in _ROLES:
             layer_name = reseau_meta.get(role, f"{role}_{reseau}")
-            key        = _PREFIX + f"couche_{role}_{reseau.lower()}"
 
-            old_id = s.value(key)
+            old_id = get_layer_id(role, reseau)
             if old_id and project.mapLayer(old_id):
                 project.removeMapLayer(old_id)
 
@@ -455,7 +452,7 @@ def load_projet(plugin, iface):
             new_layer.setLabelsEnabled(labels_enabled)
             project.addMapLayer(new_layer, False)
             _get_or_create_group(project, reseau).addLayer(new_layer)
-            s.setValue(key, new_layer.id())
+            set_layer_id(role, reseau, new_layer.id())
 
             node = project.layerTreeRoot().findLayer(new_layer.id())
             if node:

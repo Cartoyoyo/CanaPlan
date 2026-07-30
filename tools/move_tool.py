@@ -9,6 +9,10 @@ from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor
 from . import layer_ok as _ok
+from .spatial_utils import (
+    rect_request, nearest_point_feature,
+    nearest_line_feature, nearest_line_feature_expanding,
+)
 
 
 class MoveTool(QgsMapTool):
@@ -182,20 +186,16 @@ class MoveTool(QgsMapTool):
         elif self._hover_annotation is not None:
             self._clear_annotation_hover()
 
-        # Passe 1 : regards et tabourets (prioritaires)
+        # Passe 1 : regards et tabourets (prioritaires) — requête filtrée
         best_pt = None
         for reseau, couches in self.couches.items():
             for role in ('regard', 'tabouret'):
                 layer = couches.get(role)
                 if not _ok(layer):
                     continue
-                for feat in layer.getFeatures():
-                    geom = feat.geometry()
-                    if geom.isEmpty():
-                        continue
-                    dist = click_pt.distance(QgsPointXY(geom.asPoint()))
-                    if dist <= tol and (best_pt is None or dist < best_pt[4]):
-                        best_pt = (role, feat, layer, reseau, dist)
+                feat, dist = nearest_point_feature(layer, click_pt, tol)
+                if feat is not None and (best_pt is None or dist < best_pt[4]):
+                    best_pt = (role, feat, layer, reseau, dist)
 
         if best_pt is not None:
             self._clear_label_hover()
@@ -334,7 +334,7 @@ class MoveTool(QgsMapTool):
         """
         tolerance = 0.05
         old_point = QgsPointXY(self._orig_pt)
-        for feat in line_layer.getFeatures():
+        for feat in line_layer.getFeatures(rect_request(old_point, tolerance)):
             geom = feat.geometry()
             if geom.isEmpty():
                 continue
@@ -616,7 +616,7 @@ class MoveTool(QgsMapTool):
         if not line_layer.isEditable():
             line_layer.startEditing()
         modified = False
-        for feat in line_layer.getFeatures():
+        for feat in line_layer.getFeatures(rect_request(old_point, tolerance)):
             geom = feat.geometry()
             if geom.isEmpty():
                 continue
@@ -653,7 +653,8 @@ class MoveTool(QgsMapTool):
             branchement_layer.startEditing()
         modified = False
 
-        for feat in branchement_layer.getFeatures():
+        for feat in branchement_layer.getFeatures(
+                rect_request(old_point, tolerance)):
             geom = feat.geometry()
             if geom.isEmpty():
                 continue
@@ -667,17 +668,8 @@ class MoveTool(QgsMapTool):
             new_line = [QgsPointXY(p.x() + dx, p.y() + dy) for p in line]
 
             # Re-projette le point de piquage (premier sommet) sur la conduite
-            new_start = new_line[0]
-            best_proj, best_dist = None, float('inf')
-            for c_feat in conduite_layer.getFeatures():
-                c_geom = c_feat.geometry()
-                if c_geom.isEmpty():
-                    continue
-                sq_d, proj, _, _ = c_geom.closestSegmentWithContext(new_start)
-                dist = math.sqrt(sq_d)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_proj = QgsPointXY(proj)
+            _, best_proj, _ = nearest_line_feature_expanding(
+                conduite_layer, new_line[0])
 
             if best_proj is not None:
                 new_line[0] = best_proj
@@ -706,16 +698,8 @@ class MoveTool(QgsMapTool):
                 continue
             br_line = br_geom.asPolyline()
             start_pt = QgsPointXY(br_line[0])
-            best_proj, best_dist = None, float('inf')
-            for c_feat in conduite_layer.getFeatures():
-                c_geom = c_feat.geometry()
-                if c_geom.isEmpty():
-                    continue
-                sq_d, proj, _, _ = c_geom.closestSegmentWithContext(start_pt)
-                dist = math.sqrt(sq_d)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_proj = QgsPointXY(proj)
+            _, best_proj, best_dist = nearest_line_feature_expanding(
+                conduite_layer, start_pt)
             if best_proj is None or best_dist <= 0.0001:
                 continue
             br_line[0] = best_proj
@@ -740,7 +724,7 @@ class MoveTool(QgsMapTool):
             br_layer = couches.get('branchement')
             if not _ok(br_layer):
                 continue
-            for feat in br_layer.getFeatures():
+            for feat in br_layer.getFeatures(rect_request(click_pt, tol)):
                 geom = feat.geometry()
                 if geom.isEmpty():
                     continue
@@ -801,35 +785,18 @@ class MoveTool(QgsMapTool):
         reg_layer = self._piquage_reg_layer
         if _ok(reg_layer):
             reg_tol = 10 * self.canvas.mapUnitsPerPixel()
-            best_rpt, best_rd = None, float('inf')
-            for r in reg_layer.getFeatures():
-                g = r.geometry()
-                if g.isEmpty():
-                    continue
-                pt = QgsPointXY(g.asPoint())
-                d  = cursor_pt.distance(pt)
-                if d < best_rd:
-                    best_rd, best_rpt = d, pt
-            if best_rpt and best_rd <= reg_tol:
-                snap_pt = best_rpt
-                best_cf, best_cd = None, float('inf')
-                for c in cond_layer.getFeatures():
-                    sq, _, _, _ = c.geometry().closestSegmentWithContext(snap_pt)
-                    d = math.sqrt(sq)
-                    if d < best_cd:
-                        best_cd, best_cf = d, c
-                snap_cond = best_cf
+            r_feat, _ = nearest_point_feature(reg_layer, cursor_pt, reg_tol)
+            if r_feat is not None:
+                snap_pt = QgsPointXY(r_feat.geometry().asPoint())
+                snap_cond, _, _ = nearest_line_feature_expanding(
+                    cond_layer, snap_pt)
 
         # Priorité 2 : projection sur conduite
         if snap_pt is None:
             cond_tol = 200 * self.canvas.mapUnitsPerPixel()
-            best_cf, best_cd, best_proj = None, float('inf'), None
-            for c in cond_layer.getFeatures():
-                sq, proj, _, _ = c.geometry().closestSegmentWithContext(cursor_pt)
-                d = math.sqrt(sq)
-                if d < best_cd:
-                    best_cd, best_cf, best_proj = d, c, QgsPointXY(proj)
-            if best_cf and best_cd <= cond_tol:
+            best_cf, best_proj, _ = nearest_line_feature(
+                cond_layer, cursor_pt, cond_tol)
+            if best_cf is not None:
                 snap_pt   = best_proj
                 snap_cond = best_cf
 
@@ -909,23 +876,19 @@ class MoveTool(QgsMapTool):
         if cond_len <= 0:
             return None
         line   = cond_geom.asPolyline()
-        pt_dep = QgsPointXY(line[0])
-        pt_arr = QgsPointXY(line[-1])
         tol    = 0.05
-        fe_dep = fe_arr = None
-        for r in self._piquage_reg_layer.getFeatures():
-            g = r.geometry()
-            if g.isEmpty():
-                continue
-            pt = QgsPointXY(g.asPoint())
+
+        def _fe_at(pt):
+            r, _ = nearest_point_feature(self._piquage_reg_layer, pt, tol)
+            if r is None:
+                return None
             try:
-                v = float(r['fe_radier'])
+                return float(r['fe_radier'])
             except (TypeError, ValueError):
-                continue
-            if pt_dep.distance(pt) <= tol:
-                fe_dep = v
-            if pt_arr.distance(pt) <= tol:
-                fe_arr = v
+                return None
+
+        fe_dep = _fe_at(QgsPointXY(line[0]))
+        fe_arr = _fe_at(QgsPointXY(line[-1]))
         if fe_dep is None or fe_arr is None:
             return None
         return fe_dep + (fe_arr - fe_dep) * (pk / cond_len)

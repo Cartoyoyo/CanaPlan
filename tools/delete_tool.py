@@ -2,12 +2,16 @@
 
 import math
 
-from qgis.core import QgsPointXY, QgsGeometry, QgsWkbTypes, QgsRectangle, QgsProject
+from qgis.core import (
+    QgsPointXY, QgsGeometry, QgsWkbTypes, QgsRectangle, QgsProject,
+    QgsFeatureRequest,
+)
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QMessageBox
 from . import layer_ok as _ok
+from .spatial_utils import nearest_point_feature, nearest_line_feature
 
 
 class DeleteTool(QgsMapTool):
@@ -157,13 +161,9 @@ class DeleteTool(QgsMapTool):
                 layer = couches.get(role)
                 if not _ok(layer):
                     continue
-                for feat in layer.getFeatures():
-                    geom = feat.geometry()
-                    if geom.isEmpty():
-                        continue
-                    dist = click_pt.distance(QgsPointXY(geom.asPoint()))
-                    if dist <= tol and (best_pt is None or dist < best_pt[4]):
-                        best_pt = (role, feat, layer, reseau, dist)
+                feat, dist = nearest_point_feature(layer, click_pt, tol)
+                if feat is not None and (best_pt is None or dist < best_pt[4]):
+                    best_pt = (role, feat, layer, reseau, dist)
 
         # Passe 2 : conduites et branchements, seulement si aucun point trouvé
         best_line = None
@@ -173,14 +173,9 @@ class DeleteTool(QgsMapTool):
                     layer = couches.get(role)
                     if not _ok(layer):
                         continue
-                    for feat in layer.getFeatures():
-                        geom = feat.geometry()
-                        if geom.isEmpty():
-                            continue
-                        sq_d, _, _, _ = geom.closestSegmentWithContext(click_pt)
-                        dist = math.sqrt(sq_d)
-                        if dist <= tol and (best_line is None or dist < best_line[4]):
-                            best_line = (role, feat, layer, reseau, dist)
+                    feat, _, dist = nearest_line_feature(layer, click_pt, tol)
+                    if feat is not None and (best_line is None or dist < best_line[4]):
+                        best_line = (role, feat, layer, reseau, dist)
 
         best = best_pt if best_pt is not None else best_line
 
@@ -321,7 +316,9 @@ class DeleteTool(QgsMapTool):
         if role == 'conduite':
             br_layer = couches['branchement']
             tab_layer = couches['tabouret']
-            for br in br_layer.getFeatures():
+            _req = QgsFeatureRequest().setFilterRect(
+                feat.geometry().boundingBox().buffered(0.01))
+            for br in br_layer.getFeatures(_req):
                 br_geom = br.geometry()
                 if br_geom.isEmpty():
                     continue
@@ -372,7 +369,9 @@ class DeleteTool(QgsMapTool):
                 layer = couches.get(role)
                 if not _ok(layer):
                     continue
-                for feat in layer.getFeatures():
+                _req = QgsFeatureRequest().setFilterRect(
+                    sel_geom.boundingBox())
+                for feat in layer.getFeatures(_req):
                     geom = feat.geometry()
                     if geom.isEmpty() or not sel_geom.intersects(geom):
                         continue
@@ -406,7 +405,9 @@ class DeleteTool(QgsMapTool):
             if role == 'conduite':
                 br_layer = couches['branchement']
                 tab_layer = couches['tabouret']
-                for br in br_layer.getFeatures():
+                _req = QgsFeatureRequest().setFilterRect(
+                    feat.geometry().boundingBox().buffered(0.01))
+                for br in br_layer.getFeatures(_req):
                     br_geom = br.geometry()
                     if br_geom.isEmpty():
                         continue
@@ -482,10 +483,5 @@ class DeleteTool(QgsMapTool):
     def _find_point_at(self, layer, point):
         if not _ok(layer):
             return None
-        for feat in layer.getFeatures():
-            geom = feat.geometry()
-            if geom.isEmpty():
-                continue
-            if QgsPointXY(point).distance(geom.asPoint()) <= 0.01:
-                return feat
-        return None
+        feat, _ = nearest_point_feature(layer, QgsPointXY(point), 0.01)
+        return feat

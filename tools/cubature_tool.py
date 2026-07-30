@@ -19,14 +19,13 @@ class CubatureTool(QgsMapTool):
 
     _SNAP_TOL_PX = 20
 
-    def __init__(self, canvas, iface, couches_eu, couches_ep, opts, show_remblai=False):
+    def __init__(self, canvas, iface, couches_eu, couches_ep, opts):
         super().__init__(canvas)
         self.canvas = canvas
         self.iface = iface
         self.couches_eu = couches_eu
         self.couches_ep = couches_ep
         self.opts = opts
-        self.show_remblai = show_remblai
 
         self._start = None
         self._reseau_start = None
@@ -46,14 +45,14 @@ class CubatureTool(QgsMapTool):
         self.canvas.setCursor(Qt.CrossCursor)
         if self._axe_mode:
             self.iface.messageBar().pushMessage(
-                "Cubature tranchées" if not self.show_remblai else "Remblai tranchées",
+                "Cubature tranchées",
                 "Tracez l'axe de référence : clic gauche = ajouter un point  ·  "
                 "Double-clic ou clic droit = terminer  ·  Échap = annuler",
                 level=0, duration=0,
             )
         else:
             self.iface.messageBar().pushMessage(
-                "Cubature tranchées" if not self.show_remblai else "Remblai tranchées",
+                "Cubature tranchées",
                 "1er clic : regard départ (vert)  ·  2e clic : regard arrivée → calcul  ·  Échap : annuler",
                 level=0, duration=0,
             )
@@ -316,7 +315,7 @@ class CubatureTool(QgsMapTool):
         axe_prefix = "_".join(axe_parts) if axe_parts else None
 
         dlg = CubatureDialog(results, config, self.iface.mainWindow(),
-                             bfs_prefix=axe_prefix, show_remblai=self.show_remblai)
+                             bfs_prefix=axe_prefix)
         dlg.show()
         self._dialog = dlg
 
@@ -415,7 +414,7 @@ class CubatureTool(QgsMapTool):
         from .calc_cubature import _nom_regard
         bfs_prefix = f"{_nom_regard(start_feat)}_{_nom_regard(end_feat)}"
         dlg = CubatureDialog(results, config, self.iface.mainWindow(),
-                             bfs_prefix=bfs_prefix, show_remblai=self.show_remblai)
+                             bfs_prefix=bfs_prefix)
         dlg.show()
         self._dialog = dlg
 
@@ -432,14 +431,11 @@ class CubatureTool(QgsMapTool):
             layer = couches.get('regard') if couches else None
             if layer is None or sip.isdeleted(layer):
                 continue
-            for feat in layer.getFeatures():
-                g = feat.geometry()
-                if g.isEmpty():
-                    continue
-                d = point.distance(QgsPointXY(g.asPoint()))
-                if d <= tol and d < best_d:
-                    best_d, best, best_reseau = d, feat, name
-                    best_layer = layer
+            from .spatial_utils import nearest_point_feature
+            feat, d = nearest_point_feature(layer, point, tol)
+            if feat is not None and d < best_d:
+                best_d, best, best_reseau = d, feat, name
+                best_layer = layer
 
         return best, best_reseau, best_layer
 
@@ -450,7 +446,7 @@ class CubatureTool(QgsMapTool):
             layer = couches.get('regard')
             if layer is None or sip.isdeleted(layer):
                 continue
-            if feat.id() in [f.id() for f in layer.getFeatures()]:
+            if layer.getFeature(feat.id()).isValid():
                 return layer
         return None
 

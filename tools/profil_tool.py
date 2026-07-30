@@ -155,15 +155,9 @@ class ProfilTool(QgsMapTool):
         layer = self._layer('regard')
         if layer is None:
             return None
+        from .spatial_utils import nearest_point_feature
         tol = self._SNAP_TOL_PX * self.canvas.mapUnitsPerPixel()
-        best, best_d = None, float('inf')
-        for feat in layer.getFeatures():
-            g = feat.geometry()
-            if g.isEmpty():
-                continue
-            d = point.distance(QgsPointXY(g.asPoint()))
-            if d <= tol and d < best_d:
-                best_d, best = d, feat
+        best, _ = nearest_point_feature(layer, point, tol)
         return best
 
     def _tabouret_nom(self, br_feat):
@@ -175,13 +169,15 @@ class ProfilTool(QgsMapTool):
         if not line:
             return ''
         end_pt = QgsPointXY(line[-1])
-        tol = 0.05
         tab_layer = self._layer('tabouret')
-        for feat in (tab_layer.getFeatures() if tab_layer else []):
+        if tab_layer is None:
+            return ''
+        from .spatial_utils import rect_request
+        for feat in tab_layer.getFeatures(rect_request(end_pt, 0.05)):
             g = feat.geometry()
             if g.isEmpty():
                 continue
-            if end_pt.distance(QgsPointXY(g.asPoint())) <= tol:
+            if end_pt.distance(QgsPointXY(g.asPoint())) <= 0.05:
                 v = feat['nom']
                 if v and (QGIS_NULL is None or v != QGIS_NULL):
                     return str(v)

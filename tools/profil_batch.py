@@ -317,13 +317,11 @@ def _compute_groupe_data(couches_eu, couches_ep, pts):
                 }
             ))
 
+    from .spatial_utils import PointGrid
+    _regard_grid = PointGrid(regard_lookup)
+
     def snap_regard(pt, tol=1.0):
-        best, best_d = None, float('inf')
-        for rpt, rdata in regard_lookup:
-            d = pt.distance(rpt)
-            if d < best_d:
-                best_d, best = d, rdata
-        return best if best_d <= tol else None
+        return _regard_grid.nearest(pt, tol)
 
     conduites_data = []
 

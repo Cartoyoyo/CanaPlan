@@ -3,15 +3,27 @@
 from qgis.core import (
     QgsAnnotationPointTextItem,
     QgsTextFormat,
+    QgsTextBackgroundSettings,
     QgsProject,
     QgsPointXY,
     QgsUnitTypes,
 )
 from qgis.gui import QgsMapTool
-from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QFont
+from qgis.PyQt.QtCore import Qt, QSizeF
+from qgis.PyQt.QtGui import QFont, QColor
 
 _TOL_PX = 20
+
+
+def _bg_enum(enum_name, member_name):
+    """Résout un membre d'énum de QgsTextBackgroundSettings quel que soit le
+    style d'exposition PyQGIS (scoped `EnumName.Membre` ou à plat `Membre`
+    directement sur la classe) — évite un AttributeError silencieux selon
+    la version de QGIS installée."""
+    enum_cls = getattr(QgsTextBackgroundSettings, enum_name, None)
+    if enum_cls is not None and hasattr(enum_cls, member_name):
+        return getattr(enum_cls, member_name)
+    return getattr(QgsTextBackgroundSettings, member_name)
 
 
 def freeze_annotations_to_map_units(canvas):
@@ -84,6 +96,23 @@ def make_text_format(vals):
     fmt.setSizeUnit(vals.get('size_unit', QgsUnitTypes.RenderPoints))
     fmt.setSize(vals['size'])
     fmt.setColor(vals['color'])
+    fmt.setOpacity(vals.get('opacity', 1.0))
+
+    bg = QgsTextBackgroundSettings()
+    bg.setEnabled(bool(vals.get('frame', False)))
+    if bg.enabled():
+        bg.setType(_bg_enum('ShapeType', 'ShapeRectangle'))
+        bg.setSizeType(_bg_enum('SizeType', 'SizeBuffer'))
+        bg.setSize(QSizeF(1.0, 1.0))
+        bg.setSizeUnit(QgsUnitTypes.RenderMillimeters)
+        if vals.get('frame_filled', True):
+            bg.setFillColor(vals.get('frame_fill_color') or QColor(255, 255, 255))
+        else:
+            bg.setFillColor(QColor(0, 0, 0, 0))
+        bg.setStrokeColor(vals.get('frame_border_color') or QColor(0, 0, 0))
+        bg.setStrokeWidth(0.5)
+        bg.setStrokeWidthUnit(QgsUnitTypes.RenderMillimeters)
+    fmt.setBackground(bg)
     return fmt
 
 
@@ -105,6 +134,7 @@ def _snapshot_item(item):
     """Sérialise une annotation en dict autonome (pour clipboard interne)."""
     fmt  = item.format()
     font = fmt.font()
+    bg   = fmt.background()
     return {
         'text':      item.text(),
         'font':      font.family(),
@@ -115,6 +145,11 @@ def _snapshot_item(item):
         'italic':    font.italic(),
         'underline': font.underline(),
         'alignment': _get_alignment(item),
+        'frame':              bg.enabled(),
+        'frame_filled':       bg.fillColor().alpha() > 0,
+        'frame_fill_color':   bg.fillColor(),
+        'frame_border_color': bg.strokeColor(),
+        'opacity':            fmt.opacity(),
     }
 
 
@@ -206,41 +241,102 @@ class AnnotationTool(QgsMapTool):
 
         from ..gui.annotation_dialog import AnnotationDialog
 
+        ann_layer = QgsProject.instance().mainAnnotationLayer()
+
         if existing is not None:
             item_id, item = existing
-            fmt  = item.format()
-            font = fmt.font()
+            original_point = QgsPointXY(item.point().x(), item.point().y())
+            original_snapshot = _snapshot_item(item)
             dlg = AnnotationDialog(
                 self.iface.mainWindow(),
-                text=item.text(),
-                font_name=font.family(),
-                size=fmt.size(),
-                size_unit=fmt.sizeUnit(),
-                color=fmt.color(),
-                bold=font.bold(),
-                italic=font.italic(),
-                underline=font.underline(),
-                alignment=_get_alignment(item),
+                text=original_snapshot['text'],
+                font_name=original_snapshot['font'],
+                size=original_snapshot['size'],
+                size_unit=original_snapshot['size_unit'],
+                color=original_snapshot['color'],
+                bold=original_snapshot['bold'],
+                italic=original_snapshot['italic'],
+                underline=original_snapshot['underline'],
+                alignment=original_snapshot['alignment'],
+                frame=original_snapshot['frame'],
+                frame_filled=original_snapshot['frame_filled'],
+                frame_fill_color=original_snapshot['frame_fill_color'],
+                frame_border_color=original_snapshot['frame_border_color'],
+                opacity=original_snapshot['opacity'],
             )
-            if dlg.exec_() != AnnotationDialog.Accepted:
-                return
-            vals = dlg.get_values()
-            ann_layer = QgsProject.instance().mainAnnotationLayer()
-            old_pt = item.point()
-            ann_layer.removeItem(item_id)
-            if vals['text']:
-                ann_layer.addItem(_create_item_from_snapshot(
-                    vals, QgsPointXY(old_pt.x(), old_pt.y())))
+
+            state = {'item_id': item_id}
+
+            def _apply_live(vals):
+                # « Appliquer » : prévisualise sur la carte sans fermer le
+                # dialogue ; le texte vide n'efface pas (seul OK le fait).
+                if not vals['text']:
+                    return
+                try:
+                    new_item = _create_item_from_snapshot(vals, original_point)
+                except Exception as exc:
+                    self.iface.messageBar().pushMessage(
+                        "Annotation", f"Impossible d'appliquer : {exc}",
+                        level=2, duration=6)
+                    return
+                ann_layer.removeItem(state['item_id'])
+                state['item_id'] = ann_layer.addItem(new_item)
+                self.canvas().refresh()
+
+            dlg.applied.connect(_apply_live)
+            accepted = dlg.exec_() == AnnotationDialog.Accepted
+
+            if accepted:
+                vals = dlg.get_values()
+                if vals['text']:
+                    new_item = _create_item_from_snapshot(vals, original_point)
+                    ann_layer.removeItem(state['item_id'])
+                    ann_layer.addItem(new_item)
+                else:
+                    ann_layer.removeItem(state['item_id'])
+            else:
+                # Annulé : restaure l'annotation d'origine (efface les aperçus
+                # déposés via « Appliquer »).
+                ann_layer.removeItem(state['item_id'])
+                ann_layer.addItem(
+                    _create_item_from_snapshot(original_snapshot, original_point))
         else:
             dlg = AnnotationDialog(self.iface.mainWindow())
-            if dlg.exec_() != AnnotationDialog.Accepted:
-                return
-            vals = dlg.get_values()
-            if not vals['text']:
-                return
-            ann_layer = QgsProject.instance().mainAnnotationLayer()
-            ann_layer.addItem(_create_item_from_snapshot(
-                vals, QgsPointXY(click_pt.x(), click_pt.y())))
+
+            state = {'item_id': None}
+
+            def _apply_live_new(vals):
+                if not vals['text']:
+                    return
+                try:
+                    new_item = _create_item_from_snapshot(
+                        vals, QgsPointXY(click_pt.x(), click_pt.y()))
+                except Exception as exc:
+                    self.iface.messageBar().pushMessage(
+                        "Annotation", f"Impossible d'appliquer : {exc}",
+                        level=2, duration=6)
+                    return
+                if state['item_id'] is not None:
+                    ann_layer.removeItem(state['item_id'])
+                state['item_id'] = ann_layer.addItem(new_item)
+                self.canvas().refresh()
+
+            dlg.applied.connect(_apply_live_new)
+            accepted = dlg.exec_() == AnnotationDialog.Accepted
+
+            if accepted:
+                vals = dlg.get_values()
+                if vals['text']:
+                    new_item = _create_item_from_snapshot(
+                        vals, QgsPointXY(click_pt.x(), click_pt.y()))
+                    if state['item_id'] is not None:
+                        ann_layer.removeItem(state['item_id'])
+                    ann_layer.addItem(new_item)
+                elif state['item_id'] is not None:
+                    ann_layer.removeItem(state['item_id'])
+            elif state['item_id'] is not None:
+                # Annulé après un aperçu « Appliquer » : retire l'aperçu.
+                ann_layer.removeItem(state['item_id'])
 
         self.canvas().refresh()
 

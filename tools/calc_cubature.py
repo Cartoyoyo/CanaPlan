@@ -48,28 +48,16 @@ def _longueur_3d(geom, z_start=None, z_end=None):
 def _snap_regard(pt, regard_layer, tol=0.05):
     if regard_layer is None:
         return None
-    best, best_d = None, float('inf')
-    for feat in regard_layer.getFeatures():
-        g = feat.geometry()
-        if g.isEmpty():
-            continue
-        d = pt.distance(QgsPointXY(g.asPoint()))
-        if d <= tol and d < best_d:
-            best_d, best = d, feat
+    from .spatial_utils import nearest_point_feature
+    best, _ = nearest_point_feature(regard_layer, pt, tol)
     return best
 
 
 def _snap_tabouret(pt, tabouret_layer, tol=0.05):
     if tabouret_layer is None:
         return None
-    best, best_d = None, float('inf')
-    for feat in tabouret_layer.getFeatures():
-        g = feat.geometry()
-        if g.isEmpty():
-            continue
-        d = pt.distance(QgsPointXY(g.asPoint()))
-        if d <= tol and d < best_d:
-            best_d, best = d, feat
+    from .spatial_utils import nearest_point_feature
+    best, _ = nearest_point_feature(tabouret_layer, pt, tol)
     return best
 
 

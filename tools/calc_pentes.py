@@ -1,26 +1,52 @@
-from qgis.core import QgsPointXY
+from qgis.core import QgsPointXY, QgsSpatialIndex
 
 from .graph_utils import _to_float
+
+
+def _build_point_index(layer, fe_field):
+    """Index spatial + {fid: (point, fe)} d'une couche de points.
+
+    Retourne (QgsSpatialIndex, dict). Couche None → index vide.
+    """
+    pts = {}
+    index = QgsSpatialIndex()
+    if layer is None:
+        return index, pts
+    for feat in layer.getFeatures():
+        g = feat.geometry()
+        if not g.isEmpty():
+            pts[feat.id()] = (QgsPointXY(g.asPoint()),
+                              _to_float(feat[fe_field]))
+            index.addFeature(feat)
+    return index, pts
+
+
+def _fe_at(index, pts, pt, tol):
+    """FE de l'entité la plus proche de pt dans le rayon tol, sinon None."""
+    for fid in index.nearestNeighbor(pt, 1, tol):
+        rpt, fe = pts[fid]
+        if pt.distance(rpt) <= tol:
+            return fe
+    return None
 
 
 def recalc_pentes(conduite_layer, regard_layer, tol=0.05,
                   branchement_layer=None, tabouret_layer=None):
     """Recalcule les pentes des conduites et les cotes de piquage / pentes des
-    branchements à partir des FE radier des regards et des FE entrée des tabourets."""
+    branchements à partir des FE radier des regards et des FE entrée des tabourets.
+
+    Recherches par index spatial (O(n log m)) et écritures batch via le
+    dataProvider (un seul lot de signaux, pas de pile d'undo : recalcul
+    automatique, pas une action utilisateur annulable)."""
     if conduite_layer is None or regard_layer is None:
         return
 
-    # ── Index des regards : {id: (point, fe_radier)} ────────────────
-    r_pts = {}
-    for feat in regard_layer.getFeatures():
-        g = feat.geometry()
-        if not g.isEmpty():
-            r_pts[feat.id()] = (QgsPointXY(g.asPoint()), _to_float(feat['fe_radier']))
+    r_index, r_pts = _build_point_index(regard_layer, 'fe_radier')
 
     # ── 1. Pentes des conduites ─────────────────────────────────────
     pente_idx = conduite_layer.fields().indexOf('pente')
     if pente_idx >= 0:
-        conduite_layer.startEditing()
+        amap = {}
         for feat in conduite_layer.getFeatures():
             g = feat.geometry()
             if g.isEmpty():
@@ -30,13 +56,8 @@ def recalc_pentes(conduite_layer, regard_layer, tol=0.05,
                 continue
 
             pt0, pt1 = QgsPointXY(line[0]), QgsPointXY(line[-1])
-            fe0 = fe1 = None
-            for _rid, (rpt, fe) in r_pts.items():
-                if pt0.distance(rpt) <= tol:
-                    fe0 = fe
-                if pt1.distance(rpt) <= tol:
-                    fe1 = fe
-
+            fe0 = _fe_at(r_index, r_pts, pt0, tol)
+            fe1 = _fe_at(r_index, r_pts, pt1, tol)
             if fe0 is None or fe1 is None:
                 continue
 
@@ -45,8 +66,11 @@ def recalc_pentes(conduite_layer, regard_layer, tol=0.05,
                 continue
 
             pente = (fe0 - fe1) / longueur * 100
-            conduite_layer.changeAttributeValue(feat.id(), pente_idx, round(pente, 3))
-        conduite_layer.commitChanges()
+            amap[feat.id()] = {pente_idx: round(pente, 3)}
+
+        if amap:
+            conduite_layer.dataProvider().changeAttributeValues(amap)
+            conduite_layer.triggerRepaint()
 
     # ── 2. Cotes de piquage et pentes des branchements ──────────────
     if branchement_layer is None:
@@ -57,15 +81,9 @@ def recalc_pentes(conduite_layer, regard_layer, tol=0.05,
     if cp_idx < 0 and bp_idx < 0:
         return
 
-    # Index des tabourets : {id: (point, fe_entree)}
-    t_pts = {}
-    if tabouret_layer is not None:
-        for feat in tabouret_layer.getFeatures():
-            g = feat.geometry()
-            if not g.isEmpty():
-                t_pts[feat.id()] = (QgsPointXY(g.asPoint()), _to_float(feat['fe_entree']))
+    t_index, t_pts = _build_point_index(tabouret_layer, 'fe_entree')
 
-    branchement_layer.startEditing()
+    amap = {}
     for feat in branchement_layer.getFeatures():
         id_conduite = feat['id_conduite']
         if id_conduite is None:
@@ -88,15 +106,8 @@ def recalc_pentes(conduite_layer, regard_layer, tol=0.05,
             continue
 
         # FE amont / aval de la conduite
-        pt_dep = QgsPointXY(cond_line[0])
-        pt_arr = QgsPointXY(cond_line[-1])
-        fe_dep = fe_arr = None
-        for _rid, (rpt, fe) in r_pts.items():
-            if pt_dep.distance(rpt) <= tol:
-                fe_dep = fe
-            if pt_arr.distance(rpt) <= tol:
-                fe_arr = fe
-
+        fe_dep = _fe_at(r_index, r_pts, QgsPointXY(cond_line[0]), tol)
+        fe_arr = _fe_at(r_index, r_pts, QgsPointXY(cond_line[-1]), tol)
         if fe_dep is None or fe_arr is None:
             continue
 
@@ -107,40 +118,29 @@ def recalc_pentes(conduite_layer, regard_layer, tol=0.05,
 
         cote_piquage = fe_dep + (fe_arr - fe_dep) * (pk / cond_len)
 
+        changes = {}
         if cp_idx >= 0:
-            branchement_layer.changeAttributeValue(
-                feat.id(), cp_idx, round(cote_piquage, 3))
+            changes[cp_idx] = round(cote_piquage, 3)
 
         # Pente du branchement = (cote_piquage - fe_arrivee) / longueur * 100
         if bp_idx >= 0:
             br_geom = feat.geometry()
-            if br_geom.isEmpty():
-                continue
-            br_line = br_geom.asPolyline()
-            if len(br_line) < 2:
-                continue
+            if not br_geom.isEmpty():
+                br_line = br_geom.asPolyline()
+                longueur = _to_float(feat['longueur']) or br_geom.length()
+                if len(br_line) >= 2 and longueur and longueur > 0:
+                    # Le dernier point arrive sur un tabouret ou un regard
+                    pt_arrivee = QgsPointXY(br_line[-1])
+                    fe_arrivee = _fe_at(t_index, t_pts, pt_arrivee, tol)
+                    if fe_arrivee is None:
+                        fe_arrivee = _fe_at(r_index, r_pts, pt_arrivee, tol)
+                    if fe_arrivee is not None:
+                        pente_br = (cote_piquage - fe_arrivee) / longueur * 100
+                        changes[bp_idx] = round(pente_br, 3)
 
-            longueur = _to_float(feat['longueur']) or br_geom.length()
-            if not longueur or longueur <= 0:
-                continue
+        if changes:
+            amap[feat.id()] = changes
 
-            # Le dernier point du branchement arrive sur un tabouret ou un regard
-            pt_arrivee = QgsPointXY(br_line[-1])
-            fe_arrivee = None
-            for _tid, (tpt, fe) in t_pts.items():
-                if pt_arrivee.distance(tpt) <= tol:
-                    fe_arrivee = fe
-                    break
-
-            if fe_arrivee is None:
-                for _rid, (rpt, fe) in r_pts.items():
-                    if pt_arrivee.distance(rpt) <= tol:
-                        fe_arrivee = fe
-                        break
-
-            if fe_arrivee is not None:
-                pente_br = (cote_piquage - fe_arrivee) / longueur * 100
-                branchement_layer.changeAttributeValue(
-                    feat.id(), bp_idx, round(pente_br, 3))
-
-    branchement_layer.commitChanges()
+    if amap:
+        branchement_layer.dataProvider().changeAttributeValues(amap)
+        branchement_layer.triggerRepaint()

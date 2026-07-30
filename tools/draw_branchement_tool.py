@@ -8,8 +8,11 @@ from qgis.core import (
 )
 from qgis.gui import QgsMapToolEmitPoint, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal
-from qgis.PyQt.QtWidgets import QMessageBox, QDialog, QFormLayout, QLineEdit, QDialogButtonBox
+from qgis.PyQt.QtWidgets import QMessageBox, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QToolTip
 from qgis.PyQt.QtGui import QColor
+
+from .spatial_utils import nearest_point_feature, nearest_line_feature
+
 
 class DrawBranchementTool(QgsMapToolEmitPoint):
     """
@@ -74,6 +77,7 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
     def deactivate(self):
         from qgis.utils import iface
         iface.messageBar().clearWidgets()
+        QToolTip.hideText()
         self.rubber.reset(QgsWkbTypes.LineGeometry)
         self.snap_cross.reset(QgsWkbTypes.LineGeometry)
         self.snap_ticks.reset(QgsWkbTypes.LineGeometry)
@@ -86,7 +90,14 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
 
         if len(self.points) == 0:
             # Pas encore de point posé : afficher l'indicateur de snap sur conduite
-            self._update_snap_indicator(point)
+            pk_info = self._update_snap_indicator(point)
+            if pk_info is not None:
+                pk, total_len = pk_info
+                texte = (f"{pk:.2f} m / {total_len - pk:.2f} m"
+                          .replace('.', ','))
+                QToolTip.showText(event.globalPos(), texte, self.canvas)
+            else:
+                QToolTip.hideText()
         else:
             # Tracé en cours : masquer les indicateurs et mettre à jour le rubber band
             self.snap_cross.reset(QgsWkbTypes.LineGeometry)
@@ -95,6 +106,69 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
             temp_points = self.snapped_points.copy()
             temp_points.append(point)
             self.rubber.setToGeometry(QgsGeometry.fromPolylineXY(temp_points), None)
+
+            longueur = QgsGeometry.fromPolylineXY(temp_points).length()
+            texte = f"{longueur:.2f} m".replace('.', ',')
+
+            angle = self._angle_amont(temp_points)
+            if angle is not None:
+                deviation = 180.0 - angle
+                texte += f"  ·  {angle:.0f}° / {deviation:.0f}°"
+
+            if len(temp_points) >= 3:
+                angle_sommet = self._compute_angle(
+                    temp_points[-3], temp_points[-2], temp_points[-1])
+                deviation_sommet = 180.0 - angle_sommet
+                texte += f"  ·  {angle_sommet:.0f}° / {deviation_sommet:.0f}°"
+
+            QToolTip.showText(event.globalPos(), texte, self.canvas)
+
+    @staticmethod
+    def _compute_angle(p_prev, p_vertex, p_next):
+        """Angle (en degrés) au sommet p_vertex entre les segments p_prev-p_vertex
+        et p_vertex-p_next. 180° = alignement droit, 90° = angle droit."""
+        ax = p_prev.x() - p_vertex.x()
+        ay = p_prev.y() - p_vertex.y()
+        bx = p_next.x() - p_vertex.x()
+        by = p_next.y() - p_vertex.y()
+        dot = ax * bx + ay * by
+        det = ax * by - ay * bx
+        return abs(math.degrees(math.atan2(det, dot)))
+
+    def _angle_amont(self, temp_points):
+        """Angle (0-180°) entre la direction amont de la conduite piquée et
+        le premier segment du branchement (piquage -> premier point tracé)."""
+        if self.id_conduite is None or len(temp_points) < 2:
+            return None
+
+        try:
+            cond_geom = self.conduite_layer.getFeature(self.id_conduite).geometry()
+        except Exception:
+            return None
+        if cond_geom.isEmpty():
+            return None
+
+        total_len = cond_geom.length()
+        if total_len <= 0:
+            return None
+
+        delta = min(0.5, total_len * 0.01)
+        pk = self.pk_debut
+        p_pk   = cond_geom.interpolate(pk).asPoint()
+        p_back = cond_geom.interpolate(max(0, pk - delta)).asPoint()
+        amont_vec = (p_back.x() - p_pk.x(), p_back.y() - p_pk.y())
+
+        p0, p1 = temp_points[0], temp_points[1]
+        branch_vec = (p1.x() - p0.x(), p1.y() - p0.y())
+
+        norm_a = math.hypot(*amont_vec)
+        norm_b = math.hypot(*branch_vec)
+        if norm_a < 1e-9 or norm_b < 1e-9:
+            return None
+
+        dot = amont_vec[0] * branch_vec[0] + amont_vec[1] * branch_vec[1]
+        cos_a = max(-1.0, min(1.0, dot / (norm_a * norm_b)))
+        return math.degrees(math.acos(cos_a))
 
     def _update_snap_indicator(self, cursor_point):
         self.snap_cross.reset(QgsWkbTypes.LineGeometry)
@@ -105,36 +179,25 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         regard_tol  =  10 * self.canvas.mapUnitsPerPixel()
 
         # ── Priorité regard à 5 px ──────────────────────────────────────────
-        nearest_regard_pt, nearest_regard_d = None, float('inf')
-        for feat in self.regard_layer.getFeatures():
-            g = feat.geometry()
-            if g.isEmpty():
-                continue
-            d = cursor_point.distance(QgsPointXY(g.asPoint()))
-            if d < nearest_regard_d:
-                nearest_regard_d = d
-                nearest_regard_pt = QgsPointXY(g.asPoint())
+        r_feat, _ = nearest_point_feature(
+            self.regard_layer, cursor_point, regard_tol)
+        nearest_regard_pt = (QgsPointXY(r_feat.geometry().asPoint())
+                             if r_feat is not None else None)
 
-        snap_from = nearest_regard_pt if (nearest_regard_pt and nearest_regard_d <= regard_tol) \
+        snap_from = nearest_regard_pt if nearest_regard_pt is not None \
                     else cursor_point
 
-        # ── Conduite la plus proche ─────────────────────────────────────────
-        best_feat, best_dist, best_proj = None, float('inf'), None
-        for feat in self.conduite_layer.getFeatures():
-            sq_dist, proj_pt, _, _ = feat.geometry().closestSegmentWithContext(snap_from)
-            dist = math.sqrt(sq_dist)
-            if dist < best_dist:
-                best_dist = dist
-                best_feat = feat
-                best_proj = QgsPointXY(proj_pt)
+        # ── Conduite la plus proche (rayon = seuil d'affichage + marge regard)
+        best_feat, best_proj, best_dist = nearest_line_feature(
+            self.conduite_layer, snap_from, detect_tol + regard_tol)
 
         if best_feat is None:
-            return
+            return None
 
         # Distance de référence pour le seuil d'affichage = curseur réel → conduite
         sq_ref, _, _, _ = best_feat.geometry().closestSegmentWithContext(cursor_point)
         if math.sqrt(sq_ref) > detect_tol:
-            return
+            return None
 
         # Quand regard prioritaire, le point projeté devient la position du regard
         if snap_from is not cursor_point:
@@ -153,6 +216,7 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
             # Mode regard : croix seule, pas de tirets vers le curseur
             self.snap_cross.setToGeometry(
                 QgsGeometry.fromMultiPolylineXY([cross_h, cross_v]), None)
+            return None
         else:
             # Mode conduite : tirets curseur→proj + croix + perpendiculaire
             self.snap_ticks.setToGeometry(
@@ -178,6 +242,8 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
             else:
                 self.snap_cross.setToGeometry(
                     QgsGeometry.fromMultiPolylineXY([cross_h, cross_v]), None)
+
+            return (pk, total_len)
 
     def canvasReleaseEvent(self, event):
         point = self.toMapCoordinates(event.pos())
@@ -222,6 +288,7 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
 
     def _reset(self):
         """Réinitialise l'état pour un nouveau tracé (outil reste actif)."""
+        QToolTip.hideText()
         self.rubber.reset(QgsWkbTypes.LineGeometry)
         self.snap_cross.reset(QgsWkbTypes.LineGeometry)
         self.snap_ticks.reset(QgsWkbTypes.LineGeometry)
@@ -263,30 +330,16 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         tol_regard   = 10  * self.canvas.mapUnitsPerPixel()
         tol_connexion = 0.5  # 50 cm pour relier regard ↔ extrémité conduite
 
-        best_pt, best_d = None, float('inf')
-        for feat in self.regard_layer.getFeatures():
-            g = feat.geometry()
-            if g.isEmpty():
-                continue
-            pt = QgsPointXY(g.asPoint())
-            d = point.distance(pt)
-            if d < best_d:
-                best_d, best_pt = d, pt
-
-        if best_pt is None or best_d > tol_regard:
+        r_feat, _ = nearest_point_feature(self.regard_layer, point, tol_regard)
+        if r_feat is None:
             return None
+        best_pt = QgsPointXY(r_feat.geometry().asPoint())
 
         # Trouve la conduite dont une extrémité coïncide avec ce regard
-        best_feat, best_dist, best_proj = None, float('inf'), None
-        for feat in self.conduite_layer.getFeatures():
-            sq_dist, proj_pt, _, _ = feat.geometry().closestSegmentWithContext(best_pt)
-            dist = math.sqrt(sq_dist)
-            if dist < best_dist:
-                best_dist = dist
-                best_feat = feat
-                best_proj = QgsPointXY(proj_pt)
+        best_feat, best_proj, best_dist = nearest_line_feature(
+            self.conduite_layer, best_pt, tol_connexion)
 
-        if best_feat is None or best_dist > tol_connexion:
+        if best_feat is None:
             return None
 
         pk = self._compute_pk(best_feat.geometry(), best_pt)
@@ -301,27 +354,15 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         regard_tol =  10 * self.canvas.mapUnitsPerPixel()
 
         # ── Priorité regard à 5 px ──────────────────────────────────────────
-        nearest_regard_pt, nearest_regard_d = None, float('inf')
-        for feat in self.regard_layer.getFeatures():
-            g = feat.geometry()
-            if g.isEmpty():
-                continue
-            d = point.distance(QgsPointXY(g.asPoint()))
-            if d < nearest_regard_d:
-                nearest_regard_d = d
-                nearest_regard_pt = QgsPointXY(g.asPoint())
+        r_feat, _ = nearest_point_feature(self.regard_layer, point, regard_tol)
+        nearest_regard_pt = (QgsPointXY(r_feat.geometry().asPoint())
+                             if r_feat is not None else None)
 
-        snap_from = nearest_regard_pt if (nearest_regard_pt and nearest_regard_d <= regard_tol) \
+        snap_from = nearest_regard_pt if nearest_regard_pt is not None \
                     else point
 
-        best_feat, best_dist, best_proj = None, float('inf'), None
-        for feat in self.conduite_layer.getFeatures():
-            sq_dist, proj_point, _, _ = feat.geometry().closestSegmentWithContext(snap_from)
-            dist = math.sqrt(sq_dist)
-            if dist < best_dist:
-                best_dist = dist
-                best_feat = feat
-                best_proj = proj_point
+        best_feat, best_proj, best_dist = nearest_line_feature(
+            self.conduite_layer, snap_from, tolerance + regard_tol)
 
         # Vérifier la distance avec le curseur réel
         if best_feat is None:
@@ -341,22 +382,14 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         Retourne le point de l'ouvrage ou None si hors tolérance.
         """
         tolerance = 200 * self.canvas.mapUnitsPerPixel()
-        layers = [self.regard_layer, self.tabouret_layer]
         best_point = None
         best_dist = float('inf')
-        for layer in layers:
-            for feat in layer.getFeatures():
-                geom = feat.geometry()
-                if geom.type() != QgsWkbTypes.PointGeometry:
-                    continue
-                pt = geom.asPoint()
-                dist = point.distance(pt)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_point = pt
-        if best_dist <= tolerance:
-            return best_point
-        return None
+        for layer in (self.regard_layer, self.tabouret_layer):
+            feat, dist = nearest_point_feature(layer, point, tolerance)
+            if feat is not None and dist < best_dist:
+                best_dist = dist
+                best_point = feat.geometry().asPoint()
+        return best_point
 
     def _compute_pk(self, line_geom, point):
         """Calcule l'abscisse curviligne du point projeté sur la ligne."""
@@ -423,13 +456,10 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         last = self.snapped_points[-1]
         # chercher dans regards et tabourets
         found = False
-        for layer in [self.regard_layer, self.tabouret_layer]:
-            for feat in layer.getFeatures():
-                pt = feat.geometry().asPoint()
-                if last.distance(pt) <= tolerance:
-                    found = True
-                    break
-            if found:
+        for layer in (self.regard_layer, self.tabouret_layer):
+            feat, _ = nearest_point_feature(layer, QgsPointXY(last), tolerance)
+            if feat is not None:
+                found = True
                 break
         if not found:
             QMessageBox.warning(None, "Validation",
@@ -496,21 +526,17 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         pt_arr = QgsPointXY(line[-1])
 
         tol = 0.05
-        fe_dep = fe_arr = None
-        for r in self.regard_layer.getFeatures():
-            g = r.geometry()
-            if g.isEmpty():
-                continue
-            pt = QgsPointXY(g.asPoint())
-            val = r['fe_radier']
+        def _fe_at(pt):
+            r, _ = nearest_point_feature(self.regard_layer, pt, tol)
+            if r is None:
+                return None
             try:
-                v = float(val)
+                return float(r['fe_radier'])
             except (TypeError, ValueError):
-                continue
-            if pt_dep.distance(pt) <= tol:
-                fe_dep = v
-            if pt_arr.distance(pt) <= tol:
-                fe_arr = v
+                return None
+
+        fe_dep = _fe_at(pt_dep)
+        fe_arr = _fe_at(pt_arr)
 
         if fe_dep is None or fe_arr is None:
             return None

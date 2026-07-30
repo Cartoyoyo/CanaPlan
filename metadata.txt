@@ -1,9 +1,41 @@
 [general]
-name=Réseau Assainissement
-description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets.
-version=1.0
+name=BET Humide – Réseau Assainissement
+description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF.
+version=1.2
 qgisMinimumVersion=3.28
-author=Ton nom
-email=ton@email.com
+author=Yoan Laloux
+email=yoan.laloux@laposte.net
+repository=https://github.com/cartoyoyo/bet_humide
+tracker=https://github.com/cartoyoyo/bet_humide/issues
+homepage=https://github.com/cartoyoyo/bet_humide
+tags=assainissement,réseau,EU,EP,profil en long,cubature,DXF,BET
+experimental=False
+deprecated=False
 
-about=Plugin de dessin de réseaux d'assainissement avec continuité topologique, recalage automatique des branchements et validation à l'enregistrement.
+about=Plugin de dessin de réseaux d'assainissement avec continuité topologique, recalage automatique des branchements et validation à l'enregistrement. Outils d'analyse : profils en long (EU/EP/groupé), cubatures et remblais de tranchées, coupes transversales, impression PDF multi-feuilles orientables avec plan d'ensemble, export DXF 2018 fidèle, fonds de plan IGN/BAN/PCI chargés en tâche de fond.
+
+changelog=
+    1.2  Fusion des outils Cubature et Remblai de tranchées en une seule fenêtre
+         de résultats, avec case à cocher pour afficher/masquer à la volée les
+         colonnes de détail remblai (lit de pose, enrobage, chaussée, remblai).
+         Sous-totaux par colonne (linéaires, surfaces, volumes) et nouvel onglet
+         Synthèse des ouvrages (PDF + Excel) groupé par matériau/diamètre, avec
+         comptage des regards et tabourets. Fenêtre de résultats redimensionnable
+         et auto-adaptée au nombre de lignes/colonnes affichées. Nouveau tableau
+         de saisie groupée (Regards/Tabourets/Conduites/Branchements) avec calcul
+         automatique de la pente ou de la cote fil d'eau, aperçu carte, copier/
+         coller Excel et annulation (Ctrl+Z). Ajout du réseau AEP (eau potable)
+         dans le dessinateur de coupe de tranchées composée. Annotations texte
+         enrichies (cadre, transparence, échelle liée aux étiquettes, aperçu
+         sans fermer la fenêtre). Fond de plan Ortho 2022 (CRAIG) remplacé par
+         la BD ORTHO IGN nationale. Persistance des identifiants de couches
+         dans le projet et mutualisation des recherches spatiales et des
+         téléchargements WFS.
+    1.1  Rendu PDF parallèle et annulable, flèche du nord, échelle normalisée
+         du plan d'ensemble, suppression feuille par feuille (Retour arrière).
+         Index spatiaux sur tous les outils carte (fluidité sur gros réseaux),
+         écritures attributaires batch. Fonds WFS (BAN/PCI/BD TOPO) chargés
+         en tâche de fond sans geler QGIS, TLS vérifié, nettoyage des
+         temporaires. IDs de couches persistés dans le projet (fin du bug
+         multi-projets). Correction du style bâti PCI. Paquet allégé.
+    1.0  Version initiale.

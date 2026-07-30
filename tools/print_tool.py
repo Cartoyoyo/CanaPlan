@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
 import math
-import tempfile
 from qgis.PyQt.QtCore import Qt, QDate, QSize
 from qgis.PyQt.QtGui import QColor, QFont
 from qgis.PyQt.QtWidgets import (
@@ -11,12 +10,7 @@ from qgis.PyQt.QtWidgets import (
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.core import (
     QgsWkbTypes, QgsGeometry, QgsRectangle, QgsPointXY,
-    QgsProject, QgsPrintLayout, QgsLayoutItemMap, QgsLayoutItemLabel,
-    QgsLayoutItemPage, QgsLayoutSize, QgsLayoutPoint, QgsUnitTypes,
-    QgsLayoutExporter, QgsLayoutItemScaleBar, QgsVectorLayer,
-    QgsSingleSymbolRenderer, QgsLayoutObject, QgsProperty,
-    QgsMapSettings, QgsMapRendererParallelJob, QgsMapRendererSequentialJob,
-    QgsLayoutItemPicture, QgsLayoutItemShape,
+    QgsProject, QgsMapSettings, QgsMapRendererParallelJob,
 )
 
 # États de l'outil
@@ -150,6 +144,28 @@ class PrintTool(QgsMapTool):
             from qgis.PyQt.QtCore import QTimer
             self._reset()
             QTimer.singleShot(0, self._reopen_settings)
+            event.accept()
+
+        elif event.key() in (Qt.Key_Backspace, Qt.Key_Delete):
+            if self._state == _STATE_ROTATE:
+                # Annule l'ancrage en cours, revient au placement libre
+                self._state   = _STATE_MOVE
+                self._anchor  = None
+                self._cur_rot = 0.0
+                self.iface.messageBar().pushMessage(
+                    "Impression", "Ancrage annulé",
+                    level=0, duration=3)
+            elif self._sheets:
+                # Dépile uniquement la dernière feuille posée
+                self._sheets.pop()
+                band = self._bands.pop()
+                band.reset()
+                self.canvas().scene().removeItem(band)
+                self.iface.messageBar().pushMessage(
+                    "Impression",
+                    f"Feuille {len(self._sheets) + 1} supprimée — "
+                    "Retour arrière : supprimer la précédente",
+                    level=0, duration=3)
             event.accept()
 
     def _reset(self):
@@ -422,10 +438,17 @@ class PrintTool(QgsMapTool):
         extent = QgsRectangle(min(xs), min(ys), max(xs), max(ys))
 
         default_name = self.s["titre"].replace(" ", "_") + ".dxf"
-        out_dir = self.s.get("output_dir")
+        out_dir  = self.s.get("output_dir")
+        dxf_path = None
         if out_dir and os.path.isdir(out_dir):
-            dxf_path = os.path.join(out_dir, default_name)
-        else:
+            cand = os.path.join(out_dir, default_name)
+            # Ne jamais écraser silencieusement un fichier existant
+            if not os.path.exists(cand) or QMessageBox.question(
+                    self.iface.mainWindow(), "Export DXF",
+                    f"Le fichier existe déjà :\n{cand}\n\nL'écraser ?",
+                    QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+                dxf_path = cand
+        if not dxf_path:
             start_dir   = project_dir() or os.path.expanduser("~")
             dxf_path, _ = QFileDialog.getSaveFileName(
                 self.iface.mainWindow(),
@@ -456,10 +479,17 @@ class PrintTool(QgsMapTool):
         else:
             projet_nom = "Plan_de_reseau"
         default_name = projet_nom + ".pdf"
-        out_dir = self.s.get("output_dir")
+        out_dir  = self.s.get("output_dir")
+        pdf_path = None
         if out_dir and os.path.isdir(out_dir):
-            pdf_path = os.path.join(out_dir, default_name)
-        else:
+            cand = os.path.join(out_dir, default_name)
+            # Ne jamais écraser silencieusement un fichier existant
+            if not os.path.exists(cand) or QMessageBox.question(
+                    self.iface.mainWindow(), "Impression",
+                    f"Le fichier existe déjà :\n{cand}\n\nL'écraser ?",
+                    QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+                pdf_path = cand
+        if not pdf_path:
             start_dir = project_dir() or os.path.expanduser("~")
             pdf_path, _ = QFileDialog.getSaveFileName(
                 self.iface.mainWindow(),
@@ -521,7 +551,12 @@ class PrintTool(QgsMapTool):
         h_mm    = self.s["h_mm"]
         carto_h = max(15.0, min(30.0, h_mm * 0.085))
         h_map   = h_mm - carto_h          # hauteur dispo pour la carte
-        ech     = max(bbox_w_m * 1000 / w_mm, bbox_h_m * 1000 / h_map)
+        ech_raw = max(bbox_w_m * 1000 / w_mm, bbox_h_m * 1000 / h_map)
+        # Arrondi à l'échelle normalisée supérieure (affichable en cartouche)
+        _std = [100, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 5000,
+                7500, 10000, 15000, 20000, 25000, 50000]
+        ech  = next((v for v in _std if v >= ech_raw),
+                    math.ceil(ech_raw / 10000.0) * 10000)
 
         return {
             "echelle":  ech,
@@ -561,7 +596,8 @@ class PrintTool(QgsMapTool):
 
     def _generate_pdf(self, pdf_path, overview_settings=False):
         from qgis.PyQt.QtGui import QPainter, QPen, QPolygon, QTransform
-        from qgis.PyQt.QtCore import QRect, QRectF, QPoint
+        from qgis.PyQt.QtCore import QRect, QRectF, QPoint, QEventLoop
+        from qgis.PyQt.QtWidgets import QProgressDialog
         from qgis.core import QgsProject
 
         w_mm    = self.s["w_mm"]
@@ -607,36 +643,19 @@ class PrintTool(QgsMapTool):
         carto_y_px = px(carto_y_mm)
         carto_h_px = px(carto_h_mm)
 
-        # Barre d'échelle
-        sb_w_m = w_mm * 0.40 / 1000.0 * echelle
-        seg_m  = self._nice_scalebar_step(sb_w_m / 3.0)
-        seg_px = seg_m * 1000.0 / echelle * dpi / 25.4
-
         fmt_ech = f"{self.s['format']}  —  1 : {echelle:,}".replace(",", " ")
 
-        # ── Création du PDF via QPrinter (Qt5 et Qt6) ────────────────────
-        try:
-            from qgis.PyQt.QtPrintSupport import QPrinter
-            from qgis.PyQt.QtCore import QSizeF
-            writer = QPrinter()
-            writer.setOutputFileName(pdf_path)
-            writer.setResolution(int(dpi))
-            writer.setFullPage(True)
-            # setPaperSize : Qt5 = (QSizeF, QPrinter.Millimeter)
-            #                Qt6 = (QSizeF, QPrinter.Unit.Millimeter)
+        # ── Pré-vérification du verrou fichier ───────────────────────────
+        # Détecte un PDF ouvert dans un autre programme AVANT de lancer les
+        # rendus (longs), plutôt qu'à l'ouverture du QPrinter après coup.
+        if os.path.exists(pdf_path):
             try:
-                writer.setOutputFormat(QPrinter.PdfFormat)
-                writer.setPaperSize(QSizeF(w_mm, h_mm), QPrinter.Millimeter)
-            except AttributeError:
-                writer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
-                writer.setPaperSize(QSizeF(w_mm, h_mm), QPrinter.Unit.Millimeter)
-        except Exception as e:
-            raise RuntimeError(f"Impossible de créer le fichier PDF : {e}")
-
-        painter = QPainter(writer)
-        if not painter.isActive():
-            raise RuntimeError(f"Impossible d'écrire dans : {pdf_path}\n"
-                               "Vérifiez que le fichier n'est pas ouvert dans un autre programme.")
+                with open(pdf_path, "ab"):
+                    pass
+            except OSError:
+                raise RuntimeError(
+                    f"Impossible d'écrire dans : {pdf_path}\n"
+                    "Vérifiez que le fichier n'est pas ouvert dans un autre programme.")
 
         first_page = [True]
 
@@ -646,16 +665,18 @@ class PrintTool(QgsMapTool):
             else:
                 writer.newPage()
 
-        def _render_map(cx, cy, rot_rad, w_m, h_m, out_w=None, out_h=None):
+        def _start_render(cx, cy, rot_rad, w_m, h_m, out_w=None, out_h=None):
+            """Démarre un job de rendu (non bloquant) et le retourne."""
             proj = QgsProject.instance()
             ms = QgsMapSettings()
             ms.setDestinationCrs(proj.crs())
             ms.setTransformContext(proj.transformContext())
             ms.setEllipsoid(proj.ellipsoid())
-            # SequentialJob rend du premier au dernier (0=fond, N=dessus),
-            # convention inverse de canvas().layers() (0=dessus).
-            # On inverse pour que les couches EP/EU restent au premier plan.
-            ms.setLayers(list(reversed(_print_layers)))
+            # QgsMapRendererParallelJob composite les couches selon la
+            # convention QgsMapSettings : index 0 = premier plan. _print_layers
+            # est déjà en ordre [haut→bas] de l'arbre : pas d'inversion
+            # (l'inversion de l'ancien SequentialJob passait l'ortho devant).
+            ms.setLayers(_print_layers)
             ms.setOutputSize(QSize(out_w or w_px, out_h or h_px))
             ms.setExtent(QgsRectangle(cx - w_m / 2, cy - h_m / 2,
                                        cx + w_m / 2, cy + h_m / 2))
@@ -669,12 +690,19 @@ class PrintTool(QgsMapTool):
                 ms.setFlag(QgsMapSettings.ForceVectorOutput,  True)
             except AttributeError:
                 pass
-            job = QgsMapRendererSequentialJob(ms)
+            # ParallelJob : les couches d'une même page sont rendues sur
+            # plusieurs threads (SequentialJob n'en utilisait qu'un seul).
+            job = QgsMapRendererParallelJob(ms)
             job.start()
-            job.waitForFinished()
-            return job.renderedImage()
+            return job
 
-        def _draw_scalebar():
+        def _draw_scalebar(ech=None):
+            # Barre d'échelle : par défaut échelle des feuilles de détail,
+            # sinon celle passée en paramètre (plan d'ensemble).
+            ech    = ech or echelle
+            sb_w_m = w_mm * 0.40 / 1000.0 * ech
+            seg_m  = self._nice_scalebar_step(sb_w_m / 3.0)
+            seg_px = seg_m * 1000.0 / ech * dpi / 25.4
             total_px = int(seg_px * 3)
             sb_h_px  = max(4, px(4))
             sb_y_px  = carto_y_px - px(3) - sb_h_px
@@ -730,33 +758,71 @@ class PrintTool(QgsMapTool):
             painter.drawRect(QRect(0, carto_y_px, w_px - 1,
                                    h_px - carto_y_px - 1))
 
-        # ── Pré-rendu de toutes les images avant d'ouvrir le QPrinter ────────
-        # Sur Qt5/Windows, appeler writer.newPage() puis QgsMapRendererSequentialJob
-        # dans le même flux provoque des pages blanches sur les 1-2 premières
-        # feuilles de détail. On rend toutes les images en amont (hors painter)
-        # puis on écrit les pages séquentiellement.
+        def _draw_north_arrow(rot_rad):
+            """Flèche du nord en haut à droite de la zone carte.
+            La carte est rendue avec setRotation(rot) : le nord pointe
+            à rot radians dans le sens anti-horaire depuis le haut de page."""
+            size   = px(14)          # diamètre du médaillon (~14 mm)
+            margin = px(5)
+            cx_a   = w_px - margin - size // 2
+            cy_a   = margin + size // 2
+            painter.save()
+            # Médaillon opaque (pas d'alpha : transparency group Qt5)
+            painter.setBrush(QColor(255, 255, 255))
+            painter.setPen(QPen(QColor(0, 0, 0), max(1, int(px(0.3)))))
+            painter.drawEllipse(QPoint(cx_a, cy_a), size // 2, size // 2)
+            painter.translate(cx_a, cy_a)
+            painter.rotate(-math.degrees(rot_rad))
+            r = size * 0.30
+            arrow = QPolygon([
+                QPoint(0, int(-r * 1.15)),
+                QPoint(int(-r * 0.55), int(r * 0.45)),
+                QPoint(0, int(r * 0.10)),
+                QPoint(int(r * 0.55), int(r * 0.45)),
+            ])
+            painter.setBrush(QColor(0, 0, 0))
+            painter.setPen(Qt.NoPen)
+            painter.drawPolygon(arrow)
+            f_n = QFont("Arial")
+            f_n.setBold(True)
+            f_n.setPixelSize(max(8, int(size * 0.26)))
+            painter.setFont(f_n)
+            painter.setPen(QColor(0, 0, 0))
+            painter.drawText(
+                QRect(int(-r), int(r * 0.30), int(2 * r), int(size * 0.32)),
+                Qt.AlignHCenter | Qt.AlignVCenter, "N")
+            painter.restore()
+
+        # ── Rendu de toutes les pages en parallèle ────────────────────────
+        # Tous les jobs sont démarrés en même temps (threads QGIS) : les
+        # latences des fonds distants (WMS, ortho, PCI) se recouvrent au lieu
+        # de s'additionner. L'attente se fait via une boîte de progression
+        # annulable au lieu de bloquer l'interface avec waitForFinished().
+        # Le rendu reste entièrement effectué AVANT d'ouvrir le QPrinter :
+        # sur Qt5/Windows, mélanger writer.newPage() et jobs de rendu dans le
+        # même flux provoque des pages blanches sur les premières feuilles.
         h_map_mm = h_mm - carto_h_mm
         h_map_px = px(h_map_mm)
 
-        img_ov       = None
-        ov_ctx       = {}   # contexte overview pour le dessin des emprises
+        ov_ctx = {}   # contexte overview pour le dessin des emprises
+        jobs   = []
         if overview_settings:
             ov       = overview_settings
             ov_ech   = ov["echelle"]
             ov_w_m   = w_mm * ov_ech / 1000.0
             ov_h_m   = h_map_mm * ov_ech / 1000.0
-            ov_cx, ov_cy = ov["cx"], ov["cy"]
-            img_ov   = _render_map(ov_cx, ov_cy, 0.0, ov_w_m, ov_h_m, w_px, h_map_px)
             ov_ctx   = {
                 "ov_w_m": ov_w_m, "ov_h_m": ov_h_m,
-                "ov_cx":  ov_cx,  "ov_cy":  ov_cy,
+                "ov_cx":  ov["cx"], "ov_cy": ov["cy"],
+                "ov_ech": ov_ech,
             }
+            jobs.append(_start_render(
+                ov["cx"], ov["cy"], 0.0, ov_w_m, ov_h_m, w_px, h_map_px))
 
         # Hauteur de la zone carte seule (même logique que le plan d'ensemble)
         h_map_m_det = h_map_mm * echelle / 1000.0
         carto_h_m   = carto_h_mm * echelle / 1000.0
 
-        detail_imgs = []
         for sheet in self._sheets:
             cx  = sheet['center'].x()
             cy  = sheet['center'].y()
@@ -766,8 +832,60 @@ class PrintTool(QgsMapTool):
             # direction "haut" du papier pour obtenir le centre de la zone carte.
             cx_c = cx + (carto_h_m / 2) * math.sin(rot)
             cy_c = cy + (carto_h_m / 2) * math.cos(rot)
-            detail_imgs.append(_render_map(
+            jobs.append(_start_render(
                 cx_c, cy_c, rot, self._w, h_map_m_det, w_px, h_map_px))
+
+        progress = QProgressDialog(
+            "Rendu des cartes…", "Annuler", 0, len(jobs),
+            self.iface.mainWindow())
+        progress.setWindowTitle("Impression")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(400)
+        try:
+            while True:
+                done = sum(1 for j in jobs if not j.isActive())
+                progress.setValue(done)
+                if progress.wasCanceled():
+                    for j in jobs:
+                        j.cancel()
+                    self.iface.messageBar().pushMessage(
+                        "Impression", "Export PDF annulé.",
+                        level=1, duration=5)
+                    return
+                if done == len(jobs):
+                    break
+                QApplication.processEvents(QEventLoop.AllEvents, 50)
+        finally:
+            progress.close()
+
+        img_ov      = jobs[0].renderedImage() if overview_settings else None
+        detail_imgs = [j.renderedImage()
+                       for j in (jobs[1:] if overview_settings else jobs)]
+        jobs.clear()
+
+        # ── Création du PDF via QPrinter (Qt5 et Qt6) ────────────────────
+        try:
+            from qgis.PyQt.QtPrintSupport import QPrinter
+            from qgis.PyQt.QtCore import QSizeF
+            writer = QPrinter()
+            writer.setOutputFileName(pdf_path)
+            writer.setResolution(int(dpi))
+            writer.setFullPage(True)
+            # setPaperSize : Qt5 = (QSizeF, QPrinter.Millimeter)
+            #                Qt6 = (QSizeF, QPrinter.Unit.Millimeter)
+            try:
+                writer.setOutputFormat(QPrinter.PdfFormat)
+                writer.setPaperSize(QSizeF(w_mm, h_mm), QPrinter.Millimeter)
+            except AttributeError:
+                writer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+                writer.setPaperSize(QSizeF(w_mm, h_mm), QPrinter.Unit.Millimeter)
+        except Exception as e:
+            raise RuntimeError(f"Impossible de créer le fichier PDF : {e}")
+
+        painter = QPainter(writer)
+        if not painter.isActive():
+            raise RuntimeError(f"Impossible d'écrire dans : {pdf_path}\n"
+                               "Vérifiez que le fichier n'est pas ouvert dans un autre programme.")
 
         # ── Plan d'ensemble ───────────────────────────────────────────────
         if overview_settings and img_ov is not None:
@@ -800,29 +918,39 @@ class PrintTool(QgsMapTool):
                 painter.setBrush(QColor(30, 100, 200, 50))
                 painter.drawPolygon(poly)
                 ctr = _map_to_px(sheet['center'])
+                # Numéro à 25 % de la hauteur du cadre de la feuille sur le
+                # plan d'ensemble (plancher ~4 mm pour rester lisible).
+                sheet_h_px = self._h / ov_h_m * h_map_px
+                num_px     = max(px(4), int(sheet_h_px * 0.25))
                 f_num = QFont("Arial")
                 f_num.setBold(True)
-                f_num.setPointSize(max(10, int(px(6) / dpi * 72)))
+                f_num.setPixelSize(num_px)
                 painter.setFont(f_num)
                 painter.setPen(QColor(20, 80, 180))
+                half = max(px(8), int(sheet_h_px / 2))
                 painter.drawText(
-                    QRect(ctr.x() - px(8), ctr.y() - px(5), px(16), px(10)),
+                    QRect(ctr.x() - half, ctr.y() - half, 2 * half, 2 * half),
                     Qt.AlignHCenter | Qt.AlignVCenter,
                     str(si + 1))
             painter.restore()
 
-            _draw_scalebar()
+            _draw_north_arrow(0.0)
+            _draw_scalebar(ov_ctx['ov_ech'])
+            ov_fmt = (f"{n} feuille{'s' if n > 1 else ''}"
+                      f"  —  1 : {int(ov_ctx['ov_ech']):,}").replace(",", " ")
             _draw_cartouche(
                 f"{titre} — Plan d'ensemble",
-                f"{n} feuille{'s' if n > 1 else ''}",
+                ov_fmt,
                 "Ens.")
 
         # ── Feuilles de détail ────────────────────────────────────────────
         # Même logique que le plan d'ensemble : image limitée à la zone carte
         # (h_map_px), cartouche dessiné par-dessus dans l'espace restant.
-        for i, (sheet, img) in enumerate(zip(self._sheets, detail_imgs)):
+        for i in range(len(detail_imgs)):
             _new_page()
-            painter.drawImage(QRect(0, 0, w_px, h_map_px), img)
+            painter.drawImage(QRect(0, 0, w_px, h_map_px), detail_imgs[i])
+            detail_imgs[i] = None   # libère l'image (pic mémoire, grands formats)
+            _draw_north_arrow(self._sheets[i]['rotation_rad'])
             _draw_scalebar()
             _draw_cartouche(titre, fmt_ech, f"{i + 1} / {n}")
 
@@ -838,178 +966,3 @@ class PrintTool(QgsMapTool):
         except Exception:
             pass
 
-    # ── Plan d'ensemble ────────────────────────────────────────────────────
-
-    def _add_overview_page(self, layout, coll, page_idx,
-                           carto_h, titre, ov):
-        """Ajoute une page de plan d'ensemble avec les emprises numérotées."""
-        from qgis.core import (
-            QgsVectorLayer, QgsFeature, QgsGeometry,
-            QgsSingleSymbolRenderer, QgsFillSymbol, QgsProject,
-        )
-        _root = QgsProject.instance().layerTreeRoot()
-        _visible_ids = {
-            node.layer().id()
-            for node in _root.findLayers()
-            if node.isVisible() and node.layer() is not None
-        }
-        if _root.hasCustomLayerOrder():
-            _ordered = list(reversed(_root.customLayerOrder()))
-        else:
-            _ordered = [node.layer() for node in _root.findLayers()
-                        if node.layer() is not None]
-        _print_layers = [lyr for lyr in _ordered
-                         if lyr is not None and lyr.id() in _visible_ids]
-
-        n        = len(self._sheets)
-        w_mm     = ov["w_mm"]
-        h_mm     = ov["h_mm"]
-        carto_h  = ov.get("carto_h", max(15.0, min(30.0, h_mm * 0.085)))
-        ech      = ov["echelle"]
-        cx_bbox  = ov["cx"]
-        cy_bbox  = ov["cy"]
-        bbox_w_m = ov["bbox_w_m"]
-        bbox_h_m = ov["bbox_h_m"]
-
-        h_map   = h_mm - carto_h   # zone carte sans le cartouche
-        carto_y = h_map            # cartouche démarre exactement là où la carte finit
-
-        if page_idx == 0:
-            page = coll.pages()[0]
-        else:
-            page = QgsLayoutItemPage(layout)
-            coll.addPage(page)
-        page.setPageSize(
-            QgsLayoutSize(w_mm, h_mm, QgsUnitTypes.LayoutMillimeters))
-
-        # ── Couche mémoire : emprises (symbologie seule, sans étiquetage PAL)
-        crs_id = QgsProject.instance().crs().authid() or "EPSG:2154"
-        lyr = QgsVectorLayer(
-            f"Polygon?crs={crs_id}&field=numero:integer",
-            "_bet_overview_", "memory",
-        )
-        feats = []
-        for i, sheet in enumerate(self._sheets):
-            corners = self._corners(
-                sheet['center'].x(), sheet['center'].y(), sheet['rotation_rad'])
-            feat = QgsFeature()
-            feat.setGeometry(QgsGeometry.fromPolygonXY([corners]))
-            feat.setAttributes([i + 1])
-            feats.append(feat)
-        lyr.dataProvider().addFeatures(feats)
-        lyr.updateExtents()
-
-        sym = QgsFillSymbol.createSimple({
-            'color': '30,100,200,50',
-            'outline_color': '20,80,180,230',
-            'outline_width': '0.8',
-        })
-        lyr.setRenderer(QgsSingleSymbolRenderer(sym))
-
-        QgsProject.instance().addMapLayer(lyr, False)   # pas dans la légende
-
-        # ── Emprise vue d'ensemble ────────────────────────────────────────
-        ext_w_m = w_mm * ech / 1000.0
-        ext_h_m = h_map * ech / 1000.0
-        overview_ext = QgsRectangle(
-            cx_bbox - ext_w_m / 2, cy_bbox - ext_h_m / 2,
-            cx_bbox + ext_w_m / 2, cy_bbox + ext_h_m / 2,
-        )
-
-        # ── Carte (hauteur hors cartouche) ───────────────────────────────
-        map_item = QgsLayoutItemMap(layout)
-        map_item.setFrameEnabled(True)
-        map_item.setKeepLayerSet(True)
-        map_item.setLayers([lyr] + _print_layers)
-        layout.addLayoutItem(map_item)
-        map_item.attemptResize(
-            QgsLayoutSize(w_mm, h_map, QgsUnitTypes.LayoutMillimeters))
-        map_item.attemptMove(
-            QgsLayoutPoint(0, 0, QgsUnitTypes.LayoutMillimeters),
-            page=page_idx)
-        map_item.setExtent(overview_ext)
-
-        # ── Numéros de feuilles : QgsLayoutItemLabel centrés précisément ─
-        # Le moteur PAL déplace librement les étiquettes ; on calcule ici la
-        # position exacte depuis les coordonnées du centre de chaque feuille.
-        for i, sheet in enumerate(self._sheets):
-            cx_s = sheet['center'].x()
-            cy_s = sheet['center'].y()
-
-            # Conversion carte → layout (Y inversé : carte ↑ = layout ↓)
-            lx = (cx_s - overview_ext.xMinimum()) / overview_ext.width()  * w_mm
-            ly = (overview_ext.yMaximum() - cy_s)  / overview_ext.height() * h_map
-
-            # Taille du label proportionnelle à l'emprise de la feuille
-            lbl_w = max(8.0,  min(60.0, self._w / overview_ext.width()  * w_mm  * 0.55))
-            lbl_h = max(6.0,  min(40.0, self._h / overview_ext.height() * h_map * 0.45))
-
-            num_lbl = QgsLayoutItemLabel(layout)
-            num_lbl.setText(str(i + 1))
-            f = QFont("Arial", 36)
-            f.setBold(True)
-            num_lbl.setFont(f)
-            num_lbl.setHAlign(Qt.AlignHCenter)
-            num_lbl.setVAlign(Qt.AlignVCenter)
-            num_lbl.setFrameEnabled(False)
-            num_lbl.setBackgroundEnabled(False)
-            layout.addLayoutItem(num_lbl)
-            num_lbl.attemptResize(
-                QgsLayoutSize(lbl_w, lbl_h, QgsUnitTypes.LayoutMillimeters))
-            num_lbl.attemptMove(
-                QgsLayoutPoint(lx - lbl_w / 2, ly - lbl_h / 2,
-                               QgsUnitTypes.LayoutMillimeters),
-                page=page_idx)
-
-        # ── Cartouche en bandeau bas (fond blanc, sur la carte) ──────────
-        _ov_titre = f"{titre} — Plan d'ensemble"
-        sections = [
-            (_ov_titre,                                  0.00, 0.55, 24, True,  Qt.AlignHCenter),
-            (f"{n} feuille{'s' if n > 1 else ''}",      0.55, 0.20, 22, False, Qt.AlignHCenter),
-            (QDate.currentDate().toString("dd/MM/yyyy"), 0.75, 0.13, 20, False, Qt.AlignHCenter),
-            ("Ensemble",                                 0.88, 0.12, 22, False, Qt.AlignHCenter),
-        ]
-        for text, x_frac, w_frac, pt_size, bold, align in sections:
-            lbl = QgsLayoutItemLabel(layout)
-            lbl.setText(text)
-            f = QFont("Arial", pt_size)
-            f.setBold(bold)
-            lbl.setFont(f)
-            lbl.setHAlign(align)
-            lbl.setVAlign(Qt.AlignVCenter)
-            lbl.setFrameEnabled(True)
-            lbl.setBackgroundEnabled(True)
-            lbl.setBackgroundColor(QColor(255, 255, 255))
-            layout.addLayoutItem(lbl)
-            lbl.attemptResize(
-                QgsLayoutSize(w_mm * w_frac, carto_h,
-                              QgsUnitTypes.LayoutMillimeters))
-            lbl.attemptMove(
-                QgsLayoutPoint(w_mm * x_frac, carto_y,
-                               QgsUnitTypes.LayoutMillimeters),
-                page=page_idx)
-
-        # Barre d'échelle centrée juste au-dessus du cartouche
-        sb_w_mm = w_mm * 0.40
-        sb_h_mm = 8.0
-        sb_w_m  = sb_w_mm / 1000.0 * ech
-        seg_m   = self._nice_scalebar_step(sb_w_m / 3.0)
-        scalebar = QgsLayoutItemScaleBar(layout)
-        scalebar.setLinkedMap(map_item)
-        scalebar.setStyle('Single Box')
-        scalebar.setUnits(QgsUnitTypes.DistanceMeters)
-        scalebar.setUnitLabel('m')
-        scalebar.setNumberOfSegments(3)
-        scalebar.setNumberOfSegmentsLeft(0)
-        scalebar.setUnitsPerSegment(seg_m)
-        scalebar.setFrameEnabled(False)
-        scalebar.setBackgroundEnabled(False)
-        layout.addLayoutItem(scalebar)
-        scalebar.attemptResize(
-            QgsLayoutSize(sb_w_mm, sb_h_mm, QgsUnitTypes.LayoutMillimeters))
-        scalebar.attemptMove(
-            QgsLayoutPoint((w_mm - sb_w_mm) / 2, carto_y - sb_h_mm - 3,
-                           QgsUnitTypes.LayoutMillimeters),
-            page=page_idx)
-
-        return lyr   # à supprimer après export

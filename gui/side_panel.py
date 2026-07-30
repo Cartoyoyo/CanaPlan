@@ -29,6 +29,7 @@ class SidePanel(QDockWidget):
 
         folder_general = self._folder("Général")
         self._item(folder_general, icon_dir, "renseignement.svg", "Renseigner un élément",          "renseignement")
+        self._item(folder_general, icon_dir, "config.svg",        "Tableau de saisie - pente",      "tableau_saisie")
         self._item(folder_general, icon_dir, "insert_regard.svg", "Insérer un regard sur conduite", "insert_regard")
         self._item(folder_general, icon_dir, "move.svg",          "Déplacer un ouvrage",            "move")
         self._item(folder_general, icon_dir, "copy_attrib.svg",   "Copier les attributs",           "copy_attributes")
@@ -73,9 +74,7 @@ class SidePanel(QDockWidget):
         self._item(folder_impression, icon_dir, "profil.svg",
                    "Coupe transversale des tranchées", "coupe_transversale")
         self._item(folder_impression, icon_dir, "config.svg",
-                   "Cubature tranchées", "cubature")
-        self._item(folder_impression, icon_dir, "config.svg",
-                   "Remblai tranchées", "remblai")
+                   "Cubature / Remblai tranchées", "cubature")
         self._item(folder_impression, icon_dir, "profil.svg",
                    "Dessinateur – Coupe de tranchées", "coupe_tranchee_composee")
 
@@ -85,7 +84,7 @@ class SidePanel(QDockWidget):
         self._item(folder_fdc, icon_dir, "config.svg",
                    "OSM Desature", "osm_desature")
         self._item(folder_fdc, icon_dir, "config.svg",
-                   "Ortho 2022",  "ortho_2022")
+                   "Ortho IGN (BD ORTHO nationale)", "ortho_ign")
         self._item(folder_fdc, icon_dir, "config.svg",
                    "PCI Vecteur – Parcelles & Bâti (emprise)", "pci_emprise")
         self._item(folder_fdc, icon_dir, "config.svg",

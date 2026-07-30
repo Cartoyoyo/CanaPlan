@@ -24,60 +24,157 @@ class CubatureDialog(QDialog):
         "Vol. remblai (m³)", "Déblai (m³)",
     ]
 
-    def __init__(self, results, config, parent=None, bfs_prefix=None, show_remblai=True):
+    # Colonnes de détail du remblai : n'existent qu'en mode show_remblai,
+    # et certaines sont en plus conditionnées à un flag de config (chaussée).
+    _VOL_BREAKDOWN = [
+        dict(key='lit_pose', field='vol_lit_pose', csv_label='Vol. lit pose (m³)',
+             pdf_label='Lit pose', recap_label='Lit pose (m³)', pdf_width=9, recap_width=20),
+        dict(key='enrobage', field='vol_enrobage', csv_label='Vol. enrobage (m³)',
+             pdf_label='Enrobage', recap_label='Enrobage (m³)', pdf_width=9, recap_width=20),
+        dict(key='conduite', field='vol_conduite', csv_label='Vol. conduite (m³)',
+             pdf_label='Conduite', recap_label='Conduite (m³)', pdf_width=9, recap_width=20),
+        dict(key='ch_inf', field='vol_chaussee_inf', csv_label='Vol. chaussée inf (m³)',
+             pdf_label='Ch.inf', recap_label='Ch. inf (m³)', pdf_width=8, recap_width=18,
+             cfg_flag='chaussee_inf'),
+        dict(key='ch_sup', field='vol_chaussee_sup', csv_label='Vol. chaussée sup (m³)',
+             pdf_label='Ch.sup', recap_label='Ch. sup (m³)', pdf_width=8, recap_width=18,
+             cfg_flag='chaussee_sup'),
+        dict(key='remblai', field='vol_remblai', csv_label='Vol. remblai (m³)',
+             pdf_label='Remblai', recap_label='Vol. remblai (m³)', pdf_width=10, recap_width=22),
+    ]
+
+    def _active_vol_cols(self):
+        """Colonnes de détail du remblai actives pour ce rapport (vide en mode cubature simple)."""
+        if not self.show_remblai:
+            return []
+        return [c for c in self._VOL_BREAKDOWN
+                if not c.get('cfg_flag') or self.config.get(c['cfg_flag'], False)]
+
+    @staticmethod
+    def _avg(values):
+        """Moyenne des valeurs non None, ou None si aucune valeur valide."""
+        vals = [v for v in values if v is not None]
+        return sum(vals) / len(vals) if vals else None
+
+    def _synthese_data(self):
+        """Données de synthèse par réseau (EU/EP) : tronçons et branchements
+        groupés par matériau + diamètre (nb + linéaire), et comptage des
+        regards/tabourets référencés dans le rapport en cours."""
+        def _groupes(items):
+            groups = {}
+            for r in items:
+                key = (r.get('materiau') or '—', r.get('diametre'))
+                g = groups.setdefault(key, {'cnt': 0, 'long': 0.0})
+                g['cnt'] += 1
+                g['long'] += r.get('l3d') or 0.0
+            return sorted(groups.items(), key=lambda kv: (kv[0][0], -(kv[0][1] or 0)))
+
+        data = []
+        for r_name in ('EU', 'EP'):
+            reseau_results = [r for r in self.results if r.get('reseau') == r_name]
+            if not reseau_results:
+                continue
+
+            troncons = [r for r in reseau_results if r.get('type') == 'Conduite']
+            branchements = [r for r in reseau_results if r.get('type') == 'Branchement']
+
+            regards = {r.get('nom_debut') for r in troncons} | {r.get('nom_fin') for r in troncons}
+            regards.discard(None); regards.discard('')
+            tabourets = {r.get('nom_fin') for r in branchements if r.get('nom_fin')}
+
+            data.append(dict(
+                reseau=r_name,
+                troncons_groupes=_groupes(troncons),
+                troncons_total=(len(troncons), sum(r.get('l3d') or 0.0 for r in troncons)),
+                branchements_groupes=_groupes(branchements),
+                branchements_total=(len(branchements), sum(r.get('l3d') or 0.0 for r in branchements)),
+                nb_regards=len(regards),
+                nb_tabourets=len(tabourets),
+            ))
+        return data
+
+    def __init__(self, results, config, parent=None, bfs_prefix=None, show_remblai=False):
         super().__init__(parent)
         self.results = results
         self.config = config
         self.bfs_prefix = bfs_prefix  # ex: "REP01_REP04" pour le mode BFS
         self.show_remblai = show_remblai
-        title = "Remblai de tranchées" if show_remblai else "Cubature des tranchées"
-        self.setWindowTitle(title)
+        self.setWindowTitle("Cubature des tranchées")
+        self.setWindowFlags(
+            self.windowFlags()
+            | Qt.WindowMinimizeButtonHint
+            | Qt.WindowMaximizeButtonHint
+            | Qt.WindowSystemMenuHint
+        )
         self.setMinimumSize(1000, 450)
         self.setAttribute(Qt.WA_DeleteOnClose, False)
 
         self._build_ui()
+        self._update_info_label()
         self._populate_table()
+        self._adjust_size_to_content()
+
+    def _adjust_size_to_content(self):
+        """Redimensionne la fenêtre pour montrer un maximum de lignes et de
+        colonnes visibles sans scroll, dans la limite de l'écran disponible.
+        Appelé à l'ouverture et à chaque bascule du détail remblai (le nombre
+        de colonnes visibles change alors)."""
+        self.table.resizeRowsToContents()
+        self.table.resizeColumnsToContents()
+
+        header_h = self.table.horizontalHeader().height()
+        rows_h = sum(self.table.rowHeight(i) for i in range(self.table.rowCount()))
+        frame_h = 2 * self.table.frameWidth()
+        chrome_h = (
+            self.info.sizeHint().height()
+            + self.cb_remblai.sizeHint().height()
+            + self.total_label.sizeHint().height()
+            + 90  # boutons d'export + marges de layout
+        )
+        ideal_h = header_h + rows_h + frame_h + chrome_h
+
+        cols_w = sum(self.table.columnWidth(c) for c in range(self.table.columnCount())
+                     if not self.table.isColumnHidden(c))
+        v_scrollbar_w = self.table.verticalScrollBar().sizeHint().width()
+        frame_w = 2 * self.table.frameWidth()
+        ideal_w = cols_w + v_scrollbar_w + frame_w + 30  # marges de layout
+
+        screen = QApplication.primaryScreen()
+        avail = screen.availableGeometry() if screen else None
+        max_h = int(avail.height() * 0.9) if avail else 900
+        max_w = int(avail.width() * 0.9) if avail else 1400
+
+        width = min(max(ideal_w, 1000), max_w)
+        height = min(max(ideal_h, 450), max_h)
+        self.resize(width, height)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
 
         # Info config
-        cfg = self.config
-        lines = [
-            f"Ép. lit de pose = {cfg.get('ep_lit_pose', 0.10):.2f} m  |  "
-            f"Larg. cond. EU = {cfg.get('largeur_conduite_eu', 0.80):.2f} m  |  "
-            f"Larg. cond. EP = {cfg.get('largeur_conduite_ep', 0.80):.2f} m  |  "
-            f"Larg. branch. EU = {cfg.get('largeur_branchement_eu', 0.60):.2f} m  |  "
-            f"Larg. branch. EP = {cfg.get('largeur_branchement_ep', 0.60):.2f} m",
-        ]
-        if self.show_remblai:
-            lines += [
-                f"Lit pose : {cfg.get('materiau_lit_pose', 'Sable')}",
-                f"Enrobage : {cfg.get('ep_enrobage', 0.15):.2f} m — {cfg.get('materiau_enrobage', 'Sable')}",
-                f"Remblai : {cfg.get('materiau_remblai', '0/31.5')}",
-            ]
-            if cfg.get('chaussee_inf', False):
-                lines.append(
-                    f"Chaussée inf. : {cfg.get('ep_chaussee_inf', 0.20):.2f} m"
-                    + (f" — {cfg['materiau_chaussee_inf']}" if cfg.get('materiau_chaussee_inf') else ""))
-            if cfg.get('chaussee_sup', False):
-                lines.append(
-                    f"Chaussée sup. : {cfg.get('ep_chaussee_sup', 0.08):.2f} m"
-                    + (f" — {cfg['materiau_chaussee_sup']}" if cfg.get('materiau_chaussee_sup') else ""))
-        info = QLabel("  |  ".join(lines))
-        info.setStyleSheet("color: #555; font-size: 10px; padding: 2px;")
-        layout.addWidget(info)
+        self.info = QLabel()
+        self.info.setWordWrap(True)
+        self.info.setStyleSheet("color: #555; font-size: 10px; padding: 2px;")
+        layout.addWidget(self.info)
+
+        # Option remblai
+        self.cb_remblai = QCheckBox(
+            "Afficher le détail remblai (lit de pose, enrobage, chaussée...)")
+        self.cb_remblai.setChecked(self.show_remblai)
+        self.cb_remblai.toggled.connect(self._on_toggle_remblai)
+        layout.addWidget(self.cb_remblai)
 
         # Table
         self.table = QTableWidget()
         self.table.setColumnCount(len(self._COLUMNS))
         self.table.setHorizontalHeaderLabels(self._COLUMNS)
         self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        layout.addWidget(self.table)
+        layout.addWidget(self.table, 1)
 
         # Total
         self.total_label = QLabel()
@@ -108,6 +205,37 @@ class CubatureDialog(QDialog):
 
         layout.addLayout(btn_row)
 
+    def _on_toggle_remblai(self, checked):
+        self.show_remblai = checked
+        self._update_info_label()
+        self._populate_table()
+        self._adjust_size_to_content()
+
+    def _update_info_label(self):
+        cfg = self.config
+        lines = [
+            f"Ép. lit de pose = {cfg.get('ep_lit_pose', 0.10):.2f} m  |  "
+            f"Larg. cond. EU = {cfg.get('largeur_conduite_eu', 0.80):.2f} m  |  "
+            f"Larg. cond. EP = {cfg.get('largeur_conduite_ep', 0.80):.2f} m  |  "
+            f"Larg. branch. EU = {cfg.get('largeur_branchement_eu', 0.60):.2f} m  |  "
+            f"Larg. branch. EP = {cfg.get('largeur_branchement_ep', 0.60):.2f} m",
+        ]
+        if self.show_remblai:
+            lines += [
+                f"Lit pose : {cfg.get('materiau_lit_pose', 'Sable')}",
+                f"Enrobage : {cfg.get('ep_enrobage', 0.15):.2f} m — {cfg.get('materiau_enrobage', 'Sable')}",
+                f"Remblai : {cfg.get('materiau_remblai', '0/31.5')}",
+            ]
+            if cfg.get('chaussee_inf', False):
+                lines.append(
+                    f"Chaussée inf. : {cfg.get('ep_chaussee_inf', 0.20):.2f} m"
+                    + (f" — {cfg['materiau_chaussee_inf']}" if cfg.get('materiau_chaussee_inf') else ""))
+            if cfg.get('chaussee_sup', False):
+                lines.append(
+                    f"Chaussée sup. : {cfg.get('ep_chaussee_sup', 0.08):.2f} m"
+                    + (f" — {cfg['materiau_chaussee_sup']}" if cfg.get('materiau_chaussee_sup') else ""))
+        self.info.setText("  |  ".join(lines))
+
     def _populate_table(self):
         eu_results = [r for r in self.results if r.get('reseau') == 'EU']
         ep_results = [r for r in self.results if r.get('reseau') == 'EP']
@@ -134,11 +262,15 @@ class CubatureDialog(QDialog):
             font = item.font()
             font.setBold(True)
             item.setFont(font)
+            self.table.setItem(row, 0, item)
             self.table.setSpan(row, 0, 1, len(self._COLUMNS))
             row += 1
 
             sous_total = 0.0
             sous_surface = 0.0
+            sous_l2d = 0.0
+            sous_l3d = 0.0
+            sous_vol = {c['key']: 0.0 for c in self._VOL_BREAKDOWN}
             for r in reseau_results:
                 self.table.insertRow(row)
                 self._set_row(row, r)
@@ -146,22 +278,37 @@ class CubatureDialog(QDialog):
                     sous_total += r['volume']
                 if r.get('surface') is not None:
                     sous_surface += r['surface']
+                sous_l2d += r.get('l2d') or 0.0
+                sous_l3d += r.get('l3d') or 0.0
+                for c in self._VOL_BREAKDOWN:
+                    sous_vol[c['key']] += r.get(c['field']) or 0.0
                 row += 1
 
-            # Ligne sous-total
+            # Ligne sous-total : label sur ID..Nom fin, puis un sous-total
+            # par colonne numérique (m, m², m³).
             self.table.insertRow(row)
             color_lighter = QColor(color_hex).lighter(185)
-            item = QTableWidgetItem(f"Sous-total {reseau_name}")
-            item.setBackground(color_lighter)
-            font = item.font()
+            label_item = QTableWidgetItem(f"Sous-total {reseau_name}")
+            label_item.setBackground(color_lighter)
+            font = label_item.font()
             font.setBold(True)
-            item.setFont(font)
-            self.table.setItem(row, 0, item)
-            self.table.setSpan(row, 0, 1, len(self._COLUMNS) - 1)
-            vol_item = QTableWidgetItem(f"{sous_total:.2f}")
-            vol_item.setFont(font)
-            vol_item.setBackground(color_lighter)
-            self.table.setItem(row, len(self._COLUMNS) - 1, vol_item)
+            label_item.setFont(font)
+            self.table.setItem(row, 0, label_item)
+            self.table.setSpan(row, 0, 1, 7)  # ID, Réseau, Type, Matériau, Ø, Nom début, Nom fin
+
+            subtotal_vals = {7: sous_l2d, 8: sous_l3d, 12: sous_surface}
+            for i, c in enumerate(self._VOL_BREAKDOWN):
+                subtotal_vals[13 + i] = sous_vol[c['key']]
+            subtotal_vals[len(self._COLUMNS) - 1] = sous_total
+
+            for col in range(1, len(self._COLUMNS)):
+                text = f"{subtotal_vals[col]:.2f}" if col in subtotal_vals else ""
+                cell = QTableWidgetItem(text)
+                cell.setFont(font)
+                cell.setBackground(color_lighter)
+                if text:
+                    cell.setTextAlignment(Qt.AlignCenter)
+                self.table.setItem(row, col, cell)
             row += 1
 
             total_volume += sous_total
@@ -172,17 +319,13 @@ class CubatureDialog(QDialog):
         self.total_label.setText(label_text)
         self.table.resizeColumnsToContents()
 
-        # Masquer les colonnes remblai si mode cubature seule
-        if not self.show_remblai:
-            for c in range(13, 19):  # Vol. lit pose .. Vol. remblai
-                self.table.setColumnHidden(c, True)
-        else:
-            # Masquer les colonnes chaussée si non configurées
-            # Vol. chaussée inf = 16, Vol. chaussée sup = 17
-            if not self.config.get('chaussee_inf', False):
-                self.table.setColumnHidden(16, True)
-            if not self.config.get('chaussee_sup', False):
-                self.table.setColumnHidden(17, True)
+        # Afficher/masquer les colonnes remblai (Vol. lit pose .. Vol. remblai)
+        # selon la case à cocher, en réévaluant l'état à chaque appel : il faut
+        # explicitement les ré-afficher quand show_remblai repasse à True, sinon
+        # elles restent masquées depuis le dernier appel avec show_remblai=False.
+        active_keys = {c['key'] for c in self._active_vol_cols()}
+        for i, c in enumerate(self._VOL_BREAKDOWN):
+            self.table.setColumnHidden(13 + i, c['key'] not in active_keys)
 
     def _set_row(self, row, data):
         diam = data.get('diametre')
@@ -235,8 +378,7 @@ class CubatureDialog(QDialog):
         if not path:
             return
         try:
-            ch_inf = self.config.get('chaussee_inf', False)
-            ch_sup = self.config.get('chaussee_sup', False)
+            vol_cols = self._active_vol_cols()
             with open(path, 'w', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f)
                 header = [
@@ -244,13 +386,7 @@ class CubatureDialog(QDialog):
                     "Long. 2D (m)", "Long. 3D (m)", "Pente (%)",
                     "Prof. moy. (m)", "Largeur (m)", "Surf. ouv. (m²)",
                 ]
-                if self.show_remblai:
-                    header += ["Vol. lit pose (m³)", "Vol. enrobage (m³)", "Vol. conduite (m³)"]
-                    if ch_inf:
-                        header.append("Vol. chaussée inf (m³)")
-                    if ch_sup:
-                        header.append("Vol. chaussée sup (m³)")
-                    header.append("Vol. remblai (m³)")
+                header += [c['csv_label'] for c in vol_cols]
                 header.append("Déblai (m³)")
                 writer.writerow(header)
 
@@ -266,17 +402,7 @@ class CubatureDialog(QDialog):
                         r.get('largeur'),
                         r.get('surface') if r.get('surface') is not None else '',
                     ]
-                    if self.show_remblai:
-                        row += [
-                            r.get('vol_lit_pose') if r.get('vol_lit_pose') is not None else '',
-                            r.get('vol_enrobage') if r.get('vol_enrobage') is not None else '',
-                            r.get('vol_conduite') if r.get('vol_conduite') is not None else '',
-                        ]
-                        if ch_inf:
-                            row.append(r.get('vol_chaussee_inf') if r.get('vol_chaussee_inf') is not None else '')
-                        if ch_sup:
-                            row.append(r.get('vol_chaussee_sup') if r.get('vol_chaussee_sup') is not None else '')
-                        row.append(r.get('vol_remblai') if r.get('vol_remblai') is not None else '')
+                    row += [r.get(c['field']) if r.get(c['field']) is not None else '' for c in vol_cols]
                     row.append(r.get('volume') if r.get('volume') is not None else '')
                     writer.writerow(row)
             self._open_folder(path)
@@ -448,13 +574,13 @@ class CubatureDialog(QDialog):
                 ),
             ))
 
+            vol_cols = self._active_vol_cols()
             pdf_cols = ["ID", "Type", "Mat.", "Ø mm", "Début", "Fin",
                         "L.2D", "L.3D", "Pente%", "Prof.moy", "Larg.", "Surf."]
             col_widths = [9*mm, 14*mm, 10*mm, 9*mm, 16*mm, 16*mm,
                          11*mm, 11*mm, 10*mm, 14*mm, 10*mm, 12*mm]
-            if self.show_remblai:
-                pdf_cols += ["Lit pose", "Enrobage", "Conduite", "Ch.inf", "Ch.sup", "Remblai"]
-                col_widths += [9*mm, 9*mm, 9*mm, 8*mm, 8*mm, 10*mm]
+            pdf_cols += [c['pdf_label'] for c in vol_cols]
+            col_widths += [c['pdf_width']*mm for c in vol_cols]
             pdf_cols.append("Vol.")
             col_widths.append(13*mm)
             n_total = len(pdf_cols)  # nombre total de colonnes
@@ -497,31 +623,21 @@ class CubatureDialog(QDialog):
                         Paragraph(f"{r.get('largeur', 0):.2f}", cell_style),
                         Paragraph(f"{r.get('surface', 0):.2f}" if r.get('surface') is not None else '—', cell_style),
                     ]
-                    if self.show_remblai:
-                        row_data += [
-                            Paragraph(f"{r.get('vol_lit_pose', 0):.2f}" if r.get('vol_lit_pose') is not None else '—', cell_style),
-                            Paragraph(f"{r.get('vol_enrobage', 0):.2f}" if r.get('vol_enrobage') is not None else '—', cell_style),
-                            Paragraph(f"{r.get('vol_conduite', 0):.2f}" if r.get('vol_conduite') is not None else '—', cell_style),
-                            Paragraph(f"{r.get('vol_chaussee_inf', 0):.2f}" if r.get('vol_chaussee_inf') is not None else '—', cell_style),
-                            Paragraph(f"{r.get('vol_chaussee_sup', 0):.2f}" if r.get('vol_chaussee_sup') is not None else '—', cell_style),
-                            Paragraph(f"{r.get('vol_remblai', 0):.2f}" if r.get('vol_remblai') is not None else '—', cell_style),
-                        ]
+                    row_data += [
+                        Paragraph(f"{r.get(c['field'], 0):.2f}" if r.get(c['field']) is not None else '—', cell_style)
+                        for c in vol_cols
+                    ]
                     row_data.append(Paragraph(f"{r.get('volume', 0):.2f}" if r.get('volume') is not None else '—', cell_style))
                     table_data.append(row_data)
                     if r.get('volume') is not None:
                         sous_total += r['volume']
                         if r.get('surface') is not None:
                             sous_surface += r['surface']
-                        if self.show_remblai:
+                        if vol_cols:
                             if sous_bd is None:
-                                sous_bd = {'lit_pose': 0.0, 'enrobage': 0.0, 'conduite': 0.0,
-                                           'ch_inf': 0.0, 'ch_sup': 0.0, 'remblai': 0.0}
-                            sous_bd['lit_pose'] += r.get('vol_lit_pose', 0) or 0.0
-                            sous_bd['enrobage'] += r.get('vol_enrobage', 0) or 0.0
-                            sous_bd['conduite'] += r.get('vol_conduite', 0) or 0.0
-                            sous_bd['ch_inf'] += r.get('vol_chaussee_inf', 0) or 0.0
-                            sous_bd['ch_sup'] += r.get('vol_chaussee_sup', 0) or 0.0
-                            sous_bd['remblai'] += r.get('vol_remblai', 0) or 0.0
+                                sous_bd = {c['key']: 0.0 for c in vol_cols}
+                            for c in vol_cols:
+                                sous_bd[c['key']] += r.get(c['field'], 0) or 0.0
 
                 # Ligne sous-total du sous-groupe
                 n_empty = n_total - 2  # label + volume
@@ -574,169 +690,156 @@ class CubatureDialog(QDialog):
             fontSize=12, spaceAfter=3*mm, textColor=colors.HexColor('#222222'),
         )))
 
-        ch_inf_configured = self.config.get('chaussee_inf', False)
-        ch_sup_configured = self.config.get('chaussee_sup', False)
+        vol_cols = self._active_vol_cols()
+        vol_keys = [c['key'] for c in vol_cols]
 
-        if self.show_remblai:
-            # Récapitulatif exhaustif avec toutes les colonnes de volume
-            recap_cols = ["", "Nb", "Lit pose", "Enrobage", "Conduite"]
-            recap_widths = [62*mm, 12*mm, 17*mm, 17*mm, 17*mm]
-            if ch_inf_configured:
-                recap_cols.append("Ch. inf")
-                recap_widths.append(15*mm)
-            if ch_sup_configured:
-                recap_cols.append("Ch. sup")
-                recap_widths.append(15*mm)
-            recap_cols += ["Remblai", "Surf. m²", "Déblai m³"]
-            recap_widths += [17*mm, 17*mm, 20*mm]
-            n_recap = len(recap_cols)
-
-            recap_rows = [recap_cols]
-            sous_total_rows = []
-            grand_bd = {'lit_pose': 0.0, 'enrobage': 0.0, 'conduite': 0.0,
-                        'ch_inf': 0.0, 'ch_sup': 0.0, 'remblai': 0.0}
-
-            for r_name, r_vol, r_count, r_color, r_detail, r_surf in recap_data:
-                reseau_label = f"{r_name} — Eaux {'Usées' if r_name == 'EU' else 'Pluviales'}"
-                recap_rows.append([Paragraph(f"<b>{reseau_label}</b>", cell_left)] + [''] * (n_recap - 1))
-
-                reseau_bd = {'lit_pose': 0.0, 'enrobage': 0.0, 'conduite': 0.0,
-                             'ch_inf': 0.0, 'ch_sup': 0.0, 'remblai': 0.0}
-                for sous_type, sous_label in [('Conduite', 'Conduites'), ('Branchement', 'Branchements')]:
-                    entry = r_detail.get(sous_type, (0, 0.0, None, 0.0))
-                    if len(entry) >= 4:
-                        cnt, vol, bd, surf = entry
-                    else:
-                        cnt, vol, bd, surf = entry[0] if len(entry) > 0 else 0, entry[1] if len(entry) > 1 else 0.0, entry[2] if len(entry) > 2 else None, 0.0
-                    row_data = [Paragraph(f"&nbsp;&nbsp;&nbsp;{sous_label}", cell_left),
-                                Paragraph(str(cnt), cell_style)]
-                    for key in ['lit_pose', 'enrobage', 'conduite', 'ch_inf', 'ch_sup', 'remblai']:
-                        if key == 'ch_inf' and not ch_inf_configured:
-                            continue
-                        if key == 'ch_sup' and not ch_sup_configured:
-                            continue
-                        val = bd.get(key, 0.0) if bd else 0.0
-                        row_data.append(Paragraph(f"{val:.2f}" if (cnt > 0 and bd) else '—', cell_style))
-                        if bd:
-                            reseau_bd[key] += val
-                    row_data.append(Paragraph(f"{surf:.2f}" if cnt > 0 else '—', cell_style))
-                    row_data.append(Paragraph(f"{vol:.2f}" if cnt > 0 else '—', cell_style))
-                    recap_rows.append(row_data)
-
-                # Sous-total réseau
-                st_row = [Paragraph(f"<i>Sous-total {r_name}</i>", cell_left),
-                          Paragraph(f"<b>{r_count}</b>", cell_style)]
-                for key in ['lit_pose', 'enrobage', 'conduite', 'ch_inf', 'ch_sup', 'remblai']:
-                    if key == 'ch_inf' and not ch_inf_configured:
-                        continue
-                    if key == 'ch_sup' and not ch_sup_configured:
-                        continue
-                    st_row.append(Paragraph(f"<b>{reseau_bd[key]:.2f}</b>", cell_style))
-                    grand_bd[key] += reseau_bd[key]
-                st_row.append(Paragraph(f"<b>{r_surf:.2f}</b>", cell_style))
-                st_row.append(Paragraph(f"<b>{r_vol:.2f}</b>", cell_style))
-                recap_rows.append(st_row)
-                sous_total_rows.append(len(recap_rows) - 1)
-
-            # TOTAL PROJET
-            grand_surf = sum(r[5] for r in recap_data)  # reseau_surface
-            total_row_data = [Paragraph("<b>TOTAL PROJET</b>", cell_left),
-                              Paragraph(f"<b>{grand_count}</b>", cell_style)]
-            for key in ['lit_pose', 'enrobage', 'conduite', 'ch_inf', 'ch_sup', 'remblai']:
-                if key == 'ch_inf' and not ch_inf_configured:
-                    continue
-                if key == 'ch_sup' and not ch_sup_configured:
-                    continue
-                total_row_data.append(Paragraph(f"<b>{grand_bd[key]:.2f}</b>", cell_style))
-            total_row_data.append(Paragraph(f"<b>{grand_surf:.2f}</b>", cell_style))
-            total_row_data.append(Paragraph(f"<b>{grand_total:.2f}</b>", cell_style))
-            recap_rows.append(total_row_data)
-            total_row = len(recap_rows) - 1
-
-            style_cmds = [
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#333333')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 7),
-                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
-                ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CCCCCC')),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('TOPPADDING', (0, 0), (-1, -1), 2),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-                ('BACKGROUND', (0, total_row), (-1, total_row), colors.HexColor('#E8E8E8')),
-                ('LINEABOVE', (0, total_row), (-1, total_row), 1.5, colors.HexColor('#333333')),
-            ]
-            for st_row in sous_total_rows:
-                style_cmds.append(('BACKGROUND', (0, st_row), (-1, st_row), colors.HexColor('#EEEEEE')))
-                style_cmds.append(('LINEABOVE', (0, st_row), (-1, st_row), 0.8, colors.HexColor('#666666')))
-
-            recap_tbl = Table(recap_rows, colWidths=recap_widths)
-            recap_tbl.setStyle(TableStyle(style_cmds))
-
+        recap_cols = ["", "Nb", "Prof. moy. (m)", "Largeur (m)"] + \
+            [c['recap_label'] for c in vol_cols] + ["Surf. ouv. (m²)", "Déblai (m³)"]
+        if vol_cols:
+            recap_widths = [46*mm, 10*mm, 15*mm, 13*mm] + \
+                [c['recap_width']*mm for c in vol_cols] + [17*mm, 20*mm]
         else:
-            # Mode cubature simple : tableau Nb / Surface / Volume
-            recap_cols = ["", "Nb", "Surf. m²", "Déblai m³"]
-            recap_rows = [recap_cols]
-            sous_total_rows = []
-            grand_surf = 0.0
-            for r_name, r_vol, r_count, r_color, r_detail, r_surf in recap_data:
-                reseau_label = f"{r_name} — Eaux {'Usées' if r_name == 'EU' else 'Pluviales'}"
-                recap_rows.append([
-                    Paragraph(f"<b>{reseau_label}</b>", cell_left),
-                    Paragraph('', cell_style),
-                    Paragraph('', cell_style),
-                    Paragraph('', cell_style),
-                ])
-                for sous_type, sous_label in [('Conduite', 'Conduites'), ('Branchement', 'Branchements')]:
-                    entry = r_detail.get(sous_type, (0, 0.0, None, 0.0))
-                    cnt = entry[0] if len(entry) > 0 else 0
-                    vol = entry[1] if len(entry) > 1 else 0.0
-                    surf = entry[3] if len(entry) > 3 else 0.0
-                    recap_rows.append([
-                        Paragraph(f"&nbsp;&nbsp;&nbsp;{sous_label}", cell_left),
-                        Paragraph(str(cnt), cell_style),
-                        Paragraph(f"{surf:.2f}" if cnt > 0 else '—', cell_style),
-                        Paragraph(f"{vol:.2f}" if cnt > 0 else '—', cell_style),
-                    ])
-                recap_rows.append([
-                    Paragraph(f"<i>Sous-total {r_name}</i>", cell_left),
-                    Paragraph(f"<b>{r_count}</b>", cell_style),
-                    Paragraph(f"<b>{r_surf:.2f}</b>", cell_style),
-                    Paragraph(f"<b>{r_vol:.2f}</b>", cell_style),
-                ])
-                sous_total_rows.append(len(recap_rows) - 1)
-                grand_surf += r_surf
-            recap_rows.append([
-                Paragraph("<b>TOTAL PROJET</b>", cell_left),
-                Paragraph(f"<b>{grand_count}</b>", cell_style),
-                Paragraph(f"<b>{grand_surf:.2f}</b>", cell_style),
-                Paragraph(f"<b>{grand_total:.2f}</b>", cell_style),
-            ])
-            total_row = len(recap_rows) - 1
+            recap_widths = [70*mm, 15*mm, 18*mm, 15*mm, 25*mm, 27*mm]
+        n_recap = len(recap_cols)
 
-            style_cmds = [
+        recap_rows = [recap_cols]
+        sous_total_rows = []
+        grand_bd = {k: 0.0 for k in vol_keys}
+
+        for r_name, r_vol, r_count, r_color, r_detail, r_surf in recap_data:
+            reseau_label = f"{r_name} — Eaux {'Usées' if r_name == 'EU' else 'Pluviales'}"
+            recap_rows.append([Paragraph(f"<b>{reseau_label}</b>", cell_left)] + [''] * (n_recap - 1))
+
+            reseau_bd = {k: 0.0 for k in vol_keys}
+            for sous_type, sous_label in [('Conduite', 'Conduites'), ('Branchement', 'Branchements')]:
+                cnt, vol, bd, surf = r_detail.get(sous_type, (0, 0.0, None, 0.0))
+                sous_results = [r for r in self.results
+                                if r.get('reseau') == r_name and r.get('type') == sous_type]
+                profmoy_avg = self._avg([r.get('prof_moy') for r in sous_results])
+                largeur_avg = self._avg([r.get('largeur') for r in sous_results])
+                row_data = [Paragraph(f"&nbsp;&nbsp;&nbsp;{sous_label}", cell_left),
+                            Paragraph(str(cnt), cell_style),
+                            Paragraph(f"{profmoy_avg:.2f}" if profmoy_avg is not None else '—', cell_style),
+                            Paragraph(f"{largeur_avg:.2f}" if largeur_avg is not None else '—', cell_style)]
+                for key in vol_keys:
+                    val = bd.get(key, 0.0) if bd else 0.0
+                    row_data.append(Paragraph(f"{val:.2f}" if (cnt > 0 and bd) else '—', cell_style))
+                    if bd:
+                        reseau_bd[key] += val
+                row_data.append(Paragraph(f"{surf:.2f}" if cnt > 0 else '—', cell_style))
+                row_data.append(Paragraph(f"{vol:.2f}" if cnt > 0 else '—', cell_style))
+                recap_rows.append(row_data)
+
+            # Sous-total réseau
+            reseau_results_r = [r for r in self.results if r.get('reseau') == r_name]
+            reseau_profmoy_avg = self._avg([r.get('prof_moy') for r in reseau_results_r])
+            reseau_largeur_avg = self._avg([r.get('largeur') for r in reseau_results_r])
+            st_row = [Paragraph(f"<i>Sous-total {r_name}</i>", cell_left),
+                      Paragraph(f"<b>{r_count}</b>", cell_style),
+                      Paragraph(f"<b>{reseau_profmoy_avg:.2f}</b>" if reseau_profmoy_avg is not None else '—', cell_style),
+                      Paragraph(f"<b>{reseau_largeur_avg:.2f}</b>" if reseau_largeur_avg is not None else '—', cell_style)]
+            for key in vol_keys:
+                st_row.append(Paragraph(f"<b>{reseau_bd[key]:.2f}</b>", cell_style))
+                grand_bd[key] += reseau_bd[key]
+            st_row.append(Paragraph(f"<b>{r_surf:.2f}</b>", cell_style))
+            st_row.append(Paragraph(f"<b>{r_vol:.2f}</b>", cell_style))
+            recap_rows.append(st_row)
+            sous_total_rows.append(len(recap_rows) - 1)
+
+        # TOTAL PROJET
+        grand_surf = sum(r[5] for r in recap_data)  # reseau_surface
+        grand_profmoy_avg = self._avg([r.get('prof_moy') for r in self.results])
+        grand_largeur_avg = self._avg([r.get('largeur') for r in self.results])
+        total_row_data = [Paragraph("<b>TOTAL PROJET</b>", cell_left),
+                          Paragraph(f"<b>{grand_count}</b>", cell_style),
+                          Paragraph(f"<b>{grand_profmoy_avg:.2f}</b>" if grand_profmoy_avg is not None else '—', cell_style),
+                          Paragraph(f"<b>{grand_largeur_avg:.2f}</b>" if grand_largeur_avg is not None else '—', cell_style)]
+        for key in vol_keys:
+            total_row_data.append(Paragraph(f"<b>{grand_bd[key]:.2f}</b>", cell_style))
+        total_row_data.append(Paragraph(f"<b>{grand_surf:.2f}</b>", cell_style))
+        total_row_data.append(Paragraph(f"<b>{grand_total:.2f}</b>", cell_style))
+        recap_rows.append(total_row_data)
+        total_row = len(recap_rows) - 1
+
+        style_cmds = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#333333')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 7 if vol_cols else 8),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CCCCCC')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('BACKGROUND', (0, total_row), (-1, total_row), colors.HexColor('#E8E8E8')),
+            ('LINEABOVE', (0, total_row), (-1, total_row), 1.5, colors.HexColor('#333333')),
+        ]
+        for st_row in sous_total_rows:
+            style_cmds.append(('BACKGROUND', (0, st_row), (-1, st_row), colors.HexColor('#EEEEEE')))
+            style_cmds.append(('LINEABOVE', (0, st_row), (-1, st_row), 0.8, colors.HexColor('#666666')))
+
+        recap_tbl = Table(recap_rows, colWidths=recap_widths)
+        recap_tbl.setStyle(TableStyle(style_cmds))
+
+        story.append(recap_tbl)
+
+        # ── Synthèse des ouvrages ──────────────────────────────────
+        story.append(PageBreak())
+        story.append(Paragraph("Synthèse des ouvrages", ParagraphStyle(
+            'SynthTitle', parent=styles['Heading2'],
+            fontSize=12, spaceAfter=3*mm, textColor=colors.HexColor('#222222'),
+        )))
+
+        def _synth_table(groupes, total, label_total):
+            rows = [["Matériau", "Ø (mm)", "Long. totale (m)"]]
+            for (mat, diam), g in groupes:
+                rows.append([
+                    Paragraph(mat, cell_left),
+                    Paragraph(f"{diam:.0f}" if diam is not None else '—', cell_style),
+                    Paragraph(f"{g['long']:.2f}", cell_style),
+                ])
+            _cnt_total, long_total = total
+            rows.append([
+                Paragraph(f"<b>{label_total}</b>", cell_left), '',
+                Paragraph(f"<b>{long_total:.2f}</b>", cell_style),
+            ])
+            tbl = Table(rows, colWidths=[55*mm, 25*mm, 35*mm])
+            tbl.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#333333')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, 0), 8),
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
                 ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CCCCCC')),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('TOPPADDING', (0, 0), (-1, -1), 2),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-                ('BACKGROUND', (0, total_row), (-1, total_row), colors.HexColor('#E8E8E8')),
-                ('LINEABOVE', (0, total_row), (-1, total_row), 1.5, colors.HexColor('#333333')),
-            ]
-            for st_row in sous_total_rows:
-                style_cmds.append(('BACKGROUND', (0, st_row), (-1, st_row), colors.HexColor('#EEEEEE')))
-                style_cmds.append(('LINEABOVE', (0, st_row), (-1, st_row), 0.8, colors.HexColor('#666666')))
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#EEEEEE')),
+                ('LINEABOVE', (0, -1), (-1, -1), 1, colors.HexColor('#333333')),
+            ]))
+            return tbl
 
-            recap_tbl = Table(recap_rows, colWidths=[90*mm, 20*mm, 30*mm, 35*mm])
-            recap_tbl.setStyle(TableStyle(style_cmds))
-
-        story.append(recap_tbl)
+        for d in self._synthese_data():
+            synth_color = '#CC0000' if d['reseau'] == 'EU' else '#0044CC'
+            reseau_label = f"{d['reseau']} — Eaux {'Usées' if d['reseau'] == 'EU' else 'Pluviales'}"
+            story.append(Paragraph(reseau_label, ParagraphStyle(
+                'SynthReseau', parent=styles['Heading3'],
+                fontSize=10, textColor=colors.HexColor(synth_color),
+                spaceBefore=4*mm, spaceAfter=2*mm,
+            )))
+            story.append(Paragraph("▸ Tronçons", sousgroupe_style))
+            story.append(_synth_table(d['troncons_groupes'], d['troncons_total'], "Total tronçons"))
+            story.append(Spacer(1, 2*mm))
+            story.append(Paragraph("▸ Branchements", sousgroupe_style))
+            story.append(_synth_table(d['branchements_groupes'], d['branchements_total'], "Total branchements"))
+            story.append(Spacer(1, 2*mm))
+            story.append(Paragraph(
+                f"Regards : <b>{d['nb_regards']}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
+                f"Tabourets : <b>{d['nb_tabourets']}</b>",
+                param_style,
+            ))
+            story.append(Spacer(1, 5*mm))
 
         # ── Pied de page ─────────────────────────────────────────
         def add_page_number(canvas, doc):
@@ -839,18 +942,12 @@ class CubatureDialog(QDialog):
             c.font = Font(size=8, color='444444')
 
             # Tableau récap
-            ch_inf_configured = self.config.get('chaussee_inf', False)
-            ch_sup_configured = self.config.get('chaussee_sup', False)
+            vol_cols = self._active_vol_cols()
+            vol_keys = [c['key'] for c in vol_cols]
+            vol_field = {c['key']: c['field'] for c in vol_cols}
 
-            if self.show_remblai:
-                recap_cols = ["", "Nb", "Lit pose", "Enrobage", "Conduite"]
-                if ch_inf_configured:
-                    recap_cols.append("Ch. inf")
-                if ch_sup_configured:
-                    recap_cols.append("Ch. sup")
-                recap_cols += ["Remblai", "Surf. m²", "Déblai m³"]
-            else:
-                recap_cols = ["", "Nb", "Surf. m²", "Déblai m³", ""]
+            recap_cols = ["", "Nb", "Prof. moy. (m)", "Largeur (m)"] + \
+                [c['recap_label'] for c in vol_cols] + ["Surf. ouv. (m²)", "Déblai (m³)"]
             n_recap = len(recap_cols)
 
             recap_header_row = 7
@@ -866,8 +963,7 @@ class CubatureDialog(QDialog):
             grand_total = 0.0
             grand_surface = 0.0
             grand_count = 0
-            grand_bd = {'lit_pose': 0.0, 'enrobage': 0.0, 'conduite': 0.0,
-                        'ch_inf': 0.0, 'ch_sup': 0.0, 'remblai': 0.0}
+            grand_bd = {k: 0.0 for k in vol_keys}
 
             row = recap_header_row + 1
             for r_name, reseau_results, color_hex in [
@@ -887,48 +983,37 @@ class CubatureDialog(QDialog):
                 reseau_total = 0.0
                 reseau_surface = 0.0
                 reseau_count = 0
-                reseau_bd = {'lit_pose': 0.0, 'enrobage': 0.0, 'conduite': 0.0,
-                             'ch_inf': 0.0, 'ch_sup': 0.0, 'remblai': 0.0}
+                reseau_bd = {k: 0.0 for k in vol_keys}
 
                 for sous_type, sous_label in [('Conduite', 'Conduites'), ('Branchement', 'Branchements')]:
                     sous_results = [r for r in reseau_results if r.get('type') == sous_type]
                     cnt = len(sous_results)
                     vol = sum(r.get('volume', 0.0) or 0.0 for r in sous_results)
                     surf = sum(r.get('surface', 0.0) or 0.0 for r in sous_results)
+                    profmoy_avg = self._avg([r.get('prof_moy') for r in sous_results])
+                    largeur_avg = self._avg([r.get('largeur') for r in sous_results])
 
                     c = ws_recap.cell(row=row, column=1, value=f"   {sous_label}")
                     c.font = normal_font; c.border = thin_border
                     c = ws_recap.cell(row=row, column=2, value=cnt)
                     c.font = normal_font; c.alignment = Alignment(horizontal='center'); c.border = thin_border
+                    c = ws_recap.cell(row=row, column=3, value=round(profmoy_avg, 2) if profmoy_avg is not None else '—')
+                    c.font = normal_font; c.alignment = Alignment(horizontal='center'); c.border = thin_border
+                    c = ws_recap.cell(row=row, column=4, value=round(largeur_avg, 2) if largeur_avg is not None else '—')
+                    c.font = normal_font; c.alignment = Alignment(horizontal='center'); c.border = thin_border
 
-                    if self.show_remblai:
-                        col = 3
-                        vol_field = {
-                            'lit_pose': 'vol_lit_pose', 'enrobage': 'vol_enrobage',
-                            'conduite': 'vol_conduite', 'ch_inf': 'vol_chaussee_inf',
-                            'ch_sup': 'vol_chaussee_sup', 'remblai': 'vol_remblai',
-                        }
-                        for key in ['lit_pose', 'enrobage', 'conduite', 'ch_inf', 'ch_sup', 'remblai']:
-                            if key == 'ch_inf' and not ch_inf_configured:
-                                continue
-                            if key == 'ch_sup' and not ch_sup_configured:
-                                continue
-                            field = vol_field[key]
-                            v = sum(r.get(field, 0.0) or 0.0 for r in sous_results) if cnt > 0 else None
-                            c = ws_recap.cell(row=row, column=col, value=round(v, 2) if v is not None else '—')
-                            c.font = normal_font; c.alignment = Alignment(horizontal='center'); c.border = thin_border
-                            if v is not None:
-                                reseau_bd[key] += v
-                            col += 1
-                        c = ws_recap.cell(row=row, column=col, value=round(surf, 2) if cnt > 0 else '—'); col += 1
+                    col = 5
+                    for key in vol_keys:
+                        v = sum(r.get(vol_field[key], 0.0) or 0.0 for r in sous_results) if cnt > 0 else None
+                        c = ws_recap.cell(row=row, column=col, value=round(v, 2) if v is not None else '—')
                         c.font = normal_font; c.alignment = Alignment(horizontal='center'); c.border = thin_border
-                        c = ws_recap.cell(row=row, column=col, value=round(vol, 2) if cnt > 0 else '—')
-                        c.font = normal_font; c.alignment = Alignment(horizontal='center'); c.border = thin_border
-                    else:
-                        c = ws_recap.cell(row=row, column=3, value=round(surf, 2) if cnt > 0 else '—')
-                        c.font = normal_font; c.alignment = Alignment(horizontal='center'); c.border = thin_border
-                        c = ws_recap.cell(row=row, column=4, value=round(vol, 2) if cnt > 0 else '—')
-                        c.font = normal_font; c.alignment = Alignment(horizontal='center'); c.border = thin_border
+                        if v is not None:
+                            reseau_bd[key] += v
+                        col += 1
+                    c = ws_recap.cell(row=row, column=col, value=round(surf, 2) if cnt > 0 else '—'); col += 1
+                    c.font = normal_font; c.alignment = Alignment(horizontal='center'); c.border = thin_border
+                    c = ws_recap.cell(row=row, column=col, value=round(vol, 2) if cnt > 0 else '—')
+                    c.font = normal_font; c.alignment = Alignment(horizontal='center'); c.border = thin_border
 
                     row += 1
                     reseau_total += vol
@@ -941,29 +1026,26 @@ class CubatureDialog(QDialog):
                     ws_recap.cell(row=row, column=cc).border = Border(
                         top=Side(style='thin'), bottom=Side(style='thin'),
                         left=Side(style='thin'), right=Side(style='thin'))
+                reseau_profmoy_avg = self._avg([r.get('prof_moy') for r in reseau_results])
+                reseau_largeur_avg = self._avg([r.get('largeur') for r in reseau_results])
                 c = ws_recap.cell(row=row, column=1, value=f"Sous-total {r_name}")
                 c.font = Font(bold=True, size=10, italic=True); c.fill = subtotal_fill
                 c = ws_recap.cell(row=row, column=2, value=reseau_count)
                 c.font = Font(bold=True, size=10); c.fill = subtotal_fill; c.alignment = Alignment(horizontal='center')
+                c = ws_recap.cell(row=row, column=3, value=round(reseau_profmoy_avg, 2) if reseau_profmoy_avg is not None else '—')
+                c.font = Font(bold=True, size=10); c.fill = subtotal_fill; c.alignment = Alignment(horizontal='center')
+                c = ws_recap.cell(row=row, column=4, value=round(reseau_largeur_avg, 2) if reseau_largeur_avg is not None else '—')
+                c.font = Font(bold=True, size=10); c.fill = subtotal_fill; c.alignment = Alignment(horizontal='center')
 
-                if self.show_remblai:
-                    col = 3
-                    for key in ['lit_pose', 'enrobage', 'conduite', 'ch_inf', 'ch_sup', 'remblai']:
-                        if key == 'ch_inf' and not ch_inf_configured:
-                            continue
-                        if key == 'ch_sup' and not ch_sup_configured:
-                            continue
-                        c = ws_recap.cell(row=row, column=col, value=round(reseau_bd[key], 2))
-                        c.font = Font(bold=True, size=10); c.fill = subtotal_fill; c.alignment = Alignment(horizontal='center')
-                        grand_bd[key] += reseau_bd[key]
-                        col += 1
-                    c = ws_recap.cell(row=row, column=col, value=round(reseau_surface, 2)); col += 1
+                col = 5
+                for key in vol_keys:
+                    c = ws_recap.cell(row=row, column=col, value=round(reseau_bd[key], 2))
                     c.font = Font(bold=True, size=10); c.fill = subtotal_fill; c.alignment = Alignment(horizontal='center')
-                    c = ws_recap.cell(row=row, column=col, value=round(reseau_total, 2))
-                else:
-                    c = ws_recap.cell(row=row, column=3, value=round(reseau_surface, 2))
-                    c.font = Font(bold=True, size=10); c.fill = subtotal_fill; c.alignment = Alignment(horizontal='center')
-                    c = ws_recap.cell(row=row, column=4, value=round(reseau_total, 2))
+                    grand_bd[key] += reseau_bd[key]
+                    col += 1
+                c = ws_recap.cell(row=row, column=col, value=round(reseau_surface, 2)); col += 1
+                c.font = Font(bold=True, size=10); c.fill = subtotal_fill; c.alignment = Alignment(horizontal='center')
+                c = ws_recap.cell(row=row, column=col, value=round(reseau_total, 2))
                 c.font = Font(bold=True, size=10); c.fill = subtotal_fill; c.alignment = Alignment(horizontal='center')
                 row += 1
                 grand_total += reseau_total
@@ -976,38 +1058,37 @@ class CubatureDialog(QDialog):
                 ws_recap.cell(row=row, column=cc).border = Border(
                     top=Side(style='medium'), bottom=Side(style='thin'),
                     left=Side(style='thin'), right=Side(style='thin'))
+            grand_profmoy_avg = self._avg([r.get('prof_moy') for r in self.results])
+            grand_largeur_avg = self._avg([r.get('largeur') for r in self.results])
             c = ws_recap.cell(row=row, column=1, value="TOTAL PROJET")
             c.font = Font(bold=True, size=11); c.fill = total_fill
             c = ws_recap.cell(row=row, column=2, value=grand_count)
             c.font = Font(bold=True, size=11); c.fill = total_fill; c.alignment = Alignment(horizontal='center')
+            c = ws_recap.cell(row=row, column=3, value=round(grand_profmoy_avg, 2) if grand_profmoy_avg is not None else '—')
+            c.font = Font(bold=True, size=11); c.fill = total_fill; c.alignment = Alignment(horizontal='center')
+            c = ws_recap.cell(row=row, column=4, value=round(grand_largeur_avg, 2) if grand_largeur_avg is not None else '—')
+            c.font = Font(bold=True, size=11); c.fill = total_fill; c.alignment = Alignment(horizontal='center')
 
-            if self.show_remblai:
-                col = 3
-                for key in ['lit_pose', 'enrobage', 'conduite', 'ch_inf', 'ch_sup', 'remblai']:
-                    if key == 'ch_inf' and not ch_inf_configured:
-                        continue
-                    if key == 'ch_sup' and not ch_sup_configured:
-                        continue
-                    c = ws_recap.cell(row=row, column=col, value=round(grand_bd[key], 2))
-                    c.font = Font(bold=True, size=11); c.fill = total_fill; c.alignment = Alignment(horizontal='center')
-                    col += 1
-                c = ws_recap.cell(row=row, column=col, value=round(grand_surface, 2)); col += 1
+            col = 5
+            for key in vol_keys:
+                c = ws_recap.cell(row=row, column=col, value=round(grand_bd[key], 2))
                 c.font = Font(bold=True, size=11); c.fill = total_fill; c.alignment = Alignment(horizontal='center')
-                c = ws_recap.cell(row=row, column=col, value=round(grand_total, 2))
-            else:
-                c = ws_recap.cell(row=row, column=3, value=round(grand_surface, 2))
-                c.font = Font(bold=True, size=11); c.fill = total_fill; c.alignment = Alignment(horizontal='center')
-                c = ws_recap.cell(row=row, column=4, value=round(grand_total, 2))
+                col += 1
+            c = ws_recap.cell(row=row, column=col, value=round(grand_surface, 2)); col += 1
+            c.font = Font(bold=True, size=11); c.fill = total_fill; c.alignment = Alignment(horizontal='center')
+            c = ws_recap.cell(row=row, column=col, value=round(grand_total, 2))
             c.font = Font(bold=True, size=11); c.fill = total_fill; c.alignment = Alignment(horizontal='center')
 
             ws_recap.column_dimensions['A'].width = 40
-            if self.show_remblai:
+            if vol_cols:
                 for col_idx in range(2, n_recap + 1):
                     ws_recap.column_dimensions[get_column_letter(col_idx)].width = 16
             else:
                 ws_recap.column_dimensions['B'].width = 12
-                ws_recap.column_dimensions['C'].width = 18
-                ws_recap.column_dimensions['D'].width = 18
+                ws_recap.column_dimensions['C'].width = 16
+                ws_recap.column_dimensions['D'].width = 14
+                ws_recap.column_dimensions['E'].width = 18
+                ws_recap.column_dimensions['F'].width = 18
 
             # ── Feuille 2 : Données détaillées ─────────────────────
             ws_data = wb.create_sheet("Données détaillées")
@@ -1105,6 +1186,68 @@ class CubatureDialog(QDialog):
             for col_idx_1based, col_letter in avg_cols.items():
                 ws_data.cell(row=subtotal_row, column=col_idx_1based).value = \
                     f"=SUBTOTAL(101,{col_letter}2:{col_letter}{last_data_row})"
+
+            # ── Feuille 3 : Synthèse ouvrages (tronçons/branchements par Ø/matériau, regards, tabourets) ──
+            ws_synth = wb.create_sheet("Synthèse ouvrages")
+            ws_synth.merge_cells('A1:C1')
+            c = ws_synth.cell(row=1, column=1, value="Synthèse des ouvrages")
+            c.font = title_font
+            c.alignment = Alignment(horizontal='left')
+
+            def _write_groupes_table(row_s, groupes, total, label_total):
+                for col_idx, h in enumerate(["Matériau", "Ø (mm)", "Long. totale (m)"], 1):
+                    cell = ws_synth.cell(row=row_s, column=col_idx, value=h)
+                    cell.font = header_font; cell.fill = header_fill
+                    cell.alignment = Alignment(horizontal='center'); cell.border = thin_border
+                row_s += 1
+                for (mat, diam), g in groupes:
+                    ws_synth.cell(row=row_s, column=1, value=mat).border = thin_border
+                    c = ws_synth.cell(row=row_s, column=2, value=round(diam, 1) if diam is not None else '—')
+                    c.alignment = Alignment(horizontal='center'); c.border = thin_border
+                    c = ws_synth.cell(row=row_s, column=3, value=round(g['long'], 2))
+                    c.alignment = Alignment(horizontal='center'); c.border = thin_border
+                    row_s += 1
+                _cnt_total, long_total = total
+                c = ws_synth.cell(row=row_s, column=1, value=label_total)
+                c.font = Font(bold=True); c.border = thin_border
+                ws_synth.cell(row=row_s, column=2).border = thin_border
+                c = ws_synth.cell(row=row_s, column=3, value=round(long_total, 2))
+                c.font = Font(bold=True); c.alignment = Alignment(horizontal='center'); c.border = thin_border
+                return row_s + 2
+
+            row_s = 3
+            for d in self._synthese_data():
+                fill = red_fill if d['reseau'] == 'EU' else blue_fill
+                reseau_label = f"{d['reseau']} — Eaux {'Usées' if d['reseau'] == 'EU' else 'Pluviales'}"
+
+                ws_synth.merge_cells(start_row=row_s, start_column=1, end_row=row_s, end_column=3)
+                c = ws_synth.cell(row=row_s, column=1, value=reseau_label)
+                c.font = Font(bold=True, size=11)
+                c.fill = fill
+                for cc in range(1, 4):
+                    ws_synth.cell(row=row_s, column=cc).border = thin_border
+                row_s += 1
+
+                row_s = _write_groupes_table(row_s, d['troncons_groupes'], d['troncons_total'],
+                                              "Total tronçons")
+                row_s = _write_groupes_table(row_s, d['branchements_groupes'], d['branchements_total'],
+                                              "Total branchements")
+
+                for label, value in [
+                    ("Nombre de regards", d['nb_regards']),
+                    ("Nombre de tabourets", d['nb_tabourets']),
+                ]:
+                    c = ws_synth.cell(row=row_s, column=1, value=label)
+                    c.font = normal_font
+                    c = ws_synth.cell(row=row_s, column=3, value=value)
+                    c.font = Font(bold=True); c.alignment = Alignment(horizontal='center')
+                    row_s += 1
+
+                row_s += 2
+
+            ws_synth.column_dimensions['A'].width = 22
+            ws_synth.column_dimensions['B'].width = 12
+            ws_synth.column_dimensions['C'].width = 18
 
             wb.save(path)
             self._open_folder(path)

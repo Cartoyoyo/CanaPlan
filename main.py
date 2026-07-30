@@ -28,6 +28,13 @@ class ReseauAssainissementPlugin(QObject):
 
     def initGui(self):
         """Création de la barre d'outils et des actions."""
+        # Purge des GeoJSON temporaires (fonds WFS) des sessions précédentes
+        try:
+            from .tools.wfs_utils import purge_temp_dir
+            purge_temp_dir()
+        except Exception:
+            pass
+
         self.toolbar = self.iface.addToolBar("Réseau Assainissement")
         self.toolbar.setObjectName("ReseauAssainissementToolBar")
 
@@ -140,14 +147,8 @@ class ReseauAssainissementPlugin(QObject):
         )
         self.action_dict['cubature'] = self._add_action(
             "config.svg",
-            "Cubature tranchées",
+            "Cubature / Remblai tranchées",
             self.run_cubature,
-            checkable=True
-        )
-        self.action_dict['remblai'] = self._add_action(
-            "config.svg",
-            "Remblai tranchées",
-            self.run_remblai,
             checkable=True
         )
         self.action_dict['coupe_tranchee_composee'] = self._add_action(
@@ -207,10 +208,10 @@ class ReseauAssainissementPlugin(QObject):
             self.run_pci_emprise,
             checkable=False
         )
-        self.action_dict['ortho_2022'] = self._add_action(
+        self.action_dict['ortho_ign'] = self._add_action(
             "config.svg",
-            "Ortho 2022",
-            self.run_ortho_2022,
+            "Ortho IGN (BD ORTHO nationale)",
+            self.run_ortho_ign,
             checkable=False
         )
         self.action_dict['osm_desature'] = self._add_action(
@@ -247,6 +248,13 @@ class ReseauAssainissementPlugin(QObject):
             "config.svg",
             "Importer Star-DT (GML)",
             self.run_import_star_dt,
+            checkable=False
+        )
+
+        self.action_dict['tableau_saisie'] = self._add_action(
+            "config.svg",
+            "Tableau de saisie - pente",
+            self.show_tableau_saisie,
             checkable=False
         )
 
@@ -376,9 +384,9 @@ class ReseauAssainissementPlugin(QObject):
         from .tools.projet_bet import project_dir
         if project_dir():
             return
-        s = QSettings()
+        from .tools.layer_keys import get_layer_id
         for reseau in ('eu', 'ep'):
-            if s.value(f"BET_HUMIDE/couche_conduite_{reseau}"):
+            if get_layer_id('conduite', reseau):
                 return
         from .gui.welcome_dialog import WelcomeDialog
         dlg = WelcomeDialog(self.iface.mainWindow())
@@ -432,20 +440,19 @@ class ReseauAssainissementPlugin(QObject):
         automatiquement comme couche mémoire et enregistrée dans la config.
         Retourne un dict {'conduite', 'branchement', 'regard', 'tabouret'}.
         """
-        s = QSettings()
+        from .tools.layer_keys import get_layer_id, set_layer_id
         project = QgsProject.instance()
         couches = {}
 
         for role in ('conduite', 'branchement', 'regard', 'tabouret'):
-            setting_key = SKETCHES_PREFIX + f"couche_{role}_{reseau.lower()}"
-            layer_id = s.value(setting_key)
+            layer_id = get_layer_id(role, reseau)
             layer = project.mapLayer(layer_id) if layer_id else None
 
             if not layer:
                 layer = self._create_layer(role, reseau)
                 project.addMapLayer(layer, False)
                 self._get_or_create_group(reseau).addLayer(layer)
-                s.setValue(setting_key, layer.id())
+                set_layer_id(role, reseau, layer.id())
             else:
                 self._ensure_fields(layer, role)
 
@@ -638,6 +645,7 @@ class ReseauAssainissementPlugin(QObject):
         self._run_tool_single(checked, "coupe_ep", "EP", CoupeTransversaleSingleTool, needs_iface=True)
 
     def run_cubature(self, checked):
+        key = 'cubature'
         if not checked:
             self._deactivate_current()
             return
@@ -647,7 +655,7 @@ class ReseauAssainissementPlugin(QObject):
 
         dlg = CubatureOptionsDialog(self.iface.mainWindow())
         if dlg.exec_() != dlg.Accepted:
-            self.action_dict['cubature'].setChecked(False)
+            self.action_dict[key].setChecked(False)
             return
         opts = dlg.options()
         config = get_cubature_config()
@@ -656,12 +664,12 @@ class ReseauAssainissementPlugin(QObject):
             couches_eu = self._get_couches("EU")
             couches_ep = self._get_couches("EP")
             if not couches_eu or not couches_ep:
-                self.action_dict['cubature'].setChecked(False)
+                self.action_dict[key].setChecked(False)
                 return
             from .tools.cubature_tool import CubatureTool
             tool = CubatureTool(self.iface.mapCanvas(), self.iface,
-                                couches_eu, couches_ep, opts, show_remblai=False)
-            self._activate_tool("cubature", tool)
+                                couches_eu, couches_ep, opts)
+            self._activate_tool(key, tool)
         else:
             # Calcul direct sans outil carte
             all_results = []
@@ -682,74 +690,16 @@ class ReseauAssainissementPlugin(QObject):
                 all_results.extend(results)
 
             if not all_results:
-                self.action_dict['cubature'].setChecked(False)
+                self.action_dict[key].setChecked(False)
                 from qgis.PyQt.QtWidgets import QMessageBox
                 QMessageBox.information(
                     None, "Cubature tranchées",
                     "Aucun élément trouvé dans le périmètre sélectionné.")
                 return
 
-            dlg_result = CubatureDialog(all_results, config, self.iface.mainWindow(),
-                                         show_remblai=False)
+            dlg_result = CubatureDialog(all_results, config, self.iface.mainWindow())
             dlg_result.show()
-            self.action_dict['cubature'].setChecked(False)
-
-    def run_remblai(self, checked):
-        if not checked:
-            self._deactivate_current()
-            return
-        from .gui.cubature_dialog import CubatureOptionsDialog, CubatureDialog
-        from .config_dialog import get_cubature_config
-        from .tools.calc_cubature import calculer_cubature_reseau
-
-        dlg = CubatureOptionsDialog(self.iface.mainWindow())
-        dlg.setWindowTitle("Remblai de tranchées")
-        if dlg.exec_() != dlg.Accepted:
-            self.action_dict['remblai'].setChecked(False)
-            return
-        opts = dlg.options()
-        config = get_cubature_config()
-
-        if opts['bfs'] or opts['axe']:
-            couches_eu = self._get_couches("EU")
-            couches_ep = self._get_couches("EP")
-            if not couches_eu or not couches_ep:
-                self.action_dict['remblai'].setChecked(False)
-                return
-            from .tools.cubature_tool import CubatureTool
-            tool = CubatureTool(self.iface.mapCanvas(), self.iface,
-                                couches_eu, couches_ep, opts, show_remblai=True)
-            self._activate_tool("remblai", tool)
-        else:
-            all_results = []
-            reseaux = []
-            if opts['perimetre'] in ('tout', 'EU'):
-                reseaux.append(('EU', self._get_couches("EU")))
-            if opts['perimetre'] in ('tout', 'EP'):
-                reseaux.append(('EP', self._get_couches("EP")))
-
-            for reseau, couches in reseaux:
-                if not couches:
-                    continue
-                results = calculer_cubature_reseau(couches, config, reseau)
-                if not opts['conduites']:
-                    results = [r for r in results if r.get('type') != 'Conduite']
-                if not opts['branchements']:
-                    results = [r for r in results if r.get('type') != 'Branchement']
-                all_results.extend(results)
-
-            if not all_results:
-                self.action_dict['remblai'].setChecked(False)
-                from qgis.PyQt.QtWidgets import QMessageBox
-                QMessageBox.information(
-                    None, "Remblai tranchées",
-                    "Aucun élément trouvé dans le périmètre sélectionné.")
-                return
-
-            dlg_result = CubatureDialog(all_results, config, self.iface.mainWindow(),
-                                         show_remblai=True)
-            dlg_result.show()
-            self.action_dict['remblai'].setChecked(False)
+            self.action_dict[key].setChecked(False)
 
     def run_coupe_tranchee_composee(self):
         from .gui.coupe_tranchee_composee_dialog import CoupeTrancheeComposeeDialog
@@ -865,155 +815,30 @@ class ReseauAssainissementPlugin(QObject):
                 layer.triggerRepaint()
 
     def run_fond_projet(self):
-        import json, tempfile, os, ssl
-        import urllib.request
-        from qgis.core import (
-            QgsRasterLayer, QgsVectorLayer, QgsLayerTreeLayer,
-            QgsCoordinateReferenceSystem, QgsCoordinateTransform,
-            QgsFillSymbol, QgsLineSymbol, QgsNullSymbolRenderer, QgsSingleSymbolRenderer,
-            QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, QgsTextFormat,
-            QgsUnitTypes, Qgis,
-        )
-        from qgis.PyQt.QtWidgets import QApplication
-        from qgis.PyQt.QtCore import Qt
-        from qgis.PyQt.QtGui import QColor, QFont
+        from qgis.core import QgsRasterLayer, QgsLayerTreeLayer
+        from qgis.PyQt.QtGui import QColor
 
         project   = QgsProject.instance()
         tree_root = project.layerTreeRoot()
         canvas    = self.iface.mapCanvas()
+        saved_extent = canvas.extent()
 
         project.setBackgroundColor(QColor(255, 255, 255))
         canvas.setCanvasColor(QColor(255, 255, 255))
 
         existing = {l.name() for l in project.mapLayers().values()}
 
-        # Ajoute la couche EN BAS de la légende (sous toutes les couches existantes).
-        # Les couches EU/EP déjà présentes restent automatiquement en tête.
-        # Ordre final légende top→bottom : EU/EP | BAN | Noms | Bâti | Parcelles | OSM | Ortho
         def add_bottom(layer):
             project.addMapLayer(layer, False)
             tree_root.insertChildNode(-1, QgsLayerTreeLayer(layer))
 
-        # --- emprise courante en L93 ---
-        ext     = canvas.extent()
-        crs_src = canvas.mapSettings().destinationCrs()
-        crs_l93 = QgsCoordinateReferenceSystem("EPSG:2154")
-        if crs_src.authid().upper() != "EPSG:2154":
-            ext = QgsCoordinateTransform(crs_src, crs_l93, project).transformBoundingBox(ext)
-        bbox = (f"{ext.xMinimum():.2f},{ext.yMinimum():.2f},"
-                f"{ext.xMaximum():.2f},{ext.yMaximum():.2f},EPSG:2154")
-
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode    = ssl.CERT_NONE
-
-        def fetch(typename):
-            url = (
-                "https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0"
-                f"&REQUEST=GetFeature&TYPENAMES={typename}&BBOX={bbox}"
-                "&SRSNAME=EPSG:2154&outputFormat=application/json&COUNT=5000"
-            )
-            with urllib.request.urlopen(url, timeout=30, context=ssl_ctx) as r:
-                return json.loads(r.read().decode('utf-8')).get('features', [])
-
-        def to_layer(features, name):
-            tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.geojson', delete=False,
-                                              encoding='utf-8', prefix='bet_fdp_')
-            json.dump({"type": "FeatureCollection",
-                       "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::2154"}},
-                       "features": features}, tmp, ensure_ascii=False)
-            tmp.close()
-            return QgsVectorLayer(tmp.name, name, "ogr")
-
-        def label_cfg(field, is_expr, placement, size=8, rgb=(50, 50, 50)):
-            pal = QgsPalLayerSettings()
-            pal.fieldName    = field
-            pal.isExpression = is_expr
-            pal.placement    = placement
-            pal.enabled      = True
-            fmt = QgsTextFormat()
-            fmt.setFont(QFont('Arial'))
-            fmt.setSizeUnit(QgsUnitTypes.RenderPoints)
-            fmt.setSize(size)
-            fmt.setColor(QColor(*rgb))
-            pal.setFormat(fmt)
-            return pal
-
-        errors = []
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        # --- Rasters (immédiats, pas de téléchargement préalable) ---
+        # Ordre final légende top→bottom :
+        # EU/EP | BAN | Noms | Bâti | Parcelles | OSM | Ortho
+        # Canvas gelé le temps de l'insertion : empêche
+        # QgsLayerTreeMapCanvasBridge de recadrer sur l'étendue des rasters.
+        canvas.freeze(True)
         try:
-            # 1. BAN Adresses (la plus haute des couches fond de carte)
-            if "BAN Adresses" not in existing:
-                try:
-                    feats = fetch("BAN.DATA.GOUV:ban")
-                    if feats:
-                        lyr = to_layer(feats, "BAN Adresses")
-                        if lyr.isValid():
-                            lyr.setRenderer(QgsNullSymbolRenderer())
-                            pal = label_cfg('numero', False, Qgis.LabelPlacement.OverPoint, rgb=(30, 30, 30))
-                            lyr.setLabeling(QgsVectorLayerSimpleLabeling(pal))
-                            lyr.setLabelsEnabled(True)
-                            lyr.setMinimumScale(5000)
-                            lyr.setScaleBasedVisibility(True)
-                            add_bottom(lyr)
-                except Exception as e:
-                    errors.append(f"BAN:{e}")
-
-            # 2. Noms de rue
-            if "Noms de rue BD TOPO" not in existing:
-                try:
-                    feats = [f for f in fetch("BDTOPO_V3:troncon_de_route")
-                             if f.get('properties', {}).get('nom_voie_ban_gauche')
-                             or f.get('properties', {}).get('nom_voie_ban_droite')]
-                    if feats:
-                        lyr = to_layer(feats, "Noms de rue BD TOPO")
-                        if lyr.isValid():
-                            sym = QgsLineSymbol.createSimple({'color': '0,0,0,0', 'line_style': 'no'})
-                            lyr.setRenderer(QgsSingleSymbolRenderer(sym))
-                            pal = label_cfg('coalesce("nom_voie_ban_gauche","nom_voie_ban_droite")',
-                                            True, Qgis.LabelPlacement.Curved, rgb=(40, 40, 120))
-                            lyr.setLabeling(QgsVectorLayerSimpleLabeling(pal))
-                            lyr.setLabelsEnabled(True)
-                            lyr.setMinimumScale(5000)
-                            lyr.setScaleBasedVisibility(True)
-                            add_bottom(lyr)
-                except Exception as e:
-                    errors.append(f"Noms de rue:{e}")
-
-            # 3. PCI Bâti
-            if "PCI - Bati" not in existing:
-                try:
-                    feats = fetch("BDTOPO_V3:batiment")
-                    if feats:
-                        lyr = to_layer(feats, "PCI - Bati")
-                        if lyr.isValid():
-                            sym = QgsFillSymbol.createSimple({'color': '160,160,160,128', 'outline_color': '100,100,100,200', 'outline_width': '0.2'})
-                            lyr.setRenderer(QgsSingleSymbolRenderer(sym))
-                            lyr.setMinimumScale(5000)
-                            lyr.setScaleBasedVisibility(True)
-                            add_bottom(lyr)
-                except Exception as e:
-                    errors.append(f"Bâti:{e}")
-
-            # 4. PCI Parcelles
-            if "PCI - Parcelles" not in existing:
-                try:
-                    feats = fetch("BDPARCELLAIRE-VECTEUR_WLD_BDD_WGS84G:parcelle")
-                    if feats:
-                        lyr = to_layer(feats, "PCI - Parcelles")
-                        if lyr.isValid():
-                            sym = QgsFillSymbol.createSimple({'color': '0,0,0,0', 'outline_color': '80,80,80,255', 'outline_width': '0.4'})
-                            lyr.setRenderer(QgsSingleSymbolRenderer(sym))
-                            pal = label_cfg('"section" || "numero"', True, Qgis.LabelPlacement.Horizontal)
-                            lyr.setLabeling(QgsVectorLayerSimpleLabeling(pal))
-                            lyr.setLabelsEnabled(True)
-                            lyr.setMinimumScale(5000)
-                            lyr.setScaleBasedVisibility(True)
-                            add_bottom(lyr)
-                except Exception as e:
-                    errors.append(f"Parcelles:{e}")
-
-            # 5. OSM désaturé (cohabite avec Ortho entre 1:1000 et 1:2000)
             osm_name = "OSM Desature"
             if osm_name not in existing:
                 lyr = QgsRasterLayer(
@@ -1027,139 +852,192 @@ class ReseauAssainissementPlugin(QObject):
                     lyr.setScaleBasedVisibility(True)
                     add_bottom(lyr)
 
-            # 6. Ortho 2022 (tout en bas)
-            ortho_name = "Ortho 2022"
+            ortho_name = "Ortho IGN (BD ORTHO nationale)"
             if ortho_name not in existing:
                 lyr = QgsRasterLayer(
-                    "crs=epsg:2154&featureCount=10&format=image/jpeg"
-                    "&layers=ortho_2022&maxHeight=256&maxWidth=256"
-                    "&styles=&url=http://tiles.craig.fr/ortho/service",
+                    "crs=EPSG:2154&featureCount=10&format=image/jpeg"
+                    "&layers=ORTHOIMAGERY.ORTHOPHOTOS&maxHeight=256&maxWidth=256"
+                    "&styles=&url=https://data.geopf.fr/wms-r/wms",
                     ortho_name, "wms")
                 if lyr.isValid():
                     lyr.setOpacity(0.75)
                     lyr.setMinimumScale(2000)
                     lyr.setScaleBasedVisibility(True)
                     add_bottom(lyr)
-
         finally:
-            QApplication.restoreOverrideCursor()
+            canvas.freeze(False)
 
-        msg = "Fond de projet mis en place"
-        if errors:
-            msg += " | " + " / ".join(errors)
-        self.iface.messageBar().pushMessage("Fond de projet", msg, level=0, duration=6)
+        # --- Couches vecteur WFS (asynchrones) ---
+        def _has_nom(f):
+            p = f.get('properties', {})
+            return bool(p.get('nom_voie_ban_gauche')
+                        or p.get('nom_voie_ban_droite'))
 
-    def run_pci_emprise(self):
-        import json, tempfile, os, ssl
-        import urllib.request
-        from qgis.core import (
-            QgsVectorLayer, QgsLayerTreeLayer,
-            QgsCoordinateReferenceSystem, QgsCoordinateTransform,
-            QgsFillSymbol, QgsSingleSymbolRenderer,
-            QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, QgsTextFormat,
-        )
-        from qgis.PyQt.QtWidgets import QApplication, QMessageBox
-        from qgis.PyQt.QtCore import Qt
-        from qgis.PyQt.QtGui import QColor, QFont
+        requests = []
+        if "BAN Adresses" not in existing:
+            requests.append({'typename': "BAN.DATA.GOUV:ban",
+                             'name': "BAN Adresses", 'prefix': 'bet_fdp_'})
+        if "Noms de rue BD TOPO" not in existing:
+            requests.append({'typename': "BDTOPO_V3:troncon_de_route",
+                             'name': "Noms de rue BD TOPO",
+                             'prefix': 'bet_fdp_', 'filter': _has_nom})
+        if "PCI - Bati" not in existing:
+            requests.append({'typename': "BDTOPO_V3:batiment",
+                             'name': "PCI - Bati", 'prefix': 'bet_fdp_'})
+        if "PCI - Parcelles" not in existing:
+            requests.append({
+                'typename': "BDPARCELLAIRE-VECTEUR_WLD_BDD_WGS84G:parcelle",
+                'name': "PCI - Parcelles", 'prefix': 'bet_fdp_'})
 
-        canvas   = self.iface.mapCanvas()
-        extent   = canvas.extent()
-        crs_src  = canvas.mapSettings().destinationCrs()
-        crs_2154 = QgsCoordinateReferenceSystem("EPSG:2154")
+        canvas.setExtent(saved_extent)
+        canvas.refresh()
 
-        if crs_src.authid().upper() != "EPSG:2154":
-            tr     = QgsCoordinateTransform(crs_src, crs_2154, QgsProject.instance())
-            extent = tr.transformBoundingBox(extent)
-
-        bbox = (f"{extent.xMinimum():.2f},{extent.yMinimum():.2f},"
-                f"{extent.xMaximum():.2f},{extent.yMaximum():.2f},EPSG:2154")
-
-        LAYERS = [
-            ("BDPARCELLAIRE-VECTEUR_WLD_BDD_WGS84G:parcelle", "PCI - Parcelles",
-             "https://data.geopf.fr/wfs/ows"),
-            ("BDTOPO_V3:batiment", "PCI - Bati",
-             "https://data.geopf.fr/wfs/ows"),
-        ]
-
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode    = ssl.CERT_NONE
-
-        errors    = []
-        loaded    = 0
-        project   = QgsProject.instance()
-        tree_root = project.layerTreeRoot()
-
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            for typename, layer_name, wfs_url in LAYERS:
-                url = (
-                    f"{wfs_url}?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature"
-                    f"&TYPENAMES={typename}&BBOX={bbox}"
-                    f"&SRSNAME=EPSG:2154&outputFormat=application/json&COUNT=5000"
-                )
-                try:
-                    with urllib.request.urlopen(url, timeout=30,
-                                                context=ssl_ctx) as resp:
-                        data = json.loads(resp.read().decode('utf-8'))
-                    features = data.get('features', [])
-                    if not features:
-                        errors.append(f"{layer_name} : 0 objet dans l'emprise")
-                        continue
-
-                    geojson = {
-                        "type": "FeatureCollection",
-                        "crs":  {"type": "name", "properties": {
-                                    "name": "urn:ogc:def:crs:EPSG::2154"}},
-                        "features": features,
-                    }
-                    tmp = tempfile.NamedTemporaryFile(
-                        mode='w', suffix='.geojson', delete=False,
-                        encoding='utf-8', prefix='bet_pci_')
-                    json.dump(geojson, tmp, ensure_ascii=False)
-                    tmp.close()
-
-                    layer = QgsVectorLayer(tmp.name, layer_name, "ogr")
-                    if not layer.isValid():
-                        errors.append(f"{layer_name} : couche invalide")
-                        os.unlink(tmp.name)
-                        continue
-
-                    project.addMapLayer(layer, False)
-                    tree_root.insertChildNode(-1, QgsLayerTreeLayer(layer))
-                    loaded += len(features)
-
-                    try:
-                        self._style_pci_layer(layer, layer_name)
-                    except Exception as se:
-                        errors.append(f"style {layer_name} : {se}")
-
-                except Exception as e:
-                    errors.append(f"{layer_name} : {e}")
-
-        finally:
-            QApplication.restoreOverrideCursor()
-
-        if loaded == 0:
-            QMessageBox.warning(
-                self.iface.mainWindow(), "PCI Vecteur",
-                "Aucune donnée trouvée dans l'emprise courante.\n"
-                + "\n".join(errors))
+        if not requests:
+            self.iface.messageBar().pushMessage(
+                "Fond de projet", "Fond de projet mis en place",
+                level=0, duration=6)
             return
 
-        msg = f"{loaded} objet(s) chargé(s)"
-        if errors:
-            msg += "  |  Avertissements : " + " / ".join(errors)
-        self.iface.messageBar().pushMessage(
-            "PCI Vecteur", msg, level=0, duration=5)
+        def style_fdp(layer, name):
+            if name == "BAN Adresses":
+                self._style_ban_layer(layer)
+            elif name == "Noms de rue BD TOPO":
+                self._style_rue_layer(layer)
+            else:
+                self._style_pci_layer(layer, name)
+
+        def insert_above_rasters(layer):
+            """Insère la couche au-dessus des rasters de fond (OSM/Ortho),
+            pour préserver l'ordre BAN/Noms/Bâti/Parcelles | OSM | Ortho."""
+            root = QgsProject.instance().layerTreeRoot()
+            idx = len(root.children())
+            for i, child in enumerate(root.children()):
+                if child.name() in (osm_name, ortho_name):
+                    idx = i
+                    break
+            QgsProject.instance().addMapLayer(layer, False)
+            root.insertChildNode(idx, QgsLayerTreeLayer(layer))
+
+        self._load_wfs_async("Fond de projet", requests,
+                             style_cb=style_fdp, scale_min=5000,
+                             insert_cb=insert_above_rasters,
+                             restore_extent=(canvas, saved_extent))
+
+    def run_pci_emprise(self):
+        canvas = self.iface.mapCanvas()
+        self._load_wfs_async("PCI Vecteur", [
+            {'typename': "BDPARCELLAIRE-VECTEUR_WLD_BDD_WGS84G:parcelle",
+             'name': "PCI - Parcelles", 'prefix': 'bet_pci_'},
+            {'typename': "BDTOPO_V3:batiment",
+             'name': "PCI - Bati", 'prefix': 'bet_pci_'},
+        ], style_cb=self._style_pci_layer,
+           restore_extent=(canvas, canvas.extent()))
+
+    # ------------------------------------------------------------------ WFS asynchrone
+
+    def _load_wfs_async(self, title, requests, style_cb=None,
+                        scale_min=None, insert_cb=None,
+                        restore_extent=None):
+        """Télécharge et ajoute des couches WFS sans bloquer l'interface.
+
+        Le réseau et l'écriture des GeoJSON partent dans une QgsTask
+        (progression dans la barre de tâches QGIS, annulable) ; les couches
+        sont créées et stylées dans le thread principal à la fin.
+
+        :param requests: liste de dicts (voir tools.wfs_utils.fetch_wfs_async)
+        :param style_cb: callable(layer, name) appelé après ajout
+        :param scale_min: visibilité par échelle (setMinimumScale)
+        :param insert_cb: callable(layer) pour un placement personnalisé
+                          dans la légende (défaut : tout en bas)
+        :param restore_extent: (canvas, extent) pour reverrouiller l'étendue
+                          de la carte après ajout des couches
+        """
+        from qgis.core import QgsVectorLayer, QgsLayerTreeLayer
+        from .tools.wfs_utils import current_bbox_l93, fetch_wfs_async
+
+        bbox = current_bbox_l93(self.iface.mapCanvas())
+        for req in requests:
+            req['bbox'] = bbox
+
+        iface = self.iface
+
+        def on_done(results, errors):
+            project   = QgsProject.instance()
+            tree_root = project.layerTreeRoot()
+            loaded, msgs, insecure = 0, list(errors), False
+            if restore_extent is not None:
+                restore_extent[0].freeze(True)
+            try:
+                for res in results:
+                    insecure = insecure or res['insecure']
+                    if not res['path']:
+                        msgs.append(f"{res['name']} : 0 objet dans l'emprise")
+                        continue
+                    layer = QgsVectorLayer(res['path'], res['name'], "ogr")
+                    if not layer.isValid():
+                        msgs.append(f"{res['name']} : couche invalide")
+                        continue
+                    if insert_cb is not None:
+                        insert_cb(layer)
+                    else:
+                        project.addMapLayer(layer, False)
+                        tree_root.insertChildNode(-1, QgsLayerTreeLayer(layer))
+                    if style_cb is not None:
+                        try:
+                            style_cb(layer, res['name'])
+                        except Exception as se:
+                            msgs.append(f"style {res['name']} : {se}")
+                    if scale_min:
+                        layer.setMinimumScale(scale_min)
+                        layer.setScaleBasedVisibility(True)
+                    layer.triggerRepaint()
+                    loaded += res['count']
+            finally:
+                if restore_extent is not None:
+                    restore_extent[0].freeze(False)
+            if insecure:
+                msgs.append("certificat TLS non vérifié (proxy ?)")
+            msg = f"{loaded} objet(s) chargé(s)"
+            if msgs:
+                msg += "  |  " + " / ".join(msgs)
+            iface.messageBar().pushMessage(
+                title, msg,
+                level=1 if loaded == 0 else 0, duration=6)
+            if restore_extent is not None:
+                rcanvas, rextent = restore_extent
+                rcanvas.setExtent(rextent)
+                rcanvas.refresh()
+
+        fetch_wfs_async(title, requests, on_done)
+        iface.messageBar().pushMessage(
+            title, "Téléchargement en cours…", level=0, duration=3)
+
+    @staticmethod
+    def _make_label_settings(field, is_expr, placement, size=8,
+                             rgb=(50, 50, 50)):
+        """QgsPalLayerSettings partagés par les styles de fonds vecteur."""
+        from qgis.core import (
+            QgsPalLayerSettings, QgsTextFormat, QgsUnitTypes,
+        )
+        from qgis.PyQt.QtGui import QColor, QFont
+        pal = QgsPalLayerSettings()
+        pal.fieldName    = field
+        pal.isExpression = is_expr
+        pal.placement    = placement
+        pal.enabled      = True
+        fmt = QgsTextFormat()
+        fmt.setFont(QFont('Arial'))
+        fmt.setSizeUnit(QgsUnitTypes.RenderPoints)
+        fmt.setSize(size)
+        fmt.setColor(QColor(*rgb))
+        pal.setFormat(fmt)
+        return pal
 
     def _style_pci_layer(self, layer, layer_name):
         from qgis.core import (
             QgsFillSymbol, QgsSingleSymbolRenderer,
-            QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, QgsTextFormat,
-            QgsUnitTypes,
+            QgsVectorLayerSimpleLabeling, Qgis,
         )
-        from qgis.PyQt.QtGui import QColor, QFont
 
         if "Parcelles" in layer_name:
             # Contour gris, intérieur transparent
@@ -1170,27 +1048,16 @@ class ReseauAssainissementPlugin(QObject):
             })
             layer.setRenderer(QgsSingleSymbolRenderer(symbol))
 
-                # Label parcelle — 8 pt fixe
-            pal = QgsPalLayerSettings()
-            pal.fieldName    = '"section" || "numero"'
-            pal.isExpression = True
-            from qgis.core import Qgis
-            pal.placement    = Qgis.LabelPlacement.Horizontal
-            pal.enabled      = True
-
-            fmt = QgsTextFormat()
-            fmt.setFont(QFont('Arial'))
-            fmt.setSizeUnit(QgsUnitTypes.RenderPoints)
-            fmt.setSize(8)
-            fmt.setColor(QColor(50, 50, 50))
-            pal.setFormat(fmt)
-
+            # Label parcelle — 8 pt fixe
+            pal = self._make_label_settings(
+                '"section" || "numero"', True, Qgis.LabelPlacement.Horizontal)
             layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
             layer.setLabelsEnabled(True)
             layer.triggerRepaint()
 
-        elif "Bâti" in layer_name:
-            # Gris 50 % opacité
+        elif "Bati" in layer_name:
+            # Gris 50 % opacité. NB : la couche s'appelle "PCI - Bati"
+            # (sans accent) — l'ancien test "Bâti" ne matchait jamais.
             symbol = QgsFillSymbol.createSimple({
                 'color':         '160,160,160,128',
                 'outline_color': '100,100,100,200',
@@ -1198,309 +1065,125 @@ class ReseauAssainissementPlugin(QObject):
             })
             layer.setRenderer(QgsSingleSymbolRenderer(symbol))
 
+    def _style_ban_layer(self, layer):
+        """Points BAN invisibles, étiquette = numéro (8 pt)."""
+        from qgis.core import (
+            QgsNullSymbolRenderer, QgsVectorLayerSimpleLabeling, Qgis,
+        )
+        layer.setRenderer(QgsNullSymbolRenderer())
+        pal = self._make_label_settings(
+            'numero', False, Qgis.LabelPlacement.OverPoint, rgb=(30, 30, 30))
+        layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
+        layer.setLabelsEnabled(True)
+
+    def _style_rue_layer(self, layer):
+        """Tronçons invisibles, étiquette = nom de voie courbé (8 pt)."""
+        from qgis.core import (
+            QgsLineSymbol, QgsSingleSymbolRenderer,
+            QgsVectorLayerSimpleLabeling, Qgis,
+        )
+        sym = QgsLineSymbol.createSimple({'color': '0,0,0,0',
+                                          'line_style': 'no'})
+        layer.setRenderer(QgsSingleSymbolRenderer(sym))
+        pal = self._make_label_settings(
+            'coalesce("nom_voie_ban_gauche","nom_voie_ban_droite")',
+            True, Qgis.LabelPlacement.Curved, rgb=(40, 40, 120))
+        layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
+        layer.setLabelsEnabled(True)
+
     # ------------------------------------------------------------------ helper WFS
 
     def _wfs_emprise(self, typename, layer_name,
                      wfs_url="https://data.geopf.fr/wfs/ows"):
-        """Charge une couche WFS sur l'emprise courante, la dépose en bas de légende."""
-        import json, tempfile, os, ssl
-        import urllib.request
-        from qgis.core import (
-            QgsVectorLayer, QgsLayerTreeLayer,
-            QgsCoordinateReferenceSystem, QgsCoordinateTransform,
-        )
-        from qgis.PyQt.QtWidgets import QApplication, QMessageBox
-        from qgis.PyQt.QtCore import Qt
-
-        # Contexte SSL sans vérification (certificats auto-signés sur certains serveurs)
-        _ssl_ctx = ssl.create_default_context()
-        _ssl_ctx.check_hostname = False
-        _ssl_ctx.verify_mode    = ssl.CERT_NONE
-
-        canvas   = self.iface.mapCanvas()
-        extent   = canvas.extent()
-        crs_src  = canvas.mapSettings().destinationCrs()
-        crs_2154 = QgsCoordinateReferenceSystem("EPSG:2154")
-
-        if crs_src.authid().upper() != "EPSG:2154":
-            tr     = QgsCoordinateTransform(crs_src, crs_2154, QgsProject.instance())
-            extent = tr.transformBoundingBox(extent)
-
-        bbox = (f"{extent.xMinimum():.2f},{extent.yMinimum():.2f},"
-                f"{extent.xMaximum():.2f},{extent.yMaximum():.2f},EPSG:2154")
-
-        url = (f"{wfs_url}?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature"
-               f"&TYPENAMES={typename}&BBOX={bbox}"
-               f"&SRSNAME=EPSG:2154&outputFormat=application/json&COUNT=5000")
-
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            with urllib.request.urlopen(url, timeout=20,
-                                        context=_ssl_ctx) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-        except Exception as e:
-            QMessageBox.warning(self.iface.mainWindow(), layer_name,
-                                f"Erreur lors du chargement WFS :\n{e}")
-            return
-        finally:
-            QApplication.restoreOverrideCursor()
-
-        features = data.get('features', [])
-        if not features:
-            self.iface.messageBar().pushMessage(
-                layer_name, "Aucun objet dans l'emprise courante.",
-                level=1, duration=4)
-            return
-
-        geojson = {
-            "type": "FeatureCollection",
-            "crs":  {"type": "name", "properties": {
-                        "name": "urn:ogc:def:crs:EPSG::2154"}},
-            "features": features,
-        }
-        tmp = tempfile.NamedTemporaryFile(
-            mode='w', suffix='.geojson', delete=False,
-            encoding='utf-8', prefix='bet_wfs_')
-        json.dump(geojson, tmp, ensure_ascii=False)
-        tmp.close()
-
-        layer = QgsVectorLayer(tmp.name, layer_name, "ogr")
-        if not layer.isValid():
-            QMessageBox.warning(self.iface.mainWindow(), layer_name,
-                                "Impossible de créer la couche depuis les données WFS.")
-            os.unlink(tmp.name)
-            return
-
-        project = QgsProject.instance()
-        project.addMapLayer(layer, False)
-        project.layerTreeRoot().insertChildNode(-1, QgsLayerTreeLayer(layer))
-        self.iface.messageBar().pushMessage(
-            layer_name, f"{len(features)} objet(s) chargé(s)",
-            level=0, duration=5)
+        """Charge une couche WFS sur l'emprise courante (asynchrone),
+        déposée en bas de légende."""
+        self._load_wfs_async(layer_name, [{
+            'typename': typename, 'name': layer_name,
+            'wfs_url': wfs_url, 'prefix': 'bet_wfs_',
+        }])
 
     # ------------------------------------------------------------------ fonds vecteur
 
     def run_ban_vecteur(self):
-        import json, tempfile, os, ssl
-        import urllib.request
-        from qgis.core import (
-            QgsVectorLayer, QgsLayerTreeLayer,
-            QgsCoordinateReferenceSystem, QgsCoordinateTransform,
-            QgsMarkerSymbol, QgsSingleSymbolRenderer,
-            QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, QgsTextFormat,
-            QgsUnitTypes,
-        )
-        from qgis.PyQt.QtWidgets import QApplication, QMessageBox
-        from qgis.PyQt.QtCore import Qt
-        from qgis.PyQt.QtGui import QColor, QFont
-
-        layer_name = "BAN Adresses"
-        canvas   = self.iface.mapCanvas()
-        extent   = canvas.extent()
-        crs_src  = canvas.mapSettings().destinationCrs()
-        crs_2154 = QgsCoordinateReferenceSystem("EPSG:2154")
-        if crs_src.authid().upper() != "EPSG:2154":
-            tr     = QgsCoordinateTransform(crs_src, crs_2154, QgsProject.instance())
-            extent = tr.transformBoundingBox(extent)
-
-        bbox = (f"{extent.xMinimum():.2f},{extent.yMinimum():.2f},"
-                f"{extent.xMaximum():.2f},{extent.yMaximum():.2f},EPSG:2154")
-
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode    = ssl.CERT_NONE
-
-        url = (
-            "https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature"
-            f"&TYPENAMES=BAN.DATA.GOUV:ban&BBOX={bbox}"
-            "&SRSNAME=EPSG:2154&outputFormat=application/json&COUNT=5000"
-        )
-
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            with urllib.request.urlopen(url, timeout=20, context=ssl_ctx) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-        except Exception as e:
-            QMessageBox.warning(self.iface.mainWindow(), layer_name,
-                                f"Erreur WFS :\n{e}")
-            return
-        finally:
-            QApplication.restoreOverrideCursor()
-
-        features = data.get('features', [])
-        if not features:
-            self.iface.messageBar().pushMessage(
-                layer_name, "Aucun objet dans l'emprise.", level=1, duration=4)
-            return
-
-        geojson = {
-            "type": "FeatureCollection",
-            "crs":  {"type": "name", "properties": {
-                        "name": "urn:ogc:def:crs:EPSG::2154"}},
-            "features": features,
-        }
-        tmp = tempfile.NamedTemporaryFile(
-            mode='w', suffix='.geojson', delete=False,
-            encoding='utf-8', prefix='bet_ban_')
-        json.dump(geojson, tmp, ensure_ascii=False)
-        tmp.close()
-
-        layer = QgsVectorLayer(tmp.name, layer_name, "ogr")
-        if not layer.isValid():
-            QMessageBox.warning(self.iface.mainWindow(), layer_name,
-                                "Couche invalide.")
-            os.unlink(tmp.name)
-            return
-
-        project = QgsProject.instance()
-        project.addMapLayer(layer, False)
-        project.layerTreeRoot().insertChildNode(-1, QgsLayerTreeLayer(layer))
-
-        # Point invisible
-        from qgis.core import QgsNullSymbolRenderer
-        layer.setRenderer(QgsNullSymbolRenderer())
-
-        # Label numéro — 8 pt fixe
-        pal = QgsPalLayerSettings()
-        pal.fieldName    = 'numero'
-        pal.isExpression = False
-        from qgis.core import Qgis
-        pal.placement    = Qgis.LabelPlacement.OverPoint
-        pal.enabled      = True
-
-        fmt = QgsTextFormat()
-        fmt.setFont(QFont('Arial'))
-        fmt.setSizeUnit(QgsUnitTypes.RenderPoints)
-        fmt.setSize(8)
-        fmt.setColor(QColor(30, 30, 30))
-        pal.setFormat(fmt)
-
-        layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
-        layer.setLabelsEnabled(True)
-        layer.triggerRepaint()
-
-        self.iface.messageBar().pushMessage(
-            layer_name, f"{len(features)} adresse(s) chargée(s)",
-            level=0, duration=5)
+        canvas = self.iface.mapCanvas()
+        self._load_wfs_async("BAN Adresses", [{
+            'typename': "BAN.DATA.GOUV:ban", 'name': "BAN Adresses",
+            'prefix': 'bet_ban_',
+        }], style_cb=lambda layer, name: self._style_ban_layer(layer),
+           restore_extent=(canvas, canvas.extent()))
 
     def run_nom_voie(self):
-        import json, tempfile, os, ssl
-        import urllib.request
-        from qgis.core import (
-            QgsVectorLayer, QgsLayerTreeLayer,
-            QgsCoordinateReferenceSystem, QgsCoordinateTransform,
-            QgsLineSymbol, QgsSingleSymbolRenderer,
-            QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, QgsTextFormat,
-            QgsUnitTypes, Qgis,
-        )
-        from qgis.PyQt.QtWidgets import QApplication, QMessageBox
-        from qgis.PyQt.QtCore import Qt
-        from qgis.PyQt.QtGui import QColor, QFont
+        def _has_nom(f):
+            p = f.get('properties', {})
+            return bool(p.get('nom_voie_ban_gauche')
+                        or p.get('nom_voie_ban_droite'))
 
-        layer_name = "Noms de rue BD TOPO"
-        canvas   = self.iface.mapCanvas()
-        extent   = canvas.extent()
-        crs_src  = canvas.mapSettings().destinationCrs()
-        crs_2154 = QgsCoordinateReferenceSystem("EPSG:2154")
-        if crs_src.authid().upper() != "EPSG:2154":
-            tr     = QgsCoordinateTransform(crs_src, crs_2154, QgsProject.instance())
-            extent = tr.transformBoundingBox(extent)
+        canvas = self.iface.mapCanvas()
+        self._load_wfs_async("Noms de rue BD TOPO", [{
+            'typename': "BDTOPO_V3:troncon_de_route",
+            'name': "Noms de rue BD TOPO",
+            'prefix': 'bet_rue_', 'filter': _has_nom,
+        }], style_cb=lambda layer, name: self._style_rue_layer(layer),
+           restore_extent=(canvas, canvas.extent()))
 
-        bbox = (f"{extent.xMinimum():.2f},{extent.yMinimum():.2f},"
-                f"{extent.xMaximum():.2f},{extent.yMaximum():.2f},EPSG:2154")
 
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode    = ssl.CERT_NONE
 
-        url = (
-            "https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature"
-            f"&TYPENAMES=BDTOPO_V3:troncon_de_route&BBOX={bbox}"
-            "&SRSNAME=EPSG:2154&outputFormat=application/json&COUNT=5000"
-        )
-
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            with urllib.request.urlopen(url, timeout=30, context=ssl_ctx) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-        except Exception as e:
-            QMessageBox.warning(self.iface.mainWindow(), layer_name,
-                                f"Erreur WFS :\n{e}")
-            return
-        finally:
-            QApplication.restoreOverrideCursor()
-
-        # Ne garder que les tronçons avec un nom
-        features = [
-            f for f in data.get('features', [])
-            if f.get('properties', {}).get('nom_voie_ban_gauche')
-            or f.get('properties', {}).get('nom_voie_ban_droite')
-        ]
-        if not features:
-            self.iface.messageBar().pushMessage(
-                layer_name, "Aucun nom de rue dans l'emprise.", level=1, duration=4)
-            return
-
-        geojson = {
-            "type": "FeatureCollection",
-            "crs":  {"type": "name", "properties": {
-                        "name": "urn:ogc:def:crs:EPSG::2154"}},
-            "features": features,
-        }
-        tmp = tempfile.NamedTemporaryFile(
-            mode='w', suffix='.geojson', delete=False,
-            encoding='utf-8', prefix='bet_rue_')
-        json.dump(geojson, tmp, ensure_ascii=False)
-        tmp.close()
-
-        layer = QgsVectorLayer(tmp.name, layer_name, "ogr")
-        if not layer.isValid():
-            QMessageBox.warning(self.iface.mainWindow(), layer_name, "Couche invalide.")
-            os.unlink(tmp.name)
-            return
-
+    @staticmethod
+    def _remove_orphan_layer(name):
+        """Supprime du projet toute couche `name` absente de l'arbre de
+        légende (résidu d'un ajout interrompu), pour ne pas bloquer un
+        nouvel ajout via le test anti-doublon."""
         project = QgsProject.instance()
-        project.addMapLayer(layer, False)
-        project.layerTreeRoot().insertChildNode(-1, QgsLayerTreeLayer(layer))
+        root    = project.layerTreeRoot()
+        for lyr in list(project.mapLayers().values()):
+            if lyr.name() == name and root.findLayer(lyr.id()) is None:
+                project.removeMapLayer(lyr.id())
 
-        # Ligne transparente
-        symbol = QgsLineSymbol.createSimple({
-            'color': '0,0,0,0', 'line_style': 'no'
-        })
-        layer.setRenderer(QgsSingleSymbolRenderer(symbol))
+    def _add_raster_bottom_keep_extent(self, layer):
+        """Ajoute un raster en bas de légende sans dézoomer le canvas.
 
-        # Label nom de rue courbé le long de la ligne — 8 pt fixe
-        pal = QgsPalLayerSettings()
-        pal.fieldName    = 'coalesce("nom_voie_ban_gauche", "nom_voie_ban_droite")'
-        pal.isExpression = True
-        pal.placement    = Qgis.LabelPlacement.Curved
-        pal.enabled      = True
+        Une couche WMS ne connaît son étendue réelle qu'après avoir reçu
+        les capabilities du serveur (requête réseau asynchrone) ; ce retour
+        tardif peut recadrer le canvas bien après notre insertion. On
+        verrouille donc l'étendue pendant une courte fenêtre après l'ajout,
+        pas seulement une fois, pour absorber ce recadrage différé.
+        """
+        from qgis.core import QgsLayerTreeLayer
+        from qgis.PyQt.QtCore import QTimer
+        project = QgsProject.instance()
+        canvas  = self.iface.mapCanvas()
+        saved_extent = canvas.extent()
 
-        fmt = QgsTextFormat()
-        fmt.setFont(QFont('Arial'))
-        fmt.setSizeUnit(QgsUnitTypes.RenderPoints)
-        fmt.setSize(8)
-        fmt.setColor(QColor(40, 40, 120))
-        pal.setFormat(fmt)
+        def _lock_extent(*_args):
+            if canvas.extent() != saved_extent:
+                canvas.blockSignals(True)
+                canvas.setExtent(saved_extent)
+                canvas.blockSignals(False)
+                canvas.refresh()
 
-        layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
-        layer.setLabelsEnabled(True)
-        layer.triggerRepaint()
+        canvas.extentsChanged.connect(_lock_extent)
 
-        self.iface.messageBar().pushMessage(
-            layer_name, f"{len(features)} tronçon(s) nommé(s) chargé(s)",
-            level=0, duration=5)
+        canvas.freeze(True)
+        try:
+            project.addMapLayer(layer, False)
+            project.layerTreeRoot().insertChildNode(-1, QgsLayerTreeLayer(layer))
+        finally:
+            canvas.freeze(False)
+        canvas.setExtent(saved_extent)
+        canvas.refresh()
 
+        QTimer.singleShot(
+            2000, lambda: canvas.extentsChanged.disconnect(_lock_extent))
 
-
-    def run_ortho_2022(self):
+    def run_ortho_ign(self):
         from qgis.core import QgsRasterLayer, QgsLayerTreeLayer
-        name   = "Ortho 2022"
+        name   = "Ortho IGN (BD ORTHO nationale)"
         source = (
-            "crs=epsg:2154&featureCount=10&format=image/jpeg"
-            "&layers=ortho_2022&maxHeight=256&maxWidth=256"
-            "&styles=&url=http://tiles.craig.fr/ortho/service"
+            "crs=EPSG:2154&featureCount=10&format=image/jpeg"
+            "&layers=ORTHOIMAGERY.ORTHOPHOTOS&maxHeight=256&maxWidth=256"
+            "&styles=&url=https://data.geopf.fr/wms-r/wms"
         )
+        self._remove_orphan_layer(name)
         project = QgsProject.instance()
         for lyr in project.mapLayers().values():
             if lyr.name() == name:
@@ -1511,8 +1194,7 @@ class ReseauAssainissementPlugin(QObject):
             QMessageBox.warning(self.iface.mainWindow(), "Fond de carte",
                                 f"Impossible de charger la couche WMS :\n{name}")
             return
-        project.addMapLayer(layer, False)
-        project.layerTreeRoot().insertChildNode(-1, QgsLayerTreeLayer(layer))
+        self._add_raster_bottom_keep_extent(layer)
 
     def run_osm_desature(self):
         from qgis.core import QgsRasterLayer, QgsLayerTreeLayer
@@ -1522,6 +1204,7 @@ class ReseauAssainissementPlugin(QObject):
             "&layers=faded&maxHeight=256&maxWidth=256"
             "&styles=&url=https://osm.datagrandest.fr/mapcache"
         )
+        self._remove_orphan_layer(name)
         project = QgsProject.instance()
         # Évite les doublons
         for lyr in project.mapLayers().values():
@@ -1533,9 +1216,7 @@ class ReseauAssainissementPlugin(QObject):
             QMessageBox.warning(self.iface.mainWindow(), "Fond de carte",
                                 f"Impossible de charger la couche WMS :\n{name}")
             return
-        # Ajout en bas de la légende (fond de carte sous toutes les couches)
-        project.addMapLayer(layer, False)
-        project.layerTreeRoot().insertChildNode(-1, QgsLayerTreeLayer(layer))
+        self._add_raster_bottom_keep_extent(layer)
 
     def run_enregistrer_projet(self):
         from .tools.projet_bet import save_projet
@@ -1750,3 +1431,16 @@ class ReseauAssainissementPlugin(QObject):
         from .config_dialog import ConfigDialog
         dialog = ConfigDialog(self.iface)
         dialog.exec_()
+
+    def show_tableau_saisie(self):
+        self._ensure_project_loaded()
+        couches_eu = self._get_couches("EU")
+        couches_ep = self._get_couches("EP")
+        if not couches_eu or not couches_ep:
+            return
+        from .gui.tableau_saisie_dialog import TableauSaisieDialog
+        self._tableau_saisie_dialog = TableauSaisieDialog(
+            couches_eu, couches_ep, iface=self.iface, parent=self.iface.mainWindow())
+        self._tableau_saisie_dialog.show()
+        self._tableau_saisie_dialog.raise_()
+        self._tableau_saisie_dialog.activateWindow()

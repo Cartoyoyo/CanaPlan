@@ -67,7 +67,10 @@ def _layer_color(mat):
 def _pipe_color(reseau):
     # EU = brun/orange  (convention française eaux usées)
     # EP = bleu         (convention française eaux pluviales)
-    return '#C85A00' if reseau == 'EU' else '#1A6BBF'
+    # AEP = cyan        (convention française eau potable)
+    if reseau == 'EU':  return '#C85A00'
+    if reseau == 'AEP': return '#00BCD4'
+    return '#1A6BBF'
 
 def _luminance(hex_color):
     h = hex_color.lstrip('#')
@@ -200,15 +203,19 @@ class CoupeTrancheeComposeeDialog(QDialog):
         f1.setSpacing(4)
 
         rnet_row = QHBoxLayout()
-        self._rb_eu = QRadioButton("EU")
-        self._rb_ep = QRadioButton("EP")
+        self._rb_eu  = QRadioButton("EU")
+        self._rb_ep  = QRadioButton("EP")
+        self._rb_aep = QRadioButton("AEP")
         self._rb_eu.setChecked(True)
         bg = QButtonGroup(self)
         bg.addButton(self._rb_eu)
         bg.addButton(self._rb_ep)
+        bg.addButton(self._rb_aep)
         self._rb_eu.toggled.connect(self._on_field_changed)
+        self._rb_aep.toggled.connect(self._on_field_changed)
         rnet_row.addWidget(self._rb_eu)
         rnet_row.addWidget(self._rb_ep)
+        rnet_row.addWidget(self._rb_aep)
         rnet_row.addStretch()
         rw = QWidget(); rw.setLayout(rnet_row)
         f1.addRow("Réseau :", rw)
@@ -414,6 +421,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
         try:
             self._rb_eu.setChecked(t.get('reseau', 'EU') == 'EU')
             self._rb_ep.setChecked(t.get('reseau', 'EU') == 'EP')
+            self._rb_aep.setChecked(t.get('reseau', 'EU') == 'AEP')
             self._sp_dn.setValue(t.get('dn', 300))
             _set_combo(self._cb_mat, t.get('materiau', 'PVC'))
             self._sp_prof.setValue(t.get('profondeur', 1.80))
@@ -439,7 +447,12 @@ class CoupeTrancheeComposeeDialog(QDialog):
         if self._updating or self._current < 0:
             return
         t = self._tranches[self._current]
-        t['reseau']          = 'EU' if self._rb_eu.isChecked() else 'EP'
+        if self._rb_eu.isChecked():
+            t['reseau'] = 'EU'
+        elif self._rb_aep.isChecked():
+            t['reseau'] = 'AEP'
+        else:
+            t['reseau'] = 'EP'
         t['dn']              = self._sp_dn.value()
         t['materiau']        = self._cb_mat.currentText()
         t['profondeur']      = self._sp_prof.value()

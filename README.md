@@ -22,6 +22,7 @@ Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees
 | **Deplacer** | Deplace un ouvrage (regard ou tabouret) et recale automatiquement les conduites et branchements connectes. Permet aussi de deplacer une etiquette (regard / tabouret / conduite) sans toucher a l'ouvrage. Mode **piquage** : survol du point de piquage d'un branchement (surligne en orange) puis glisser-deposer pour repositionner le piquage le long de la conduite ; met a jour `id_conduite`, `pk_debut`, `cote_piquage` et recale la geometrie du branchement. |
 | **Effacer** | Supprime un element et ses etiquettes associees. Lasso possible pour une selection multiple. |
 | **Copier les attributs** | Copie les attributs (diametre, materiau...) d'un element vers un ou plusieurs autres du meme type. |
+| **Tableau de saisie - pente** | Saisie groupee en tableau, par onglets **Regards / Tabourets / Conduites / Branchements**, avec calcul automatique de la pente ou de la cote fil d'eau selon le sens choisi. Apercu carte miniature de l'element selectionne, copier/coller depuis Excel, saisie multi-cellules, historique d'annulation (Ctrl+Z). Un onglet **Chaine** trace le profil simplifie entre deux regards choisis. |
 
 ### Analyse
 
@@ -32,14 +33,13 @@ Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees
 | **Coupe transversale EU** | Trace un axe de coupe sur le reseau EU uniquement. Les conduites croisees sont representees en section avec TN, FE, lit de pose, enrobage, remblai et chaussee. |
 | **Coupe transversale EP** | Meme principe sur le reseau EP uniquement. |
 | **Coupe transversale des tranchees** | Trace un axe de coupe croisant les reseaux EU et EP simultanement. Genere un plan de coupe A4/A3 (**paysage par defaut**) avec : profil de coupe (tranchees empilees par largeur configuree, cotes NGF), plan de situation (couches QGIS visibles + trait de coupe), titre et cartouche. Export PDF. |
-| **Dessinateur – Coupe de tranchees composee** | Dialogue de dessin de coupes de tranchees composees (EU et EP cote a cote). Gestion de N tranches juxtaposees : reseau (EU/EP), DN, materiau, profondeur fil d'eau, ecarts gauche/droit, lit de pose, enrobage, remblai, chaussee inferieure (GB/GC) et superieure (enrobe). Apercu matplotlib temps reel avec cotes, annotations de couches et couleurs conventionnelles. Export PDF et PNG (200 dpi). Les valeurs par defaut des couches de remblai heritent de la configuration rapide. Memorisation automatique des dernieres tranches saisies (QgsSettings). Necessite **matplotlib**. |
+| **Dessinateur – Coupe de tranchees composee** | Dialogue de dessin de coupes de tranchees composees (EU, EP et **AEP** — eau potable, cote a cote). Gestion de N tranches juxtaposees : reseau (EU/EP/AEP), DN, materiau, profondeur fil d'eau, ecarts gauche/droit, lit de pose, enrobage, remblai, chaussee inferieure (GB/GC) et superieure (enrobe). Apercu matplotlib temps reel avec cotes, annotations de couches et couleurs conventionnelles (EU rouge, EP bleu, AEP cyan). Export PDF et PNG (200 dpi). Les valeurs par defaut des couches de remblai heritent de la configuration rapide. Memorisation automatique des dernieres tranches saisies (QgsSettings). Necessite **matplotlib**. |
 
 ### Cubature et Remblai
 
 | Outil | Description |
 |---|---|
-| **Cubature tranchees** | Calcule le volume de deblai des tranchees. Mode BFS (2 regards) ou reseau complet. Formule : `Volume = largeur × L3D × (prof_debut + prof_fin) / 2`. Export CSV, PDF, Excel. |
-| **Remblai tranchees** | Calcule la decomposition du remblai par couche : lit de pose, enrobage, conduite, chaussee inf/sup et remblai. Parametrage des materiaux et epaisseurs dans la Configuration rapide (onglet Remblai). Export exhaustif CSV, PDF, Excel. |
+| **Cubature / Remblai tranchees** | Calcule le volume de deblai des tranchees. Mode BFS (2 regards), axe trace (buffer 3 m) ou reseau complet. Formule : `Volume = largeur × L3D × (prof_debut + prof_fin) / 2`. Une case a cocher **« Afficher le detail remblai »** dans la fenetre de resultats affiche/masque a la volee les colonnes de decomposition du remblai (lit de pose, enrobage, conduite, chaussee inf/sup, remblai) sans refaire le calcul — parametrage des materiaux et epaisseurs dans la Configuration rapide (onglet Remblai). Sous-totaux par colonne (lineaires, surfaces, volumes) sur chaque ligne de sous-total EU/EP. Onglet/section **Synthese des ouvrages** (tronçons et branchements groupes par materiau/diametre, comptage des regards et tabourets). Fenetre redimensionnable, plein ecran, et qui s'ajuste automatiquement au nombre de lignes et de colonnes affichees. Export CSV, PDF, Excel. |
 
 ### Renumerotation
 
@@ -61,7 +61,7 @@ Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees
 
 | Outil | Description |
 |---|---|
-| **Annotation texte** | Pose un texte libre sur la carte (mainAnnotationLayer du projet). Clic sur zone vide = creation, clic sur annotation existante = edition. Police, taille, couleur, gras / italique / souligne, alignement gauche / centre / droite. Taille en **metres** (RenderMapUnits) : l'annotation suit le zoom comme les conduites, ne grossit plus relativement au plan au dezoom. |
+| **Annotation texte** | Pose un texte libre sur la carte (mainAnnotationLayer du projet). Clic sur zone vide = creation, clic sur annotation existante = edition. Police, taille, couleur, gras / italique / souligne, alignement gauche / centre / droite, cadre optionnel (rempli ou non, couleurs de fond/bordure independantes), transparence reglable. Taille liee a l'echelle configuree pour les etiquettes, en **metres** (RenderMapUnits) : l'annotation suit le zoom comme les conduites, ne grossit plus relativement au plan au dezoom. Bouton **Appliquer** pour previsualiser les changements sans fermer la fenetre. |
 | **Copier / coller** | `Ctrl + clic` sur une annotation = duplication immediate avec leger decalage. `Ctrl + C` (curseur sur l'annotation) = copie dans un presse-papier interne au plugin. `Ctrl + V` puis clic = collage au point clique. `Echap` annule un coller en attente. |
 | **Figer en map units** | Fonction `freeze_annotations_to_map_units(canvas)` exposable dans la console Python : convertit toutes les annotations existantes (qui seraient en pt) vers map units, calcule a la vue courante du canvas — regle la vue sur 1:200 avant de lancer pour avoir une taille coherente. |
 
@@ -81,11 +81,11 @@ Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees
 
 | Outil | Description |
 |---|---|
-| **Mise en place fond de projet** | Charge les 6 fonds de carte (BAN, Noms de rue, PCI Bati, PCI Parcelles, OSM Desature, Ortho 2022) sur l'emprise courante et configure le projet (fond blanc, SCR). |
+| **Mise en place fond de projet** | Charge les 6 fonds de carte (BAN, Noms de rue, PCI Bati, PCI Parcelles, OSM Desature, Ortho IGN) sur l'emprise courante et configure le projet (fond blanc, SCR). |
 | **BAN Adresses (vecteur)** | Charge les adresses de la BAN sur l'emprise courante. |
 | **Noms de rue BD TOPO** | Charge les voies nominees de la BD TOPO sur l'emprise courante. |
 | **PCI Vecteur – Parcelles & Bati** | Charge le cadastre vectoriel sur l'emprise courante. |
-| **Ortho 2022** | Ajoute le flux d'orthophotographie 2022. |
+| **Ortho IGN (BD ORTHO nationale)** | Ajoute le flux d'orthophotographie BD ORTHO de l'IGN, disponible sur toute la France (remplace l'ancien fond regional CRAIG limite a un millesime). |
 | **OSM Desature** | Ajoute un fond OpenStreetMap desature. |
 
 ---
@@ -269,8 +269,10 @@ BET_HUMIDE/
 │   ├── cubature_dialog.py          # Tableau resultats cubature/remblai + exports CSV/PDF/Excel
 │   ├── etiquette_taille_dialog.py  # Dialogue de reglage de la taille des etiquettes
 │   ├── etiquette_affichage_dialog.py # Dialogue de gestion de l'affichage des etiquettes
-│   ├── coupe_tranchee_composee_dialog.py # Dessinateur de coupes de tranchees composees (matplotlib)
-│   ├── annotation_dialog.py        # Dialogue d'annotation (texte, police, couleur, alignement)
+│   ├── coupe_tranchee_composee_dialog.py # Dessinateur de coupes de tranchees composees (EU/EP/AEP, matplotlib)
+│   ├── annotation_dialog.py        # Dialogue d'annotation (texte, police, couleur, cadre, transparence)
+│   ├── tableau_saisie_dialog.py    # Tableau de saisie groupee (regards/tabourets/conduites/branchements)
+│   ├── chain_profile_widget.py     # Widget du profil simplifie pour l'onglet Chaine du tableau de saisie
 │   ├── export_dialog.py            # Dialogue d'export combine (plan PDF/DXF + profils)
 │   ├── welcome_dialog.py           # Dialogue d'accueil (nouveau / ouvrir / annuler)
 │   ├── star_dt_dialog.py           # Dialogue d'import GML Star-DT
@@ -287,7 +289,7 @@ BET_HUMIDE/
 │   ├── profil_tool.py              # Profil en long (BFS + ProfilDialog)
 │   ├── profil_groupe_tool.py       # Profil groupe EU + EP (BFS + ProfilGroupeDialog)
 │   ├── renommer_tool.py            # Renumerotation le long d'un chemin BFS
-│   ├── cubature_tool.py            # Selection BFS pour cubature/remblai tranchees
+│   ├── cubature_tool.py            # Selection BFS/axe pour cubature/remblai tranchees
 │   ├── calc_cubature.py            # Calcul cubature (volumes, BFS, remblai par couche)
 │   ├── print_tool.py               # Impression PDF multi-feuilles
 │   ├── coupe_transversale_tool.py  # Outil de trace de l'axe de coupe (EU+EP ou mono-reseau)
@@ -299,6 +301,9 @@ BET_HUMIDE/
 │   ├── projet_bet.py               # Sauvegarde / chargement .bet (archive ZIP)
 │   ├── graph_utils.py              # Construction graphe + BFS (partages par tous les outils BFS)
 │   ├── calc_pentes.py              # Recalcul des pentes a partir des FE radier
+│   ├── layer_keys.py               # Persistance des identifiants de couches dans le projet (.qgs)
+│   ├── spatial_utils.py            # Recherche spatiale indexee (point/ligne les plus proches), partagee
+│   ├── wfs_utils.py                 # Telechargement WFS mutualise en tache de fond (BAN/PCI/BD TOPO)
 │   └── dxf_convert/                # Conversion DXF/DWG vers couches vectorielles
 │       ├── ui_dialog.py            # Dialogue principal
 │       ├── alg_cad_to_gis_convert.py

@@ -67,7 +67,6 @@ package "BET_HUMIDE" #F0F4FF {
     + run_profil_ep(checked)
     + run_profil_groupe(checked)
     + run_cubature(checked)
-    + run_remblai(checked)
     + run_coupe_transversale(checked)
     + run_coupe_eu(checked)
     + run_coupe_ep(checked)
@@ -283,9 +282,17 @@ package "BET_HUMIDE" #F0F4FF {
       - show_remblai : bool
       - bfs_prefix : str
       - table : QTableWidget
+      - cb_remblai : QCheckBox
       - total_label : QLabel
-      + __init__(results, config, parent, bfs_prefix, show_remblai)
+      - _VOL_BREAKDOWN : list[dict]  {static}
+      + __init__(results, config, parent, bfs_prefix, show_remblai=False)
+      - _active_vol_cols() : list[dict]
+      - _synthese_data() : list[dict]
+      - _avg(values) : float  {static}
       - _build_ui()
+      - _adjust_size_to_content()
+      - _on_toggle_remblai(checked)
+      - _update_info_label()
       - _populate_table()
       - _set_row(row, data)
       - _default_filename(ext) : str
@@ -295,6 +302,14 @@ package "BET_HUMIDE" #F0F4FF {
       - _export_xlsx()
       - _open_folder(path)
     }
+    note right of CubatureDialog
+      Fenetre unique Cubature/Remblai :
+      case "detail remblai" affiche/masque
+      les colonnes de volume a la volee,
+      sous-totaux par colonne, section
+      "Synthese des ouvrages" (PDF+Excel),
+      redimensionnement auto au contenu.
+    end note
 
     class CubatureOptionsDialog {
       - rb_tout : QRadioButton
@@ -303,6 +318,7 @@ package "BET_HUMIDE" #F0F4FF {
       - cb_conduites : QCheckBox
       - cb_branchements : QCheckBox
       - cb_bfs : QCheckBox
+      - cb_axe : QCheckBox
       + __init__(parent)
       + options() : dict
       - _build_ui()
@@ -362,14 +378,70 @@ package "BET_HUMIDE" #F0F4FF {
       - _save_settings()
       + closeEvent(event)
       .. Note ..
-      ' N tranches juxtaposees (EU / EP). Apercu matplotlib
+      ' N tranches juxtaposees (EU / EP / AEP). Apercu matplotlib
       ' temps reel : lit de pose, enrobage, remblai, chaussee
-      ' inf/sup avec couleurs conventionnelles. Colonnes de cotes
-      ' verticales (droite) et sous-cotes horizontales (bas).
+      ' inf/sup avec couleurs conventionnelles (EU rouge, EP bleu,
+      ' AEP cyan). Colonnes de cotes verticales (droite) et
+      ' sous-cotes horizontales (bas).
       ' Valeurs par defaut heritees de ConfigDialog (cubature).
       ' Memorisation QgsSettings : BET_HUMIDE/coupe_tranchee_composee.
       ' Export PDF / PNG via matplotlib (200 dpi).
       ' Necessite matplotlib ; affiche un message si absent.
+    }
+
+    class TableauSaisieDialog {
+      - couches_eu / couches_ep : dict
+      - iface : QgisInterface
+      .. Tableaux par role ..
+      - _tables : dict[str, QTableWidget]  ' Regards/Tabourets/Conduites/Branchements
+      - _mini_map : QgsMapCanvas
+      + __init__(couches_eu, couches_ep, iface, parent)
+      - _build_ui()
+      - _set_reseau(reseau)
+      - _reload_all()
+      - _load_regard_tabouret(role)
+      - _load_conduites()
+      - _load_branchements()
+      .. Edition cellule ..
+      - _handle_cell_edit(role, item)
+      - _handle_conduite_edit(item)
+      - _handle_branchement_edit(item)
+      - _autofill_row(role, table, row)
+      - _recalc_cond_row(fid)
+      - _recalc_branch_row(fid)
+      - _write_attr(layer, fid, fname, value, role, record_undo)
+      .. Copier / coller / annuler ..
+      - _copy_selection()
+      - _paste_selection()
+      - _apply_batch()
+      - _undo()
+      .. Navigation / apercu carte ..
+      - _select_feature(role, fid)
+      - _zoom_to_item(role, item)
+      - _update_mini_map(table)
+      - _goto_next_missing()
+      .. Onglet Chaine ..
+      - _build_chain_tab()
+      - _populate_chain_combos()
+      - _build_graph()
+      - _find_chain(key1, key2)
+      - _detect_chain()
+      - _chain_zoom_to_item(item)
+      .. Note ..
+      ' Saisie groupee par onglets (Regards/Tabourets/Conduites/
+      ' Branchements) avec calcul auto pente <-> cote fil d'eau
+      ' selon le sens choisi (_recalc_cond_row / _recalc_branch_row).
+      ' Copier/coller compatible Excel, historique Ctrl+Z, apercu
+      ' carte miniature de la ligne selectionnee. Onglet "Chaine" :
+      ' trace le profil simplifie (ChainProfileWidget) entre deux
+      ' regards choisis, chemin trouve par BFS local.
+    }
+
+    class ChainProfileWidget {
+      + __init__(parent)
+      + set_data(nodes)
+      + paintEvent(event)
+      - _text_width(fm, text)  {static}
     }
 
     class "etiquettes" <<module>> {
@@ -445,6 +517,45 @@ package "BET_HUMIDE" #F0F4FF {
 
     class "layer_ok" <<module>> {
       + layer_ok(layer) : bool
+    }
+
+    class "layer_keys" <<module>> {
+      + layer_key(role, reseau) : str
+      + get_layer_id(role, reseau) : str
+      + set_layer_id(role, reseau, layer_id)
+      .. Note ..
+      ' Persiste les IDs de couches (regard/conduite/...) dans les
+      ' proprietes du projet QGIS (.qgs) plutot qu'en QSettings
+      ' globales : corrige le bug de confusion entre plusieurs
+      ' projets ouverts successivement.
+    }
+
+    class "spatial_utils" <<module>> {
+      + rect_request(pt, tol) : QgsFeatureRequest
+      + nearest_point_feature(layer, pt, tol) : tuple
+      + nearest_line_feature(layer, pt, tol) : tuple
+      + nearest_line_feature_expanding(layer, pt, tols) : tuple
+      .. Note ..
+      ' Recherches spatiales indexees (bbox + distance), mutualisees
+      ' par tous les outils carte (dessin, deplacement, cubature...).
+    }
+
+    class PointGrid {
+      + __init__(items, cell)
+      + nearest(pt, tol) : tuple
+    }
+
+    class "wfs_utils" <<module>> {
+      + temp_dir() : str
+      + purge_temp_dir()
+      + write_geojson(features, prefix) : str
+      + current_bbox_l93(canvas) : tuple
+      + fetch_wfs_async(description, requests, on_done, timeout=30)
+      - _fetch_features(typename, bbox, wfs_url, timeout) : list  {static}
+      .. Note ..
+      ' Telechargement WFS mutualise (BAN / PCI / BD TOPO) execute en
+      ' QgsTask (tache de fond), TLS verifie, nettoyage automatique
+      ' des GeoJSON temporaires apres chargement des couches.
     }
 
     class "calc_pentes" <<module>> {
@@ -712,7 +823,6 @@ package "BET_HUMIDE" #F0F4FF {
       - couches_eu : dict
       - couches_ep : dict
       - opts : dict
-      - show_remblai : bool
       - _start : QgsFeature
       - _reseau_start : str
       - _start_band : QgsRubberBand
@@ -773,14 +883,22 @@ package "BET_HUMIDE" #F0F4FF {
       + keyPressEvent(event)
       - _place_sheet(center, rot)
       - _generate_pdf(pdf_path)
-      - {static} _render_map(cx, cy, rot, w_m, h_m, w_px, h_px) : QImage
+      - {static} _start_render(cx, cy, rot, w_m, h_m, w_px, h_px) : QgsMapRendererParallelJob
       - {static} _split_two_lines(text) : str
       - {static} _ask_overview_settings(n, dpi) : bool
       - _reset()
       .. Note ..
-      ' PDF multi-pages : pre-rendu de toutes les images
-      ' (QgsMapRendererSequentialJob) avant ouverture QPrinter,
-      ' evite les interactions rendu/PDF Qt5.
+      ' PDF multi-pages : pre-rendu de toutes les images avant
+      ' ouverture QPrinter (evite les interactions rendu/PDF Qt5).
+      ' Jobs QgsMapRendererParallelJob tous lances en simultane
+      ' (latences WMS/ortho recouvertes), attente via
+      ' QProgressDialog annulable (plus de waitForFinished
+      ' bloquant). Images liberees au fil de l ecriture des pages.
+      ' Fleche du nord (medaillon, suit la rotation de la feuille).
+      ' Retour arriere / Suppr : depile la derniere feuille posee.
+      ' Echelle du plan d ensemble normalisee (1:500, 1:1000...)
+      ' et affichee au cartouche ; barre d echelle propre a l ensemble.
+      ' Confirmation avant ecrasement si output_dir predefini.
       ' Zone carte = h_mm - carto_h_mm ; centre ajuste :
       '   cx_c = cx + (carto_h_m/2)*sin(rot),
       '   cy_c = cy + (carto_h_m/2)*cos(rot).
@@ -885,6 +1003,8 @@ AnnotationDialog            --|> QDialog
 ProfilOptionsDialog         --|> QDialog
 ExportDialog                --|> QDialog
 CoupeTrancheeComposeeDialog --|> QDialog
+TableauSaisieDialog         --|> QDialog
+ChainProfileWidget          --|> QWidget
 
 ' ─────────────────────────────────────────
 '  Associations
@@ -954,6 +1074,13 @@ ReseauAssainissementPlugin ..> "dxf_export"    : run_export_dxf_with_ui()
 ReseauAssainissementPlugin ..> "star_dt_import": import_star_dt()
 ReseauAssainissementPlugin ..> WelcomeDialog   : _ensure_project_loaded()
 ReseauAssainissementPlugin ..> CoupeTrancheeComposeeDialog : ouvre (coupe tranchees composee)
+ReseauAssainissementPlugin ..> TableauSaisieDialog : ouvre (tableau_saisie)
+TableauSaisieDialog        ..> ChainProfileWidget  : onglet Chaine
+TableauSaisieDialog        ..> "spatial_utils"     : recherche ouvrage sous le curseur
+CubatureTool                ..> "spatial_utils"    : nearest_point_feature
+"spatial_utils"              ..> PointGrid          : nearest() (index spatial en grille)
+ReseauAssainissementPlugin  ..> "wfs_utils"         : run_ortho_ign / fond_projet (telechargement async)
+"projet_bet"                ..> "layer_keys"        : persistance des IDs de couches
 
 ' Tools -> utilitaires partages
 RenseignementTool  ..> "layer_ok" : _ok()

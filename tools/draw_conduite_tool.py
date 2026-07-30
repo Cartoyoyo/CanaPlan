@@ -1,12 +1,16 @@
 # tools/draw_conduite_tool.py
 
+import math
+
 from qgis.core import (
     QgsPointXY, QgsGeometry, QgsFeature, QgsWkbTypes, QgsProject
 )
 from qgis.gui import QgsMapToolEmitPoint, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal
-from qgis.PyQt.QtWidgets import QMessageBox
+from qgis.PyQt.QtWidgets import QMessageBox, QToolTip
 from qgis.PyQt.QtGui import QColor
+
+from .spatial_utils import nearest_point_feature, rect_request
 
 
 class DrawConduiteTool(QgsMapToolEmitPoint):
@@ -30,6 +34,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
         self.regard_layer = couches['regard']
 
         self.last_point = None       # dernier point posé
+        self.points = []             # tous les sommets posés (pour calcul d'angle)
         self.regard_ids = []         # ids des regards créés (pour undo)
         self.conduite_ids = []       # ids des tronçons créés (pour undo)
 
@@ -52,8 +57,10 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
     def deactivate(self):
         from qgis.utils import iface
         iface.messageBar().clearWidgets()
+        QToolTip.hideText()
         self.rubber.reset(QgsWkbTypes.LineGeometry)
         self.last_point = None
+        self.points = []
         self.regard_ids = []
         self.conduite_ids = []
         super().deactivate()
@@ -63,6 +70,27 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
             point = self.toMapCoordinates(event.pos())
             self.rubber.setToGeometry(
                 QgsGeometry.fromPolylineXY([self.last_point, point]), None)
+            longueur = self.last_point.distance(point)
+            texte = f"{longueur:.2f} m".replace('.', ',')
+            if len(self.points) >= 2:
+                angle = self._compute_angle(self.points[-2], self.points[-1], point)
+                deviation = 180.0 - angle
+                texte += f"  ·  {angle:.1f}° / {deviation:.1f}°".replace('.', ',')
+            QToolTip.showText(event.globalPos(), texte, self.canvas)
+        else:
+            QToolTip.hideText()
+
+    @staticmethod
+    def _compute_angle(p_prev, p_vertex, p_next):
+        """Angle (en degrés) au sommet p_vertex entre les segments p_prev-p_vertex
+        et p_vertex-p_next. 180° = alignement droit, 90° = angle droit."""
+        ax = p_prev.x() - p_vertex.x()
+        ay = p_prev.y() - p_vertex.y()
+        bx = p_next.x() - p_vertex.x()
+        by = p_next.y() - p_vertex.y()
+        dot = ax * bx + ay * by
+        det = ax * by - ay * bx
+        return abs(math.degrees(math.atan2(det, dot)))
 
     def canvasReleaseEvent(self, event):
         if event.button() == Qt.RightButton:
@@ -111,6 +139,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
             self.conduite_ids.append(conduite_id)
 
         self.last_point = point
+        self.points.append(point)
 
     def _create_regard(self, point):
         """Crée un regard au point donné. Retourne l'id."""
@@ -155,6 +184,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
                 self.regard_layer.deleteFeature(rid)
                 self.regard_layer.commitChanges()
             self.last_point = None
+            self.points = []
             self.rubber.reset(QgsWkbTypes.LineGeometry)
             return
 
@@ -177,6 +207,8 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
             self.regard_layer.deleteFeature(rid)
             self.regard_layer.commitChanges()
 
+        if self.points:
+            self.points.pop()
         self.last_point = QgsPointXY(prev_point)
         self.rubber.reset(QgsWkbTypes.LineGeometry)
 
@@ -196,21 +228,26 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
                 self.regard_layer.deleteFeature(rid)
             self.regard_layer.commitChanges()
 
+        QToolTip.hideText()
         self.rubber.reset(QgsWkbTypes.LineGeometry)
         self.last_point = None
+        self.points = []
         self.regard_ids = []
         self.conduite_ids = []
 
     def _reset(self):
         """Termine le tracé en cours, prêt pour un nouveau."""
+        QToolTip.hideText()
         self.rubber.reset(QgsWkbTypes.LineGeometry)
         self.last_point = None
+        self.points = []
         self.regard_ids = []
         self.conduite_ids = []
 
     def _find_nearby_regard(self, point):
         """Retourne le premier regard dans _TOPO_MIN_DIST_M, hors tolérance de snap."""
-        for feat in self.regard_layer.getFeatures():
+        for feat in self.regard_layer.getFeatures(
+                rect_request(point, self._TOPO_MIN_DIST_M)):
             geom = feat.geometry()
             if geom.type() != QgsWkbTypes.PointGeometry:
                 continue
@@ -225,15 +262,10 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
         best_point = None
         best_dist = float('inf')
 
-        for feat in self.regard_layer.getFeatures():
-            geom = feat.geometry()
-            if geom.type() != QgsWkbTypes.PointGeometry:
-                continue
-            pt = geom.asPoint()
-            dist = point.distance(pt)
-            if dist < best_dist:
-                best_dist = dist
-                best_point = pt
+        feat, dist = nearest_point_feature(self.regard_layer, point, tolerance)
+        if feat is not None:
+            best_dist = dist
+            best_point = feat.geometry().asPoint()
 
         if best_dist <= tolerance:
             return best_point

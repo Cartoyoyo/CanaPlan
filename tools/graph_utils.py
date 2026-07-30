@@ -1,6 +1,6 @@
 from collections import deque
 
-from qgis.core import QgsPointXY
+from qgis.core import QgsPointXY, QgsSpatialIndex
 
 try:
     from qgis.core import NULL as QGIS_NULL
@@ -27,25 +27,23 @@ def build_graph(conduite_layer, regard_layer, tol=0.05):
     if regard_layer is None or conduite_layer is None:
         return {}, {}
 
-    r_pts = [
-        (feat.id(), QgsPointXY(feat.geometry().asPoint()))
-        for feat in regard_layer.getFeatures()
-        if not feat.geometry().isEmpty()
-    ]
+    # Un seul passage sur les regards : index spatial + points + features
+    r_index      = QgsSpatialIndex()
+    r_pts        = {}    # {fid: QgsPointXY}
+    regard_by_id = {}
+    for feat in regard_layer.getFeatures():
+        if feat.geometry().isEmpty():
+            continue
+        r_index.addFeature(feat)
+        r_pts[feat.id()]        = QgsPointXY(feat.geometry().asPoint())
+        regard_by_id[feat.id()] = feat
 
     def snap(pt):
-        best_id, best_d = None, float('inf')
-        for rid, rpt in r_pts:
-            d = pt.distance(rpt)
-            if d < best_d:
-                best_d, best_id = d, rid
-        return best_id if best_d <= tol else None
-
-    regard_by_id = {
-        feat.id(): feat
-        for feat in regard_layer.getFeatures()
-        if not feat.geometry().isEmpty()
-    }
+        """Regard le plus proche de pt dans le rayon tol (index spatial)."""
+        for rid in r_index.nearestNeighbor(pt, 1, tol):
+            if pt.distance(r_pts[rid]) <= tol:
+                return rid
+        return None
 
     graph = {}
     for feat in conduite_layer.getFeatures():
@@ -53,6 +51,8 @@ def build_graph(conduite_layer, regard_layer, tol=0.05):
         if g.isEmpty():
             continue
         line = g.asPolyline()
+        if len(line) < 2:
+            continue
         r0 = snap(QgsPointXY(line[0]))
         r1 = snap(QgsPointXY(line[-1]))
         if r0 is None or r1 is None:

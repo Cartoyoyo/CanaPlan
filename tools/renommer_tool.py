@@ -244,14 +244,8 @@ class RenommerTool(QgsMapTool):
         layer = self.couches.get('regard')
         if not _ok(layer):
             return None
-        best, best_d = None, float('inf')
-        for feat in layer.getFeatures():
-            g = feat.geometry()
-            if g.isEmpty():
-                continue
-            d = point.distance(QgsPointXY(g.asPoint()))
-            if d <= tol and d < best_d:
-                best_d, best = d, feat
+        from .spatial_utils import nearest_point_feature
+        best, _ = nearest_point_feature(layer, point, tol)
         return best
 
     def _make_pt_band(self, color):

@@ -243,7 +243,7 @@ class MoveTool(QgsMapTool):
             self._clear_label_hover()
 
     def _find_label_near(self, click_pt, tol):
-        """Cherche l'étiquette (regard/tabouret) la plus proche."""
+        """Cherche l'étiquette BET la plus proche du clic, tous rôles confondus."""
         results = self.canvas.labelingResults()
         if results is None:
             return None
@@ -251,7 +251,7 @@ class MoveTool(QgsMapTool):
         valid_ids = {
             couches[role].id()
             for couches in self.couches.values()
-            for role in ('regard', 'tabouret', 'conduite')
+            for role in ('regard', 'tabouret', 'conduite', 'branchement')
             if _ok(couches.get(role))
         }
 
@@ -325,12 +325,17 @@ class MoveTool(QgsMapTool):
             self._collect_line_previews(couches['conduite'])
             self._collect_line_previews(couches['branchement'])
         elif role == 'tabouret':
-            self._collect_line_previews(couches['branchement'], translate_all=True)
+            self._collect_line_previews(couches['branchement'])
 
-    def _collect_line_previews(self, line_layer, translate_all=False):
+    def _collect_line_previews(self, line_layer):
         """Collecte les rubber bands de prévisualisation des lignes connectées.
-        translate_all=True : tous les sommets suivent le déplacement (tabouret).
-        translate_all=False : seul le sommet coïncident suit (regard).
+
+        Seuls les sommets coïncidant avec l'ouvrage déplacé suivent le
+        curseur, ce qui reflète exactement ce que font _update_connected_lines
+        (regard) et _move_branchement_tabouret_end (tabouret). L'ancien mode
+        « translate_all » marquait tous les indices du branchement d'un
+        tabouret : l'aperçu écrasait la ligne entière sur le curseur, et le
+        resultat applique faisait glisser le piquage.
         """
         tolerance = 0.05
         old_point = QgsPointXY(self._orig_pt)
@@ -339,19 +344,13 @@ class MoveTool(QgsMapTool):
             if geom.isEmpty():
                 continue
             line = geom.asPolyline()
-            if translate_all:
-                # Branchement de tabouret : l'extrémité finale doit coïncider
-                if QgsPointXY(line[-1]).distance(old_point) > tolerance:
-                    continue
-                endpoints = list(range(len(line)))   # tous les indices
-            else:
-                endpoints = []
-                if QgsPointXY(line[0]).distance(old_point) <= tolerance:
-                    endpoints.append(0)
-                if QgsPointXY(line[-1]).distance(old_point) <= tolerance:
-                    endpoints.append(len(line) - 1)
-                if not endpoints:
-                    continue
+            endpoints = []
+            if QgsPointXY(line[0]).distance(old_point) <= tolerance:
+                endpoints.append(0)
+            if QgsPointXY(line[-1]).distance(old_point) <= tolerance:
+                endpoints.append(len(line) - 1)
+            if not endpoints:
+                continue
             rb = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
             rb.setColor(QColor(255, 165, 0, 220))
             rb.setWidth(2)
@@ -377,8 +376,8 @@ class MoveTool(QgsMapTool):
             self._reproject_branchements(couches['branchement'], couches['conduite'])
             self._update_connected_lines(couches['branchement'], old_point, new_point)
         elif self._sel_role == 'tabouret':
-            self._translate_branchements(couches['branchement'], couches['conduite'],
-                                         old_point, new_point)
+            self._move_branchement_tabouret_end(couches['branchement'],
+                                                old_point, new_point)
 
         self._reset()
         self.canvas.refresh()
@@ -425,31 +424,43 @@ class MoveTool(QgsMapTool):
         self.canvas.refresh()
 
     @staticmethod
-    def _conduite_angle_at(geom, pt):
+    def _line_angle_at(geom, pt):
         """Valeur de LBL_ROT (degrés) pour aligner l'étiquette épinglée sur la
-        conduite au point pt.
+        ligne (conduite ou branchement) au point pt.
 
-        L'angle lisible de la conduite est normalisé dans [-90, 90], puis
-        décalé de -90° : le placement OverPoint de QGIS ajoute +90° à la
-        rotation data-defined (sinon le texte sort perpendiculaire à la
-        conduite). affiché = (angle-90) + 90 = angle."""
+        Convention : la rotation d'étiquette de QGIS est comptée en degrés
+        *horaires* (doc de QgsPalLayerSettings.angleOffset, que la propriété
+        data-defined LabelRotation surcharge en gardant la même convention),
+        alors que atan2 raisonne en anti-horaire. On renvoie donc l'opposé,
+        sinon le texte sort au symétrique de sa conduite — écart de 2 × angle,
+        d'où une étiquette « presque horizontale mais de travers » sur une
+        conduite peu inclinée.
+
+        L'angle est normalisé dans [-90, 90] pour que le texte reste lisible
+        de gauche à droite : une conduite tracée d'est en ouest donnerait
+        sinon une étiquette à l'envers."""
         try:
             if geom is None or geom.isEmpty():
-                return -90.0
+                return 0.0
             _, _, after, _ = geom.closestSegmentWithContext(pt)
             line = geom.asPolyline()
             if len(line) < 2:
-                return -90.0
+                # Géométrie multi-parties : asPolyline() renvoie une liste vide.
+                parts = geom.asMultiPolyline()
+                line = max(parts, key=len) if parts else []
+                if len(line) < 2:
+                    return 0.0
+                after = len(line) - 1
             i = max(1, min(after, len(line) - 1))
             p1, p2 = line[i - 1], line[i]
-            angle = math.degrees(math.atan2(p2.y() - p1.y(), p2.x() - p1.x()))
+            angle = -math.degrees(math.atan2(p2.y() - p1.y(), p2.x() - p1.x()))
             if angle > 90:
                 angle -= 180
             elif angle < -90:
                 angle += 180
-            return round(angle - 90, 2)
+            return round(angle, 2)
         except Exception:
-            return -90.0
+            return 0.0
 
     def _apply_label_move(self, new_point):
         lbl = self._sel_label
@@ -504,10 +515,15 @@ class MoveTool(QgsMapTool):
         layer.changeAttributeValue(lbl.featureId, idx_y, new_y)
         if idx_v >= 0:
             layer.changeAttributeValue(lbl.featureId, idx_v, None)
-        # Conduites : fige l'orientation = angle de la conduite au point d'origine
+        # Lignes (conduite, branchement) : fige l'orientation sur l'angle de
+        # la ligne au droit de l'étiquette. Recalculé à chaque déplacement,
+        # donc l'angle se remet d'aplomb tout seul si la géométrie a bougé
+        # entre-temps (déplacement d'un regard, recalage d'un piquage).
+        # Le segment de référence est cherché au droit du point de dépose et
+        # non de l'ancienne position : sur une conduite coudée, l'étiquette
+        # s'aligne sur le tronçon vers lequel on la déplace.
         if idx_r >= 0:
-            rot_deg = self._conduite_angle_at(
-                feat.geometry(), QgsPointXY(cur_cx, cur_cy))
+            rot_deg = self._line_angle_at(feat.geometry(), new_point)
             layer.changeAttributeValue(lbl.featureId, idx_r, rot_deg)
         layer.commitChanges()
         self._label_hidden = False
@@ -641,13 +657,23 @@ class MoveTool(QgsMapTool):
         else:
             line_layer.rollBack()
 
-    def _translate_branchements(self, branchement_layer, conduite_layer,
-                                 old_point, new_point):
-        """Translate tout le branchement connecté au tabouret (rigide),
-        puis re-projette le point de piquage sur la conduite la plus proche."""
+    def _move_branchement_tabouret_end(self, branchement_layer,
+                                       old_point, new_point):
+        """Fait suivre le tabouret par la seule extrémité aval du branchement.
+
+        Le premier sommet est le point de piquage sur la conduite : il
+        appartient à la conduite, pas au tabouret, et doit donc rester en
+        place. L'ancienne version translatait le branchement en bloc puis
+        re-projetait le piquage sur la conduite la plus proche — le piquage
+        glissait à chaque déplacement de tabouret, et pouvait même sauter
+        sur une autre conduite si elle passait plus près.
+
+        Les sommets intermédiaires restent eux aussi fixes : seul le dernier
+        segment s'allonge, comme lors du déplacement d'un sommet.
+        Corollaire : pk_debut, id_conduite et cote_piquage n'ont pas à être
+        recalculés, le piquage n'ayant pas bougé.
+        """
         tolerance = 0.05
-        dx = new_point.x() - old_point.x()
-        dy = new_point.y() - old_point.y()
 
         if not branchement_layer.isEditable():
             branchement_layer.startEditing()
@@ -659,20 +685,15 @@ class MoveTool(QgsMapTool):
             if geom.isEmpty():
                 continue
             line = geom.asPolyline()
+            if len(line) < 2:
+                continue
 
             # Le tabouret est l'extrémité finale du branchement
             if QgsPointXY(line[-1]).distance(old_point) > tolerance:
                 continue
 
-            # Translate tous les sommets
-            new_line = [QgsPointXY(p.x() + dx, p.y() + dy) for p in line]
-
-            # Re-projette le point de piquage (premier sommet) sur la conduite
-            _, best_proj, _ = nearest_line_feature_expanding(
-                conduite_layer, new_line[0])
-
-            if best_proj is not None:
-                new_line[0] = best_proj
+            new_line = [QgsPointXY(p) for p in line]
+            new_line[-1] = QgsPointXY(new_point)
 
             new_geom = QgsGeometry.fromPolylineXY(new_line)
             branchement_layer.changeGeometry(feat.id(), new_geom)

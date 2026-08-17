@@ -1,6 +1,6 @@
 # BET Humide — Plugin QGIS Reseau Assainissement
 
-**Version 1.3** — QGIS >= 3.28
+**Version 1.4** — QGIS >= 3.28
 
 Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees) et **EP** (Eaux Pluviales), avec continuite geometrique, recalage automatique des branchements et gestion des etiquettes.
 
@@ -26,7 +26,7 @@ V2024** (CNIG / ASTEE).
 | Outil | Description |
 |---|---|
 | **Renseigner** | Survol pour mettre en evidence un element (orange), clic pour ouvrir son formulaire d'attributs. Les champs numeriques (TN, FE, profondeur, diametre, longueur, pente, cote piquage) acceptent des **expressions additives** : ex. `1-0.25` -> `0.750`, `2+0.5-0.1` -> `2.400`. Pas de multiplication / division. Le champ recalcule TN / FE / P automatiquement quand l'un des trois est modifie. |
-| **Deplacer** | Deplace un ouvrage (regard ou tabouret) et recale automatiquement les conduites et branchements connectes. Permet aussi de deplacer une etiquette (regard / tabouret / conduite) sans toucher a l'ouvrage. Mode **piquage** : survol du point de piquage d'un branchement (surligne en orange) puis glisser-deposer pour repositionner le piquage le long de la conduite ; met a jour `id_conduite`, `pk_debut`, `cote_piquage` et recale la geometrie du branchement. |
+| **Deplacer** | Deplace un ouvrage (regard ou tabouret) et recale automatiquement les conduites et branchements connectes. Permet aussi de deplacer une etiquette (regard / tabouret / conduite / branchement) sans toucher a l'ouvrage. Mode **piquage** : survol du point de piquage d'un branchement (surligne en orange) puis glisser-deposer pour repositionner le piquage le long de la conduite ; met a jour `id_conduite`, `pk_debut`, `cote_piquage` et recale la geometrie du branchement. |
 | **Effacer** | Supprime un element et ses etiquettes associees. Lasso possible pour une selection multiple. |
 | **Copier les attributs** | Copie les attributs (diametre, materiau...) d'un element vers un ou plusieurs autres du meme type. |
 | **Tableau de saisie - pente** | Saisie groupee en tableau, par onglets **Regards / Tabourets / Conduites / Branchements**, avec calcul automatique de la pente ou de la cote fil d'eau selon le sens choisi. Apercu carte miniature de l'element selectionne, copier/coller depuis Excel, saisie multi-cellules, historique d'annulation (Ctrl+Z). Un onglet **Chaine** trace le profil simplifie entre deux regards choisis. Sur l'onglet Branchements, la **cote de piquage est interpolee sur la conduite mere** au PK du piquage : modifier un fil d'eau de la conduite met a jour en cascade tous les branchements qui y sont piques (cellule affichee en couleur « valeur derivee »). |
@@ -83,11 +83,99 @@ de piquage y devient une valeur calculee a partir de la pente.
 
 | Outil | Description |
 |---|---|
-| **Creer les etiquettes** | Configure le moteur d'etiquettes QGIS sur toutes les couches EU et EP. Regards / tabourets : fond rectangulaire blanc + cadre + ligne de rappel (callout). Conduites : moteur **regle** (rule-based labeling) avec deux regles : **Regle 1** (etiquette non deplacee, `lbl_x IS NULL`) placement curviligne automatique le long de la conduite ; **Regle 2** (etiquette deplacee / epinglee, `lbl_x IS NOT NULL`) placement au-dessus du point d'ancrage avec callout et orientation figee via le champ `lbl_rot`. Branchements : halo blanc 0.8 mm. |
+| **Creer les etiquettes** | Configure le moteur d'etiquettes QGIS sur toutes les couches EU et EP. Regards / tabourets : fond rectangulaire blanc + cadre, **decale du symbole** et relie a lui par un connecteur. Conduites **et branchements** : moteur **regle** (rule-based labeling) a deux regles — voir ci-dessous. |
 | **Afficher / Masquer** | Bascule la visibilite des etiquettes sans reconfigurer le moteur. |
-| **Taille des etiquettes** | Regle la taille des etiquettes (points ecran ou metres carte) sur toutes les couches. Memorise le dernier reglage (mode + valeur) et le restaure a l'ouverture du dialogue. |
-| **Forcer toutes les etiquettes visibles** | Active le decalage automatique pour qu'aucune etiquette ne soit supprimee par le moteur de placement. |
+| **Taille des etiquettes** | Regle la taille des etiquettes (points ecran ou metres carte) sur toutes les couches, et le **seuil de dezoom** au-dela duquel elles cessent d'etre calculees. Memorise le dernier reglage (mode + valeur) et le restaure a l'ouverture du dialogue. |
+| **Forcer toutes les etiquettes visibles** | Empeche le moteur de supprimer une etiquette qui en chevauche une autre : elle est decalee. Ne concerne **que les couches EU / EP**, pas les fonds de plan. |
 | **Gestion de l'affichage** | Dialogue pour activer/desactiver les etiquettes par reseau et par role, et choisir les champs affiches. |
+
+#### Placement et lisibilite
+
+**Deplacement.** Les quatre roles — regards, tabourets, conduites et
+branchements — portent `lbl_x` / `lbl_y` et se deplacent a la souris avec
+l'outil *Deplacer*. Les deux roles lineaires portent en plus `lbl_rot`, qui
+fige l'orientation de l'etiquette sur l'angle de la ligne au droit de son
+ancrage : une etiquette de conduite deplacee reste **parallele a sa
+conduite**. L'angle est recalcule a chaque deplacement, donc il se remet
+d'aplomb tout seul si la geometrie a bouge entre-temps, et il est normalise
+dans [-90, 90] pour que le texte se lise toujours de gauche a droite.
+
+Les lignes utilisent un etiquetage **a deux regles** :
+
+| Regle | Filtre | Placement |
+|---|---|---|
+| *auto* | `lbl_x IS NULL` | curviligne, sous la ligne, oriente selon la carte |
+| *epinglee* | `lbl_x IS NOT NULL` | ancre sur `lbl_x`/`lbl_y`, orientation figee par `lbl_rot`, ligne de rappel en tirets |
+
+**Priorites.** En cas de conflit, le moteur sacrifie d'abord ce qui se
+retrouve le plus facilement dans la table attributaire :
+
+| Role | Priorite |
+|---|---|
+| Regard | 10 |
+| Tabouret | 9 |
+| Conduite | 6 |
+| Branchement | 4 |
+
+**Obstacles.** Les regards et tabourets sont declares obstacles (facteur
+1,5) : une caracteristique de conduite ne vient plus se poser sur le symbole
+d'un ouvrage, qui reste le repere principal du plan. Les lignes ne sont
+volontairement pas des obstacles — une etiquette curviligne est *censee*
+reposer sur sa conduite.
+
+**Etiquettes d'ouvrage : decalage et connecteur.** Le pave d'un regard ou
+d'un tabouret n'est jamais pose sur son symbole — il masquerait l'ouvrage,
+qui est le repere principal du plan. Il est ecarte de **1,5 m en unites
+carte** (`LABEL_OFFSET_MAP_UNITS`), mesures du centre du symbole au bord du
+pave, et **toujours relie au symbole par un connecteur** gris continu.
+
+Le decalage est en unites carte comme les symboles eux-memes (regard :
+cercle de 1 m ; tabouret : carre de 0,4 m), donc le rapport visuel entre
+l'ouvrage et son etiquette ne bouge pas avec le zoom. 1,5 m degage le plus
+gros des deux symboles de 1 m et laisse au connecteur la place d'etre vu :
+a 1 m le pave venait toucher le symbole et le trait se reduisait a rien.
+Sur papier cela fait 6 mm au 1:250.
+
+Le connecteur des ouvrages a un seuil de declenchement **nul** : il est
+trace quel que soit le zoom, l'etiquette etant de toute facon toujours
+decalee.
+
+**Lignes de rappel des lignes.** Pour les conduites et branchements, le
+rappel n'apparait que si l'etiquette a ete deplacee d'au moins **1,5 mm
+papier** — inutile d'en tracer un sous une etiquette curviligne posee sur sa
+conduite. Le seuil est en millimetres et non en unites carte, pour se
+declencher a la meme distance visuelle a toutes les echelles : en unites
+carte, un seuil de 5 m se declenchait apres 5 mm au 1:1000 mais seulement
+apres 50 mm au 1:100.
+
+**Seuil de dezoom.** Les etiquettes cessent d'etre calculees une fois le
+texte devenu illisible. Le seuil par defaut n'est pas une constante : il est
+**deduit de la taille du texte** (`default_min_scale`), de facon a couper
+des que la hauteur passe sous **1,5 mm papier**. Pour un plan monte au
+1:250 (texte de 0,625 m en unites carte) cela donne 1:400 ; pour du 2 m,
+1:1350. En mode « points » le texte garde sa taille a l'ecran et ne devient
+jamais illisible : seul le plafond de performance de 1:2000 s'applique.
+
+Ce n'est pas un detail de confort. Mesure sur un reseau de 1200 regards,
+rendu 1200x800, seuil desactive :
+
+| Echelle | Texte | Etiquettes placees | Rendu |
+|---|---|---|---|
+| 1/250 | 2,50 mm | 292 | 155 ms |
+| 1/400 | 1,56 mm | 524 | 252 ms |
+| 1/500 | 1,25 mm | 1 280 | 611 ms |
+| 1/700 | 0,89 mm | 1 744 | 1 095 ms |
+| 1/1000 | 0,62 mm | 5 328 | 3 268 ms |
+| 1/2000 | 0,31 mm | 560 | 3 272 ms |
+
+Le cout est dans la *tentative* de placement, pas dans le resultat : au
+1:2000 le moteur passe plus de trois secondes pour n'afficher que 560
+etiquettes, le reste etant ecarte pour cause de collision. Avec le seuil
+deduit, tout ce qui depasse le 1:400 retombe a **6 a 16 ms**, sans rien
+changer a l'echelle de travail.
+
+Le seuil se regle (ou se desactive) dans le dialogue *Taille des
+etiquettes*, et suit le projet `.bet`.
 
 ### Annotations
 
@@ -101,6 +189,7 @@ de piquage y devient une valeur calculee a partir de la pente.
 
 | Outil | Description |
 |---|---|
+| **Creer un projet avec l'assistant** | Assistant en 4 etapes, navigables librement (Precedent / Suivant) : (1) recherche d'adresse **BAN** avec suggestions au fil de la frappe et mini-carte OSM pour situer et ajuster la position du projet ; (2) choix des fonds de plan a charger (OSM et Ortho coches par defaut, BAN / Noms de voie / PCI Bati / PCI Parcelles en option) ; (3) configuration rapide — reseau par defaut, cubature, remblai — en accordeons repliables, memes reglages que le dialogue *Configuration rapide* ; (4) recapitulatif puis creation : applique l'etendue choisie, charge les fonds de plan retenus et enregistre le projet. Accessible depuis le dialogue d'accueil (« Debuter avec l'assistant ») ou directement en tete du menu *Projet*. |
 | **Enregistrer** | Sauvegarde toutes les couches EU/EP dans une archive `.bet` (ZIP contenant un GeoPackage + metadonnees JSON). |
 | **Enregistrer sous** | Choisit un dossier et un nom, cree un fichier `.bet`. |
 | **Charger un projet** | Charge un fichier `.bet` (v2 ZIP ou v1 JSON legacy) et restaure les couches, etiquettes et visibilite. |
@@ -117,7 +206,8 @@ de piquage y devient une valeur calculee a partir de la pente.
 | **Mise en place fond de projet** | Charge les 6 fonds de carte (BAN, Noms de rue, PCI Bati, PCI Parcelles, OSM Desature, Ortho IGN) sur l'emprise courante et configure le projet (fond blanc, SCR). |
 | **BAN Adresses (vecteur)** | Charge les adresses de la BAN sur l'emprise courante. |
 | **Noms de rue BD TOPO** | Charge les voies nominees de la BD TOPO sur l'emprise courante. |
-| **PCI Vecteur – Parcelles & Bati** | Charge le cadastre vectoriel sur l'emprise courante. |
+| **PCI Vecteur Parcelles** | Charge les parcelles cadastrales (Parcellaire Express IGN) sur l'emprise courante. |
+| **PCI Vecteur Bati** | Charge les batiments (BD TOPO) sur l'emprise courante. |
 | **Ortho IGN (BD ORTHO nationale)** | Ajoute le flux d'orthophotographie BD ORTHO de l'IGN, disponible sur toute la France (remplace l'ancien fond regional CRAIG limite a un millesime). |
 | **OSM Desature** | Ajoute un fond OpenStreetMap desature. |
 
@@ -160,7 +250,7 @@ Le plugin gere 4 types de couches, declinees pour chaque reseau (`_EU` / `_EP`) 
 | `pente` | Double | Pente en % |
 | `lbl_x` | Double | X du point d'ancrage de l'etiquette (NULL = placement auto) |
 | `lbl_y` | Double | Y du point d'ancrage de l'etiquette (NULL = placement auto) |
-| `lbl_rot` | Double | Angle de l'etiquette epinglee en degres (suit l'angle de la conduite au point d'ancrage) |
+| `lbl_rot` | Double | Angle de l'etiquette epinglee en degres (suit l'angle de la ligne au point d'ancrage) |
 | `lbl_visible` | Int | Visibilite forcee de l'etiquette (0 = masquee) |
 
 ### Branchement *(LineString)*
@@ -174,6 +264,10 @@ Le plugin gere 4 types de couches, declinees pour chaque reseau (`_EU` / `_EP`) 
 | `longueur` | Double | Longueur en m |
 | `pente` | Double | Pente en % |
 | `sens` | String | Sens du branchement |
+| `lbl_x` | Double | X du point d'ancrage de l'etiquette (NULL = placement auto) |
+| `lbl_y` | Double | Y du point d'ancrage de l'etiquette (NULL = placement auto) |
+| `lbl_rot` | Double | Angle de l'etiquette epinglee en degres (suit l'angle de la ligne au point d'ancrage) |
+| `lbl_visible` | Int | Visibilite forcee de l'etiquette (0 = masquee) |
 
 ### Regard *(Point)*
 | Champ | Type | Description |
@@ -183,6 +277,9 @@ Le plugin gere 4 types de couches, declinees pour chaque reseau (`_EU` / `_EP`) 
 | `fe_radier` | Double | Fil d'eau radier en m NGF |
 | `diametre` | Double | Diametre en mm |
 | `profondeur` | Double | Profondeur en m |
+| `lbl_x` | Double | X du point d'ancrage de l'etiquette (NULL = placement auto) |
+| `lbl_y` | Double | Y du point d'ancrage de l'etiquette (NULL = placement auto) |
+| `lbl_visible` | Int | Visibilite forcee de l'etiquette (0 = masquee) |
 
 ### Tabouret *(Point)*
 | Champ | Type | Description |
@@ -192,6 +289,9 @@ Le plugin gere 4 types de couches, declinees pour chaque reseau (`_EU` / `_EP`) 
 | `fe_entree` | Double | Fil d'eau entree en m NGF |
 | `diametre` | Double | Diametre en mm |
 | `profondeur` | Double | Profondeur en m |
+| `lbl_x` | Double | X du point d'ancrage de l'etiquette (NULL = placement auto) |
+| `lbl_y` | Double | Y du point d'ancrage de l'etiquette (NULL = placement auto) |
+| `lbl_visible` | Int | Visibilite forcee de l'etiquette (0 = masquee) |
 
 ---
 
@@ -536,7 +636,10 @@ BET_HUMIDE/
 │   ├── tableau_saisie_dialog.py    # Tableau de saisie groupee (regards/tabourets/conduites/branchements)
 │   ├── chain_profile_widget.py     # Widget du profil simplifie pour l'onglet Chaine du tableau de saisie
 │   ├── export_dialog.py            # Dialogue d'export combine (plan PDF/DXF + profils)
-│   ├── welcome_dialog.py           # Dialogue d'accueil (nouveau / ouvrir / annuler)
+│   ├── welcome_dialog.py           # Dialogue d'accueil (assistant / ouvrir / annuler)
+│   ├── project_wizard_dialog.py    # Assistant de creation de projet (adresse, fonds de plan, config rapide, recap)
+│   ├── quick_config_widgets.py     # Widgets Reseau/Cubature/Remblai partages entre ConfigDialog et l'assistant
+│   ├── ban_search_widget.py        # Barre de recherche d'adresse BAN avec suggestions
 │   ├── star_dt_dialog.py           # Dialogue d'import GML Star-DT / StaR-Elec (multi-fichiers + drag & drop)
 │   ├── stareau_export_dialog.py    # Dialogue d'export StaR-Eau (5 onglets + controle)
 │   ├── about_dialog.py             # Dialogue « A propos » (lit metadata.txt)
@@ -570,6 +673,7 @@ BET_HUMIDE/
 │   ├── layer_keys.py               # Persistance des identifiants de couches dans le projet (.qgs)
 │   ├── spatial_utils.py            # Recherche spatiale indexee (point/ligne les plus proches), partagee
 │   ├── wfs_utils.py                 # Telechargement WFS mutualise en tache de fond (BAN/PCI/BD TOPO)
+│   ├── ban_search.py                # Recherche d'adresse BAN avec debounce (etape 1 de l'assistant)
 │   └── dxf_convert/                # Conversion DXF/DWG vers couches vectorielles
 │       ├── ui_dialog.py            # Dialogue principal
 │       ├── alg_cad_to_gis_convert.py
@@ -580,6 +684,26 @@ BET_HUMIDE/
 ---
 
 ## Changelog
+
+### 1.4
+
+- **Assistant de creation de projet**, en 4 etapes navigables librement :
+  recherche d'adresse BAN avec suggestions et mini-carte OSM pour situer le
+  projet, choix des fonds de plan a charger, configuration rapide (reseau
+  par defaut / cubature / remblai) en accordeons, recapitulatif avant
+  creation. Accessible depuis le dialogue d'accueil (« Debuter avec
+  l'assistant ») ou directement en tete du menu *Projet*.
+- Les widgets de configuration rapide sont extraits (`quick_config_widgets.py`)
+  et partages entre le dialogue *Configuration rapide* et l'assistant — memes
+  reglages `QgsSettings` des deux cotes.
+- **PCI Vecteur** : le service cadastral des parcelles (`BDPARCELLAIRE-VECTEUR`,
+  obsolete, trous de couverture) est remplace par le **Parcellaire Express**
+  IGN, actuel et complet. Actions *PCI Vecteur Parcelles* et *PCI Vecteur
+  Bati* separees dans le menu *Fond de carte*.
+- Les couches de fond WFS rechargees (PCI, BAN, Noms de voie) mettent a jour
+  la couche existante en place (nouvelle source de donnees) au lieu
+  d'empiler des doublons a chaque clic, en conservant sa position dans le
+  gestionnaire de couches.
 
 ### 1.3
 

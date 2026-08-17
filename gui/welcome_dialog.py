@@ -37,7 +37,7 @@ class WelcomeDialog(QDialog):
         sep.setFrameShadow(QFrame.Sunken)
         layout.addWidget(sep)
 
-        btn_new = QPushButton("Nouveau projet")
+        btn_new = QPushButton("Débuter avec l'assistant")
         btn_new.setMinimumHeight(38)
         btn_new.setDefault(True)
         btn_new.clicked.connect(lambda: self._pick(self.NEW))

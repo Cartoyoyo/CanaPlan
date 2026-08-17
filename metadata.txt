@@ -1,7 +1,7 @@
 [general]
 name=BET Humide – Réseau Assainissement
 description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE).
-version=1.3
+version=1.4
 qgisMinimumVersion=3.28
 author=Yoan Laloux
 email=yoan.laloux@laposte.net
@@ -13,9 +13,23 @@ tags=assainissement,réseau,EU,EP,profil en long,cubature,DXF,BET,StaR-Eau,GeoPa
 experimental=False
 deprecated=False
 
-about=Plugin de dessin de réseaux d'assainissement avec continuité topologique, recalage automatique des branchements et validation à l'enregistrement. Outils d'analyse : profils en long (EU/EP/groupé), cubatures et remblais de tranchées, coupes transversales, impression PDF multi-feuilles orientables avec plan d'ensemble, export DXF 2018 fidèle, export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE), import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond.
+about=Plugin de dessin de réseaux d'assainissement avec continuité topologique, recalage automatique des branchements et validation à l'enregistrement. Assistant de création de projet en 4 étapes (recherche d'adresse BAN, fonds de plan, configuration rapide, récapitulatif). Outils d'analyse : profils en long (EU/EP/groupé), cubatures et remblais de tranchées, coupes transversales, impression PDF multi-feuilles orientables avec plan d'ensemble, export DXF 2018 fidèle, export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE), import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond.
 
 changelog=
+    1.4  Nouvel assistant de création de projet (4 étapes navigables librement) :
+         recherche d'adresse BAN avec suggestions et mini-carte OSM pour
+         situer le projet, choix des fonds de plan à charger, configuration
+         rapide (réseau par défaut / cubature / remblai) en accordéons,
+         récapitulatif avant création. Accessible depuis le dialogue
+         d'accueil (« Débuter avec l'assistant ») ou directement depuis le
+         menu Projet. Widgets de configuration rapide extraits pour être
+         partagés entre l'assistant et le dialogue Configuration existant.
+         PCI Vecteur : le service cadastral utilisé pour les parcelles
+         (obsolète, trous de couverture) est remplacé par le Parcellaire
+         Express IGN, actuel et complet. Actions Bâti et Parcelles séparées
+         dans le menu Fond de carte. Les couches de fond WFS rechargées
+         (PCI, BAN, noms de voie) mettent à jour la couche existante en
+         place au lieu d'empiler des doublons à chaque clic.
     1.3  Export StaR-Eau (CNIG/ASTEE V2024) : génération d'un GeoPackage conforme
          au géostandard des réseaux d'eau et d'assainissement, avec les cinq
          couches ass_canalisation, ass_regard, ass_canalisation_branchement,

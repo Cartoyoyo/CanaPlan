@@ -3,6 +3,7 @@
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGroupBox, QRadioButton,
     QSpinBox, QComboBox, QLabel, QDialogButtonBox, QFormLayout, QWidget,
+    QCheckBox,
 )
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QFont
@@ -23,12 +24,14 @@ _SCALES = [
 
 class EtiquetteTailleDialog(QDialog):
 
-    def __init__(self, init_mode='map_units', init_value=None, parent=None):
+    def __init__(self, init_mode='map_units', init_value=None,
+                 init_min_scale=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Taille des étiquettes")
-        self.setMinimumWidth(340)
-        self._init_mode  = init_mode
-        self._init_value = init_value
+        self.setMinimumWidth(360)
+        self._init_mode      = init_mode
+        self._init_value     = init_value
+        self._init_min_scale = init_min_scale
         self._build_ui()
 
     def _build_ui(self):
@@ -106,6 +109,31 @@ class EtiquetteTailleDialog(QDialog):
         form_sc.addRow(note_sc)
         layout.addWidget(grp_sc)
 
+        # ── Seuil de dézoom ───────────────────────────────────────────────
+        grp_min = QGroupBox("Seuil d'affichage")
+        form_min = QFormLayout(grp_min)
+
+        self.chk_min = QCheckBox("Masquer les étiquettes au-delà de")
+        self.spin_min = QSpinBox()
+        self.spin_min.setRange(100, 1000000)
+        self.spin_min.setSingleStep(500)
+        self.spin_min.setPrefix("1 / ")
+        self.spin_min.setGroupSeparatorShown(True)
+
+        row_min = QHBoxLayout()
+        row_min.addWidget(self.chk_min)
+        row_min.addStretch()
+        row_min.addWidget(self.spin_min)
+        form_min.addRow(row_min)
+
+        note_min = QLabel(
+            "<i>En dézoomant au-delà de ce seuil, le texte est de toute façon "
+            "illisible mais reste calculé par le moteur de placement. Le "
+            "masquer allège l'affichage sur les gros réseaux.</i>")
+        note_min.setWordWrap(True)
+        form_min.addRow(note_min)
+        layout.addWidget(grp_min)
+
         # ── Boutons ───────────────────────────────────────────────────────
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self.accept)
@@ -116,6 +144,7 @@ class EtiquetteTailleDialog(QDialog):
         self.radio_pt.toggled.connect(self._on_mode_changed)
         self.combo_sc.currentIndexChanged.connect(self._on_scale_combo_changed)
         self._custom_spin.valueChanged.connect(self._update_map_units_label)
+        self.chk_min.toggled.connect(self.spin_min.setEnabled)
 
         # État initial : restaure le dernier choix utilisateur
         if self._init_mode == 'points':
@@ -124,6 +153,14 @@ class EtiquetteTailleDialog(QDialog):
             self.radio_sc.setChecked(True)
             if self._init_value is not None:
                 self._restore_scale_combo(self._init_value)
+
+        # 0 ou None = aucun seuil actif ; on garde une valeur plausible dans
+        # le spin pour que cocher la case n'impose pas de la ressaisir.
+        active = bool(self._init_min_scale)
+        self.chk_min.setChecked(active)
+        self.spin_min.setValue(int(self._init_min_scale) if active else 2000)
+        self.spin_min.setEnabled(active)
+
         self._on_mode_changed()
         self._update_map_units_label()
 
@@ -173,10 +210,12 @@ class EtiquetteTailleDialog(QDialog):
     # ------------------------------------------------------------------ résultat
 
     def get_result(self):
-        """Retourne (mode, value) :
+        """Retourne (mode, value, min_scale) :
         - mode='points'     → value = taille en points (int)
         - mode='map_units'  → value = taille en mètres (float)
+        - min_scale         → dénominateur du seuil de dézoom, 0 si désactivé
         """
+        min_scale = self.spin_min.value() if self.chk_min.isChecked() else 0
         if self.radio_pt.isChecked():
-            return ('points', self.spin_pt.value())
-        return ('map_units', self._current_map_units())
+            return ('points', self.spin_pt.value(), min_scale)
+        return ('map_units', self._current_map_units(), min_scale)

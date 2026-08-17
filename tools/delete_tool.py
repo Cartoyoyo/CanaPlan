@@ -212,7 +212,7 @@ class DeleteTool(QgsMapTool):
             return None
         layers_by_id = {}
         for couches in self.couches.values():
-            for role in ('regard', 'tabouret', 'conduite'):
+            for role in ('regard', 'tabouret', 'conduite', 'branchement'):
                 lyr = couches.get(role)
                 if _ok(lyr):
                     layers_by_id[lyr.id()] = lyr

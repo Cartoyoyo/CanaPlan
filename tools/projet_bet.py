@@ -58,7 +58,13 @@ def _read_label_size(project, s):
                 continue
         unit = ('points' if fmt.sizeUnit() == QgsUnitTypes.RenderPoints
                 else 'map_units')
-        return {'unit': unit, 'value': fmt.size()}
+        # Seuil de dézoom : lu sur les mêmes settings (0 = pas de seuil).
+        try:
+            pal = labeling.settings()
+        except AttributeError:
+            pal = labeling.rootRule().children()[0].settings()
+        min_scale = int(pal.minimumScale) if pal.scaleVisibility else 0
+        return {'unit': unit, 'value': fmt.size(), 'min_scale': min_scale}
     return None
 
 
@@ -330,7 +336,8 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
     # Réapplique taille, champs et visibilité sur les couches rechargées
     full_prefs = prefs_from_dict(label_display_prefs) if label_display_prefs else None
     if label_size:
-        apply_label_size_all(plugin, label_size['unit'], label_size['value'])
+        apply_label_size_all(plugin, label_size['unit'], label_size['value'],
+                             label_size.get('min_scale'))
     if full_prefs:
         apply_label_display_prefs(plugin, full_prefs['visibility'])
         if full_prefs.get('fields'):
@@ -472,8 +479,12 @@ def load_projet(plugin, iface):
                                        apply_label_display_prefs, apply_label_fields)
         from ..gui.etiquette_affichage_dialog import prefs_from_dict
         if label_size:
-            apply_label_size_all(plugin, label_size['unit'], label_size['value'])
-        set_force_all_labels(force_all_labels)
+            apply_label_size_all(plugin, label_size['unit'], label_size['value'],
+                                 label_size.get('min_scale'))
+        # Le forçage doit passer APRES apply_label_size_all, qui reconstruit
+        # les étiquetages : sinon displayAll serait écrasé par la valeur par
+        # défaut de la reconstruction.
+        set_force_all_labels(force_all_labels, plugin=plugin)
         if label_display_prefs:
             full = prefs_from_dict(label_display_prefs)
             plugin._label_display_prefs = full

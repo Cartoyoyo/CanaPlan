@@ -194,6 +194,7 @@ class ReseauAssainissementPlugin(QObject):
             checkable=True
         )
         for key, label, cb in [
+            ('nouveau_projet_assistant', "Créer un projet avec l'assistant", self.run_nouveau_projet_assistant),
             ('fond_projet',            'Mise en place fond de projet',  self.run_fond_projet),
             ('enregistrer_projet_sous','Enregistrer sous',              self.run_enregistrer_projet_sous),
             ('ban_vecteur',            'BAN Adresses',        self.run_ban_vecteur),
@@ -202,10 +203,16 @@ class ReseauAssainissementPlugin(QObject):
             self.action_dict[key] = self._add_action(
                 "config.svg", label, cb, checkable=False)
 
-        self.action_dict['pci_emprise'] = self._add_action(
+        self.action_dict['pci_parcelles'] = self._add_action(
             "config.svg",
-            "PCI Vecteur – Parcelles & Bâti (emprise)",
-            self.run_pci_emprise,
+            "PCI Vecteur Parcelles",
+            self.run_pci_parcelles,
+            checkable=False
+        )
+        self.action_dict['pci_bati'] = self._add_action(
+            "config.svg",
+            "PCI Vecteur Bâti",
+            self.run_pci_bati,
             checkable=False
         )
         self.action_dict['ortho_ign'] = self._add_action(
@@ -287,13 +294,13 @@ class ReseauAssainissementPlugin(QObject):
         self.menu.addSeparator()
 
         menu_groups = [
-            ("Projet", ['enregistrer_projet', 'enregistrer_projet_sous', 'charger_projet', 'import_dxf', 'import_star_dt']),
+            ("Projet", ['nouveau_projet_assistant', 'enregistrer_projet', 'enregistrer_projet_sous', 'charger_projet', 'import_dxf', 'import_star_dt']),
             ("Général", ['renseignement', 'tableau_saisie', 'insert_regard', 'move', 'copy_attributes', 'delete', 'config']),
             ("EU – Eaux Usées", ['conduite_eu', 'branchement_eu', 'profil_eu', 'coupe_eu', 'renommer_eu']),
             ("EP – Eaux Pluviales", ['conduite_ep', 'branchement_ep', 'profil_ep', 'coupe_ep', 'renommer_ep']),
             ("Étiquettes", ['creer_etiquettes', 'afficher_etiquettes', 'taille_etiquettes', 'forcer_etiquettes', 'affichage_etiquettes', 'annotation']),
             ("Sorties & Impression", ['imprimer', 'profil_groupe', 'coupe_transversale', 'cubature', 'coupe_tranchee_composee', 'export_stareau']),
-            ("Fond de carte", ['fond_projet', 'osm_desature', 'ortho_ign', 'pci_emprise', 'ban_vecteur', 'nom_voie']),
+            ("Fond de carte", ['fond_projet', 'osm_desature', 'ortho_ign', 'pci_parcelles', 'pci_bati', 'ban_vecteur', 'nom_voie']),
         ]
         self.submenus = []
         for title, keys in menu_groups:
@@ -448,8 +455,7 @@ class ReseauAssainissementPlugin(QObject):
         dlg.exec_()
         choice = dlg.chosen()
         if choice == WelcomeDialog.NEW:
-            from .tools.projet_bet import save_projet_sous
-            save_projet_sous(self, self.iface)
+            self.run_nouveau_projet_assistant()
         elif choice == WelcomeDialog.OPEN:
             from .tools.projet_bet import load_projet
             load_projet(self, self.iface)
@@ -763,7 +769,7 @@ class ReseauAssainissementPlugin(QObject):
 
     def creer_etiquettes(self):
         """Configure le moteur d'étiquettes sur toutes les couches."""
-        from .gui.etiquettes import apply_etiquettes, apply_label_size_all, get_force_all_labels
+        from .gui.etiquettes import apply_etiquettes, apply_label_size_all
         from .tools.calc_pentes import recalc_pentes
         from .tools.projet_bet import _read_label_size
         from qgis.PyQt.QtCore import QSettings
@@ -780,9 +786,10 @@ class ReseauAssainissementPlugin(QObject):
                 self._apply_style(couches[role], role, reseau)
                 apply_etiquettes(couches[role], role, reseau)
 
-        # Réapplique la taille mémorisée
+        # Réapplique la taille mémorisée (et le seuil de dézoom qui va avec)
         if label_size:
-            apply_label_size_all(self, label_size['unit'], label_size['value'])
+            apply_label_size_all(self, label_size['unit'], label_size['value'],
+                                 label_size.get('min_scale'))
 
         # Réapplique la gestion d'affichage (visibilité + champs)
         from .gui.etiquettes import apply_label_display_prefs, apply_label_fields
@@ -832,12 +839,16 @@ class ReseauAssainissementPlugin(QObject):
 
     def run_forcer_etiquettes(self, checked):
         from .gui.etiquettes import set_force_all_labels
-        set_force_all_labels(checked, self.iface.mapCanvas())
+        # plugin= : le forçage est posé couche par couche sur les seules
+        # couches EU/EP, et non sur le moteur d'étiquettes du projet — sinon
+        # les fonds BAN, noms de rue et PCI sont forcés eux aussi.
+        set_force_all_labels(checked, self.iface.mapCanvas(), plugin=self)
 
     def run_taille_etiquettes(self):
         from .gui.etiquette_taille_dialog import EtiquetteTailleDialog
         from .gui.etiquettes import apply_label_size_all
         from qgis.PyQt.QtCore import QSettings
+        from .gui.etiquettes import get_label_min_scale
         s          = QSettings()
         last_mode  = s.value("BET_HUMIDE/label_size_mode",  "map_units")
         last_value = s.value("BET_HUMIDE/label_size_value", None)
@@ -846,14 +857,17 @@ class ReseauAssainissementPlugin(QObject):
                 last_value = float(last_value)
             except (ValueError, TypeError):
                 last_value = None
-        dlg = EtiquetteTailleDialog(last_mode, last_value,
+        # Le seuil est lu sur les couches, pas dans QSettings : c'est une
+        # propriété du projet ouvert, pas une préférence utilisateur.
+        last_scale = get_label_min_scale(self)
+        dlg = EtiquetteTailleDialog(last_mode, last_value, last_scale,
                                     parent=self.iface.mainWindow())
         if dlg.exec_() != EtiquetteTailleDialog.Accepted:
             return
-        mode, value = dlg.get_result()
+        mode, value, min_scale = dlg.get_result()
         s.setValue("BET_HUMIDE/label_size_mode",  mode)
         s.setValue("BET_HUMIDE/label_size_value", value)
-        apply_label_size_all(self, mode, value)
+        apply_label_size_all(self, mode, value, min_scale)
 
     def toggle_affichage_etiquettes(self, checked):
         """Affiche ou masque les etiquettes ; recalcule les pentes dans tous les cas."""
@@ -869,9 +883,21 @@ class ReseauAssainissementPlugin(QObject):
                 layer.setLabelsEnabled(checked)
                 layer.triggerRepaint()
 
-    def run_fond_projet(self):
+    def run_fond_projet(self, options=None):
+        """Ajoute le fond de projet (OSM, Ortho, BAN, Noms de rue, PCI).
+
+        :param options: dict optionnel {'osm', 'ortho', 'ban', 'noms_voie',
+            'pci_bati', 'pci_parcelles'} -> bool. Une clé absente vaut True
+            (comportement historique du bouton toolbar : tout est chargé).
+            Utilisé par l'assistant de création de projet pour ne charger
+            qu'un sous-ensemble choisi par l'utilisateur.
+        """
         from qgis.core import QgsRasterLayer, QgsLayerTreeLayer
         from qgis.PyQt.QtGui import QColor
+
+        opt = options or {}
+        def _wanted(key):
+            return opt.get(key, True)
 
         project   = QgsProject.instance()
         tree_root = project.layerTreeRoot()
@@ -895,7 +921,7 @@ class ReseauAssainissementPlugin(QObject):
         canvas.freeze(True)
         try:
             osm_name = "OSM Desature"
-            if osm_name not in existing:
+            if _wanted('osm') and osm_name not in existing:
                 lyr = QgsRasterLayer(
                     "crs=EPSG:2154&featureCount=10&format=image/png"
                     "&layers=faded&maxHeight=256&maxWidth=256"
@@ -908,7 +934,7 @@ class ReseauAssainissementPlugin(QObject):
                     add_bottom(lyr)
 
             ortho_name = "Ortho IGN (BD ORTHO nationale)"
-            if ortho_name not in existing:
+            if _wanted('ortho') and ortho_name not in existing:
                 lyr = QgsRasterLayer(
                     "crs=EPSG:2154&featureCount=10&format=image/jpeg"
                     "&layers=ORTHOIMAGERY.ORTHOPHOTOS&maxHeight=256&maxWidth=256"
@@ -929,19 +955,19 @@ class ReseauAssainissementPlugin(QObject):
                         or p.get('nom_voie_ban_droite'))
 
         requests = []
-        if "BAN Adresses" not in existing:
+        if _wanted('ban') and "BAN Adresses" not in existing:
             requests.append({'typename': "BAN.DATA.GOUV:ban",
                              'name': "BAN Adresses", 'prefix': 'bet_fdp_'})
-        if "Noms de rue BD TOPO" not in existing:
+        if _wanted('noms_voie') and "Noms de rue BD TOPO" not in existing:
             requests.append({'typename': "BDTOPO_V3:troncon_de_route",
                              'name': "Noms de rue BD TOPO",
                              'prefix': 'bet_fdp_', 'filter': _has_nom})
-        if "PCI - Bati" not in existing:
+        if _wanted('pci_bati') and "PCI - Bati" not in existing:
             requests.append({'typename': "BDTOPO_V3:batiment",
                              'name': "PCI - Bati", 'prefix': 'bet_fdp_'})
-        if "PCI - Parcelles" not in existing:
+        if _wanted('pci_parcelles') and "PCI - Parcelles" not in existing:
             requests.append({
-                'typename': "BDPARCELLAIRE-VECTEUR_WLD_BDD_WGS84G:parcelle",
+                'typename': "CADASTRALPARCELS.PARCELLAIRE_EXPRESS:parcelle",
                 'name': "PCI - Parcelles", 'prefix': 'bet_fdp_'})
 
         canvas.setExtent(saved_extent)
@@ -978,13 +1004,19 @@ class ReseauAssainissementPlugin(QObject):
                              insert_cb=insert_above_rasters,
                              restore_extent=(canvas, saved_extent))
 
-    def run_pci_emprise(self):
+    def run_pci_bati(self):
         canvas = self.iface.mapCanvas()
-        self._load_wfs_async("PCI Vecteur", [
-            {'typename': "BDPARCELLAIRE-VECTEUR_WLD_BDD_WGS84G:parcelle",
-             'name': "PCI - Parcelles", 'prefix': 'bet_pci_'},
+        self._load_wfs_async("PCI - Bâti", [
             {'typename': "BDTOPO_V3:batiment",
              'name': "PCI - Bati", 'prefix': 'bet_pci_'},
+        ], style_cb=self._style_pci_layer,
+           restore_extent=(canvas, canvas.extent()))
+
+    def run_pci_parcelles(self):
+        canvas = self.iface.mapCanvas()
+        self._load_wfs_async("PCI - Parcelles", [
+            {'typename': "CADASTRALPARCELS.PARCELLAIRE_EXPRESS:parcelle",
+             'name': "PCI - Parcelles", 'prefix': 'bet_pci_'},
         ], style_cb=self._style_pci_layer,
            restore_extent=(canvas, canvas.extent()))
 
@@ -1007,10 +1039,12 @@ class ReseauAssainissementPlugin(QObject):
         :param restore_extent: (canvas, extent) pour reverrouiller l'étendue
                           de la carte après ajout des couches
         """
-        from qgis.core import QgsVectorLayer, QgsLayerTreeLayer
+        from qgis.core import QgsVectorLayer, QgsLayerTreeLayer, QgsMessageLog, Qgis
         from .tools.wfs_utils import current_bbox_l93, fetch_wfs_async
 
         bbox = current_bbox_l93(self.iface.mapCanvas())
+        QgsMessageLog.logMessage(
+            f"{title} : bbox envoyée = {bbox}", "BET_HUMIDE", Qgis.Info)
         for req in requests:
             req['bbox'] = bbox
 
@@ -1028,15 +1062,29 @@ class ReseauAssainissementPlugin(QObject):
                     if not res['path']:
                         msgs.append(f"{res['name']} : 0 objet dans l'emprise")
                         continue
-                    layer = QgsVectorLayer(res['path'], res['name'], "ogr")
-                    if not layer.isValid():
-                        msgs.append(f"{res['name']} : couche invalide")
-                        continue
-                    if insert_cb is not None:
-                        insert_cb(layer)
+                    # Une couche déjà chargée sous le même nom est mise à
+                    # jour sur place (nouvelle source de données) plutôt que
+                    # remplacée : elle garde sa position dans le
+                    # gestionnaire de couches, son id et son style.
+                    existing = next(
+                        (l for l in project.mapLayers().values()
+                         if l.name() == res['name']), None)
+                    if existing is not None:
+                        existing.setDataSource(res['path'], res['name'], "ogr")
+                        if not existing.isValid():
+                            msgs.append(f"{res['name']} : couche invalide")
+                            continue
+                        layer = existing
                     else:
-                        project.addMapLayer(layer, False)
-                        tree_root.insertChildNode(-1, QgsLayerTreeLayer(layer))
+                        layer = QgsVectorLayer(res['path'], res['name'], "ogr")
+                        if not layer.isValid():
+                            msgs.append(f"{res['name']} : couche invalide")
+                            continue
+                        if insert_cb is not None:
+                            insert_cb(layer)
+                        else:
+                            project.addMapLayer(layer, False)
+                            tree_root.insertChildNode(-1, QgsLayerTreeLayer(layer))
                     if style_cb is not None:
                         try:
                             style_cb(layer, res['name'])
@@ -1272,6 +1320,11 @@ class ReseauAssainissementPlugin(QObject):
                                 f"Impossible de charger la couche WMS :\n{name}")
             return
         self._add_raster_bottom_keep_extent(layer)
+
+    def run_nouveau_projet_assistant(self):
+        from .gui.project_wizard_dialog import ProjectWizardDialog
+        wizard = ProjectWizardDialog(self, self.iface)
+        wizard.exec_()
 
     def run_enregistrer_projet(self):
         from .tools.projet_bet import save_projet

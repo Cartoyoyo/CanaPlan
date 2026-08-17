@@ -59,6 +59,7 @@ class SidePanel(QDockWidget):
         self._item(folder_etiquettes, icon_dir, "etiquettes.svg",        "Placer une annotation texte",            "annotation")
 
         folder_projet = self._folder("Projet")
+        self._item(folder_projet, icon_dir, "config.svg", "Créer un projet avec l'assistant", "nouveau_projet_assistant")
         self._item(folder_projet, icon_dir, "config.svg", "Enregistrer",                  "enregistrer_projet")
         self._item(folder_projet, icon_dir, "config.svg", "Enregistrer sous",             "enregistrer_projet_sous")
         self._item(folder_projet, icon_dir, "config.svg", "Charger un projet",            "charger_projet")
@@ -87,7 +88,9 @@ class SidePanel(QDockWidget):
         self._item(folder_fdc, icon_dir, "config.svg",
                    "Ortho IGN (BD ORTHO nationale)", "ortho_ign")
         self._item(folder_fdc, icon_dir, "config.svg",
-                   "PCI Vecteur – Parcelles & Bâti (emprise)", "pci_emprise")
+                   "PCI Vecteur Parcelles", "pci_parcelles")
+        self._item(folder_fdc, icon_dir, "config.svg",
+                   "PCI Vecteur Bâti", "pci_bati")
         self._item(folder_fdc, icon_dir, "config.svg",
                    "BAN Adresses – vecteur (emprise)", "ban_vecteur")
         self._item(folder_fdc, icon_dir, "config.svg",

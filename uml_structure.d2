@@ -1,0 +1,1754 @@
+# ═══════════════════════════════════════════════════════════════════════
+#  BET Humide — Diagramme structurel (v1.4)
+#  Source de reference, en remplacement de l ancien uml_structure.puml.
+#
+#  Rendu :   d2 uml_structure.d2 uml_structure.svg
+#  Watch  :  d2 --watch uml_structure.d2
+#  Requiert D2 >= 0.6.3 (mot-cle « classes » applique aux connexions).
+#
+#  Conventions, a respecter en editant :
+#   - un conteneur par package Python. L imbrication reelle est conservee :
+#     bet > gui, bet > tools > dxf_convert. Les connexions utilisent donc
+#     le chemin complet (bet.tools.MoveTool).
+#   - "── Section ──" : rubrique interne d une classe, rendue comme une
+#     ligne de membre sans type (equivalent du separateur PlantUML).
+#   - "[static]" suffixe un membre statique.
+#   - les commentaires # portent les notes de conception, invisibles au
+#     rendu. Pour en afficher une, ajouter une forme texte et la relier.
+#   - visibilite en prefixe de cle : + public, - prive, # protege.
+# ═══════════════════════════════════════════════════════════════════════
+
+direction: right
+
+classes: {
+  inherit: {
+    style.stroke: "#333333"
+    target-arrowhead: {shape: triangle; style.filled: false}
+  }
+  compose: {
+    style.stroke: "#333333"
+    source-arrowhead: {shape: diamond; style.filled: true}
+  }
+  aggregate: {
+    style.stroke: "#333333"
+    source-arrowhead: {shape: diamond; style.filled: false}
+  }
+  assoc: {
+    style.stroke: "#333333"
+    target-arrowhead: {shape: arrow}
+  }
+  depend: {
+    style.stroke: "#777777"
+    style.stroke-dash: 3
+    target-arrowhead: {shape: arrow}
+  }
+  module: {
+    style.fill: "#FFF6E5"
+    style.stroke: "#C89A3C"
+  }
+  external: {
+    style.fill: "#EEF0EE"
+    style.stroke: "#7A8A7A"
+    style.italic: true
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+#  Classes externes (Qt / QGIS) — racines d heritage uniquement
+# ─────────────────────────────────────────────────────────────────────────
+qgis_api: "QGIS API" {
+  style.fill: "#EEF0EE"
+  style.stroke: "#8888AA"
+
+  QObject: "QObject «PyQt»" {shape: class; class: external}
+  QDockWidget: "QDockWidget «PyQt»" {shape: class; class: external}
+  QDialog: "QDialog «PyQt»" {shape: class; class: external}
+  QLineEdit: "QLineEdit «PyQt»" {shape: class; class: external}
+  QWidget: "QWidget «PyQt»" {shape: class; class: external}
+  QgsMapTool: "QgsMapTool «QGIS, abstract»" {shape: class; class: external}
+  QgsMapToolEmitPoint: "QgsMapToolEmitPoint «QGIS, abstract»" {shape: class; class: external}
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+#  Plugin
+# ─────────────────────────────────────────────────────────────────────────
+bet: "BET_HUMIDE" {
+  style.fill: "#F0F4FF"
+  style.stroke: "#8888AA"
+
+  ReseauAssainissementPlugin: {
+    shape: class
+
+    "-iface": "QgisInterface"
+    "-toolbar": "QToolBar"
+    "-menu": "QMenu"
+    "-action_dict": "dict[str, QAction]"
+    "-tool_group": "QActionGroup"
+    "-tools": "dict[str, QgsMapTool]"
+    "-side_panel": "SidePanel"
+
+    "── Constantes ──": ""
+    "+LAYER_DEFINITIONS": "dict"
+    "+COLORS": "dict"
+
+    "── Cycle de vie ──": ""
+    "+initGui()": ""
+    "+unload()": ""
+
+    "── Outils de dessin ──": ""
+    "+run_conduite_eu(checked)": ""
+    "+run_conduite_ep(checked)": ""
+    "+run_branchement_eu(checked)": ""
+    "+run_branchement_ep(checked)": ""
+    "+run_insert_regard(checked)": ""
+
+    "── Edition ──": ""
+    "+run_renseignement(checked)": ""
+    "+run_delete(checked)": ""
+    "+run_move(checked)": ""
+    "+run_copy_attributes(checked)": ""
+
+    "── Analyse ──": ""
+    "+run_profil_eu(checked)": ""
+    "+run_profil_ep(checked)": ""
+    "+run_profil_groupe(checked)": ""
+    "+run_cubature(checked)": ""
+    "+run_coupe_transversale(checked)": ""
+    "+run_coupe_eu(checked)": ""
+    "+run_coupe_ep(checked)": ""
+    "+run_coupe_tranchee_composee()": ""
+
+    "── Renumerotation ──": ""
+    "+run_renommer_eu(checked)": ""
+    "+run_renommer_ep(checked)": ""
+
+    "── Etiquettes / Annotations ──": ""
+    "+creer_etiquettes()": ""
+    "+toggle_affichage_etiquettes(checked)": ""
+    "+run_taille_etiquettes()": ""
+    "+run_forcer_etiquettes(checked)": ""
+    "+run_affichage_etiquettes()": ""
+    "+run_annotation(checked)": ""
+
+    "── Gestion de projet ──": ""
+    "+run_nouveau_projet_assistant()": ""
+    "+run_fond_projet(options)": ""
+    "+run_enregistrer_projet()": ""
+    "+run_enregistrer_projet_sous()": ""
+    "+run_charger_projet()": ""
+    "+run_imprimer()": ""
+    "+run_export()": ""
+    "+run_import_dxf()": ""
+    "+run_import_star_dt()": ""
+
+    "── Export StaR-Eau ──": ""
+    "+run_export_stareau()": ""
+    "-_stareau_dlg": "StarEauExportDialog"
+    "-_do_export_stareau()": ""
+
+    "── Aide ──": ""
+    "+show_about_dialog()": ""
+
+    "── Fonds de plan ──": ""
+    "+run_ban_vecteur()": ""
+    "+run_nom_voie()": ""
+    "+run_pci_parcelles()": ""
+    "+run_pci_bati()": ""
+    "+run_ortho_2022()": ""
+    "+run_osm_desature()": ""
+
+    "── Configuration ──": ""
+    "+show_config_dialog()": ""
+
+    # Note menu : le menu Extensions > BET Humide est construit en
+    # sous-menus (menu_groups) reprenant exactement les categories du
+    # SidePanel. En tete : toggleViewAction() de la toolbar (etat
+    # synchronise par Qt). En pied : l action "A propos" (hors toolbar).
+
+    "── Privees ──": ""
+    "-_get_couches(reseau)": "dict"
+    "-_get_or_create_group(reseau)": ""
+    "-_create_layer(role, reseau)": "QgsVectorLayer"
+    "-_apply_style(layer, role, reseau)": ""
+    "-_ensure_fields(layer, role)": ""
+    "-_activate_tool(key, tool)": ""
+    "-_deactivate_current()": ""
+    "-_cleanup_tools()": ""
+    "-_add_action(icon, text, cb, checkable, add_to_toolbar)": "QAction"
+    "-_wfs_emprise(typename, layer_name, wfs_url)": ""
+    "-_style_pci_layer(layer, layer_name)": ""
+  }
+
+  # ───────────────────────────────────────────────────────────────────────
+  #  Package gui
+  # ───────────────────────────────────────────────────────────────────────
+  gui: "gui" {
+    style.fill: "#E8F0FF"
+    style.stroke: "#8888AA"
+
+    SidePanel: {
+      shape: class
+      "-plugin": "ReseauAssainissementPlugin"
+      "-tree": "QTreeWidget"
+      "+__init__(plugin, parent)": ""
+      "-_build_ui()": ""
+      "-_folder(title)": "QTreeWidgetItem"
+      "-_item(parent, ...)": "QTreeWidgetItem"
+      "-_on_item_clicked(item, column)": ""
+    }
+
+    RenseignementDialog: {
+      shape: class
+      "-role": "str"
+      "-feat": "QgsFeature"
+      "-layer": "QgsVectorLayer"
+      "-reseau": "str"
+      "-couches": "dict"
+      "-widgets": "dict[str, QWidget]"
+      "-_fe_field": "str"
+      "+__init__(role, feat, layer, reseau, couches)": ""
+      "-_build_ui()": ""
+      "-_make_widget(ftype, extra, val)": "QWidget"
+      "-_connect_formula()": ""
+      "-_on_committed(changed)": ""
+      "-_save()": ""
+      "-_calculate_pente()": ""
+      "-_fe_at(point, tol)": "float"
+    }
+
+    NumericEdit: {
+      shape: class
+      "-_decimals": "int"
+      "+committed": "pyqtSignal"
+      "+value()": "float"
+      "+setValue(v)": ""
+      "-_normalize()": ""
+      "+focusInEvent(event)": ""
+      "+keyPressEvent(event)": ""
+      # Note : validator regex permissif, accepte chiffres, point,
+      # virgule, +, -, espaces. value() tokenise et somme :
+      # "1-0.25" -> 0.75, "2+0.5-0.1" -> 2.4. Pas d eval.
+    }
+
+    PrintDialog: {
+      shape: class
+      "+titre_edit": "QLineEdit"
+      "+format_combo": "QComboBox"
+      "+orient_combo": "QComboBox"
+      "+scale_combo": "QComboBox"
+      "+dpi_combo": "QComboBox"
+      "-_custom_spin": "QSpinBox"
+      "-_custom_widget": "QWidget"
+      "-_dpi_custom_spin": "QSpinBox"
+      "-_dpi_custom_widget": "QWidget"
+      "-_dpi_note": "QLabel"
+      "+__init__(parent)": ""
+      "-_on_scale_changed(index)": ""
+      "-_on_dpi_changed()": ""
+      "-_suggest_dpi()": ""
+      "+get_settings()": "dict"
+      # Note : resolution PDF 96/150/200/300 dpi ou personnalisee.
+      # Suggestion automatique selon format : A4->300, A2/A3->200,
+      # A0/A1->150. N ecrase pas une saisie personnalisee active.
+    }
+
+    ProfilDialog: {
+      shape: class
+      "-data": "dict"
+      "-opts": "dict"
+      "-color": "str"
+      "+__init__(data, opts, parent)": ""
+      "-_build_ui()": ""
+      "-_draw()": ""
+      "-_draw_regard_band(ax, ...)": ""
+      "-_draw_piquage_band(ax, ...)": ""
+      "-_draw_profile(ax, ...)": ""
+      "-_draw_cartouche(ax, ...)": ""
+      "-_export(fmt)": ""
+      # Note : nom de fichier exporte {nom_dep}_{nom_arr}_PROFIL.{fmt}
+    }
+
+    ProfilOptionsDialog: {
+      shape: class
+      "-cb_cartouche": "QCheckBox"
+      "-cb_fleches": "QCheckBox"
+      "-cb_noms": "QCheckBox"
+      "-cb_distances": "QCheckBox"
+      "-format_combo": "QComboBox"
+      "+__init__(parent)": ""
+      "+get_options()": "dict"
+    }
+
+    ExportDialog: {
+      shape: class
+      "-cb_plan_pdf": "QCheckBox"
+      "-cb_plan_dxf": "QCheckBox"
+      "-cb_eu": "QCheckBox"
+      "-cb_ep": "QCheckBox"
+      "-cb_grp": "QCheckBox"
+      "-fmt_eu / fmt_ep / fmt_grp": "QComboBox"
+      "-ref_grp": "QComboBox"
+      "-output_dir": "str"
+      "+__init__(parent)": ""
+      "+get_choices()": "dict"
+      "-_profil_row(layout, label)": "tuple"
+      "-_profil_groupe_row(layout)": "tuple"
+    }
+
+    ProfilGroupeDialog: {
+      shape: class
+      "-data": "dict"
+      "-opts": "dict"
+      "+__init__(data, options, parent)": ""
+      "-_draw(fig)": ""
+      "-_export(fmt)": ""
+      # Note : nom de fichier exporte
+      # {eu_dep}_{eu_arr}_{ep_dep}_{ep_arr}_PROFIL.{fmt}
+    }
+
+    EtiquetteTailleDialog: {
+      shape: class
+      "-chk_min": "QCheckBox"
+      "-spin_min": "QSpinBox"
+      "+__init__(init_mode, init_value, init_min_scale, parent)": ""
+      "-_restore_scale_combo(value_m)": ""
+      "+get_result()": "(mode, value, min_scale)"
+      # Note : init_mode = "map_units" | "points". Lit QSettings
+      # BET_HUMIDE/label_size_mode et label_size_value pour restaurer le
+      # dernier reglage a l ouverture.
+      # init_min_scale vient des couches (get_label_min_scale) et non de
+      # QSettings : c est une propriete du projet ouvert, pas une
+      # preference utilisateur. 0 = aucun seuil.
+    }
+
+    AnnotationDialog: {
+      shape: class
+      "-_color": "QColor"
+      "-text_edit": "QTextEdit"
+      "-font_combo": "QFontComboBox"
+      "-size_spin": "QDoubleSpinBox"
+      "-color_btn": "QPushButton"
+      "-btn_bold / btn_italic / btn_underline": "QToolButton"
+      "-_align_group": "QButtonGroup"
+      "+__init__(parent, text, font_name, size=2.0, ...)": ""
+      "+get_values()": "dict"
+      "-_pick_color()": ""
+      "-_refresh_color_btn()": ""
+      "-_fmt_btn(...) [static]": "QToolButton"
+      # Note : taille en metres (RenderMapUnits), suit le zoom, ne grossit
+      # plus relativement aux conduites au dezoom.
+    }
+
+    CoupeTransversaleDialog: {
+      shape: class
+      "-crossings": "list[dict]"
+      "-config": "dict"
+      "-_scale": "int"
+      "-_cut_line_pts": "list[QgsPointXY]"
+      "-figure": "Figure"
+      "-canvas": "FigureCanvas"
+      "-fmt_combo": "QComboBox"
+      "-lbl_scale": "QLabel"
+      "+__init__(crossings, config, parent, cut_line_pts)": ""
+      "-_render_situation_plan(ax_sit)": ""
+      "-_refresh()": ""
+      "-_export_pdf()": ""
+    }
+
+    CubatureDialog: {
+      shape: class
+      "-results": "list[dict]"
+      "-config": "dict"
+      "-show_remblai": "bool"
+      "-bfs_prefix": "str"
+      "-table": "QTableWidget"
+      "-cb_remblai": "QCheckBox"
+      "-total_label": "QLabel"
+      "-_VOL_BREAKDOWN [static]": "list[dict]"
+      "+__init__(results, config, parent, bfs_prefix, show_remblai=False)": ""
+      "-_active_vol_cols()": "list[dict]"
+      "-_synthese_data()": "list[dict]"
+      "-_avg(values) [static]": "float"
+      "-_build_ui()": ""
+      "-_adjust_size_to_content()": ""
+      "-_on_toggle_remblai(checked)": ""
+      "-_update_info_label()": ""
+      "-_populate_table()": ""
+      "-_set_row(row, data)": ""
+      "-_default_filename(ext)": "str"
+      "-_export_csv()": ""
+      "-_export_pdf()": ""
+      "-_export_pdf_reportlab(path)": ""
+      "-_export_xlsx()": ""
+      "-_open_folder(path)": ""
+    }
+
+    CubatureDialog_note: |md
+      **Fenetre unique Cubature / Remblai**
+
+      La case « detail remblai » affiche ou masque les colonnes de volume
+      a la volee, avec sous-totaux par colonne, une section « Synthese des
+      ouvrages » (PDF + Excel) et un redimensionnement auto au contenu.
+    | {
+      style.fill: "#FFFFF0"
+      style.stroke: "#AAAAAA"
+    }
+
+    CubatureOptionsDialog: {
+      shape: class
+      "-rb_tout": "QRadioButton"
+      "-rb_eu": "QRadioButton"
+      "-rb_ep": "QRadioButton"
+      "-cb_conduites": "QCheckBox"
+      "-cb_branchements": "QCheckBox"
+      "-cb_bfs": "QCheckBox"
+      "-cb_axe": "QCheckBox"
+      "+__init__(parent)": ""
+      "+options()": "dict"
+      "-_build_ui()": ""
+      "-_validate_and_accept()": ""
+    }
+
+    EtiquetteAffichageDialog: {
+      shape: class
+      "+__init__(prefs, parent)": ""
+      "+get_prefs()": "dict"
+    }
+
+    StarDtDialog: {
+      shape: class
+      "-_files": "list[str]"
+      "-file_edit / out_edit": "QLineEdit"
+      "-checkboxes": "dict[str, QCheckBox]"
+      "-count_labels": "dict[str, QLabel]"
+      "+__init__(parent)": ""
+      "+file_paths()": "list[str]"
+      "+file_path()": "str"
+      "+output_path()": "str"
+      "+get_selected_types()": "list"
+      "── Glisser-deposer ──": ""
+      "+dragEnterEvent(event)": ""
+      "+dragMoveEvent(event)": ""
+      "+dropEvent(event)": ""
+      "-_paths_from_mime(mime)": "list[str]"
+      "── Privees ──": ""
+      "-_browse()": ""
+      "-_browse_out()": ""
+      "-_set_files(paths)": ""
+      "-_scan()": ""
+      "-_clear_types_layout()": ""
+      # Note : multi-fichiers via QFileDialog.getOpenFileNames + drop de
+      # .gml/.xml sur le dialogue (les QLineEdit refusent le drop pour
+      # laisser l evenement remonter). Le scan cumule les comptages de
+      # tous les fichiers.
+    }
+
+    StarEauExportDialog: {
+      shape: class
+      "-iface": "QgisInterface"
+      "-tabs": "QTabWidget"
+      "-buttons": "QDialogButtonBox"
+      "-_issues": "list[dict]"
+      "-_watched": "list[(QgsVectorLayer, list[signal])]"
+      "-_check_timer": "QTimer"
+      "+__init__(iface, parent)": ""
+      "+run_check()": ""
+      "+params()": "dict"
+      "+output_path()": "str"
+      "── Onglets ──": ""
+      "-_tab_fichier()": ""
+      "-_tab_chantier()": ""
+      "-_tab_reseau()": ""
+      "-_tab_ouvrages()": ""
+      "-_tab_controle()": ""
+      "── Controle live ──": ""
+      "-_watch_layers()": ""
+      "-_unwatch_layers()": ""
+      "-_schedule_check(...)": ""
+      "-_zoom_to_issue(item)": ""
+      "+changeEvent(event)": ""
+      "+closeEvent(event)": ""
+      "── Persistance ──": ""
+      "-_widgets()": "dict"
+      "-_save()": ""
+      "-_restore()": ""
+      "── Privees ──": ""
+      "-_combo(liste)": "QComboBox"
+      "-_code(combo)": "str"
+      "-_browse_dir()": ""
+      "-_refresh_name()": ""
+      "-_name_params()": "dict"
+      "-_on_accept()": ""
+      # Note : dialogue NON modal, le controle renvoie vers des objets a
+      # corriger dans QGIS. Un modal empecherait la correction et
+      # "Relancer le controle" ne detecterait jamais rien.
+      # Toutes les combos sont alimentees par stareau_values : produire un
+      # code invalide est structurellement impossible.
+      # Les couches sont ecoutees (featureAdded, geometryChanged,
+      # attributeValueChanged...) et un QTimer de 400 ms regroupe les
+      # modifications en rafale en un seul controle.
+    }
+
+    AboutDialog: {
+      shape: class
+      "-plugin_dir": "str"
+      "+__init__(plugin_dir, parent)": ""
+      "-_read_metadata()": "dict"
+      "-_build_ui()": ""
+      # Note : lit metadata.txt (configparser) — nom, version, auteur,
+      # about, homepage, linkedin. Aucune donnee dupliquee.
+    }
+
+    CoupeTrancheeComposeeDialog: {
+      shape: class
+      "-_tranches": "list[dict]"
+      "-_current": "int"
+      "-_updating": "bool"
+      "-_list": "QListWidget"
+      "-_form_widget": "QWidget"
+      "-_fig": "Figure"
+      "-_canvas": "FigureCanvas"
+      "-_btn_add / _btn_del / _btn_up / _btn_dn": "QPushButton"
+      "-_btn_pdf / _btn_png / _btn_close": "QPushButton"
+      "── Formulaire canalisation ──": ""
+      "-_rb_eu / _rb_ep": "QRadioButton"
+      "-_sp_dn / _sp_prof": "QDoubleSpinBox"
+      "-_cb_mat": "QComboBox"
+      "── Formulaire tranchee ──": ""
+      "-_sp_esp_g / _sp_ecg / _sp_ecd": "QDoubleSpinBox"
+      "── Formulaire remblai ──": ""
+      "-_sp_ep_lit / _sp_ep_enr": "QDoubleSpinBox"
+      "-_cb_mat_lit / _cb_mat_enr / _cb_mat_rem": "QComboBox"
+      "── Formulaire chaussee ──": ""
+      "-_chk_inf / _chk_sup": "QCheckBox"
+      "-_sp_ep_ci / _sp_ep_cs": "QDoubleSpinBox"
+      "-_cb_mat_ci / _cb_mat_cs": "QComboBox"
+      "+__init__(parent)": ""
+      "-_build_ui()": ""
+      "-_build_form()": ""
+      "-_update_ch_enabled()": ""
+      "-_add_tranche()": ""
+      "-_remove_tranche()": ""
+      "-_move_up()": ""
+      "-_move_down()": ""
+      "-_refresh_list()": ""
+      "-_on_selection_changed(row)": ""
+      "-_populate_form(t)": ""
+      "-_on_field_changed(*_)": ""
+      "-_draw()": ""
+      "-_export(fmt)": ""
+      "-_load_settings()": ""
+      "-_save_settings()": ""
+      "+closeEvent(event)": ""
+      # Note : N tranches juxtaposees (EU / EP / AEP). Apercu matplotlib
+      # temps reel — lit de pose, enrobage, remblai, chaussee inf/sup avec
+      # couleurs conventionnelles (EU rouge, EP bleu, AEP cyan). Colonnes
+      # de cotes verticales (droite) et sous-cotes horizontales (bas).
+      # Valeurs par defaut heritees de ConfigDialog (cubature).
+      # Memorisation QgsSettings : BET_HUMIDE/coupe_tranchee_composee.
+      # Export PDF / PNG via matplotlib (200 dpi).
+      # Necessite matplotlib ; affiche un message si absent.
+    }
+
+    TableauSaisieDialog: {
+      shape: class
+      "-couches_eu / couches_ep": "dict"
+      "-iface": "QgisInterface"
+      "── Tableaux par role ──": ""
+      "-_tables": "dict[str, QTableWidget]"
+      # ^ Regards / Tabourets / Conduites / Branchements
+      "-_mini_map": "QgsMapCanvas"
+      "+__init__(couches_eu, couches_ep, iface, parent)": ""
+      "-_build_ui()": ""
+      "-_set_reseau(reseau)": ""
+      "-_reload_all()": ""
+      "-_load_regard_tabouret(role)": ""
+      "-_load_conduites()": ""
+      "-_load_branchements()": ""
+      "── Edition cellule ──": ""
+      "-_handle_cell_edit(role, item)": ""
+      "-_handle_conduite_edit(item)": ""
+      "-_handle_branchement_edit(item)": ""
+      "-_autofill_row(role, table, row)": ""
+      "-_recalc_cond_row(fid)": ""
+      "-_recalc_branch_row(fid)": ""
+      "-_write_attr(layer, fid, fname, value, role, record_undo)": ""
+      "── Cascade de piquage ──": ""
+      "-_branch_by_cond": "dict[fid conduite, list[fid branchement]]"
+      "-_in_piquage": "bool  (garde anti-recursion)"
+      "-_recalc_branch_cote(bfid)": ""
+      "-_refresh_branch_piquages(cond_fid)": ""
+      "-_refresh_conduite_refs(role, fid)": ""
+      "-_refresh_branchement_refs(role, fid)": ""
+      "-_propagate_ouvrage(role, fid)": ""
+      "── Copier / coller / annuler ──": ""
+      "-_copy_selection()": ""
+      "-_paste_selection()": ""
+      "-_apply_batch()": ""
+      "-_undo()": ""
+      "── Navigation / apercu carte ──": ""
+      "-_select_feature(role, fid)": ""
+      "-_zoom_to_item(role, item)": ""
+      "-_update_mini_map(table)": ""
+      "-_goto_next_missing()": ""
+      "── Onglet Chaine ──": ""
+      "-_build_chain_tab()": ""
+      "-_populate_chain_combos()": ""
+      "-_build_graph()": ""
+      "-_find_chain(key1, key2)": ""
+      "-_detect_chain()": ""
+      "-_chain_zoom_to_item(item)": ""
+      # Note : saisie groupee par onglets (Regards / Tabourets /
+      # Conduites / Branchements) avec calcul auto pente <-> cote fil
+      # d eau selon le sens choisi (_recalc_cond_row /
+      # _recalc_branch_row). Copier/coller compatible Excel, historique
+      # Ctrl+Z, apercu carte miniature de la ligne selectionnee.
+      # Onglet "Chaine" : trace le profil simplifie (ChainProfileWidget)
+      # entre deux regards choisis, chemin trouve par BFS local.
+      # Cascade : changer le FE d un ouvrage recalcule les conduites qui
+      # s y raccordent, PUIS reinterpole la cote de piquage des
+      # branchements portes par ces conduites
+      # (cote = FE amont + (FE aval - FE amont) x pk / longueur),
+      # meme formule que calc_pentes et DrawBranchementTool.
+      # Sans effet en mode 'pente_cote', ou la pente pilote la cote.
+      # Modes conduite : fe / pente_aval / pente_amont.
+      # Modes branchement : fe / pente_fe / pente_cote, pente =
+      # (cote piquage - FE tabouret) / longueur x 100 (le trace va du
+      # piquage vers le tabouret).
+    }
+
+    ChainProfileWidget: {
+      shape: class
+      "+__init__(parent)": ""
+      "+set_data(nodes)": ""
+      "+paintEvent(event)": ""
+      "-_text_width(fm, text) [static]": ""
+    }
+
+    etiquettes: "etiquettes «module»" {
+      shape: class
+      class: module
+
+      "── Champs portes par les couches ──": ""
+      "+LBL_X": "\"lbl_x\""
+      "+LBL_Y": "\"lbl_y\""
+      "+LBL_VISIBLE": "\"lbl_visible\""
+      "+LBL_ROT": "\"lbl_rot\""
+
+      "── Constantes de placement ──": ""
+      "+LABEL_SIZE_MAP_UNITS": "2.0"
+      "+LABEL_PADDING_MAP_UNITS": "0.4"
+      "+LABEL_OFFSET_MAP_UNITS": "1.5"
+      "+CALLOUT_MIN_LENGTH_MM": "1.5"
+      "+LABEL_MIN_SCALE": "2000  (plafond, mode points)"
+      "+MIN_READABLE_MM": "1.5"
+      "+default_min_scale(size, unit)": "int"
+      "-_PRIORITY": "dict[role, int]  (10 / 9 / 6 / 4)"
+      "-_POINT_ROLES / _LINE_ROLES": ""
+      "-_FORCE_SCOPE / _FORCE_KEY": "propriete de projet"
+
+      "── API publique ──": ""
+      "+apply_etiquettes(layer, role, reseau, size, unit, min_scale)": ""
+      "+remembered_size()": "(valeur, unite)"
+      "+remove_etiquettes(layer)": ""
+      "+apply_label_size_all(plugin, mode, value, min_scale)": ""
+      "+apply_label_display_prefs(plugin, visibility)": ""
+      "+get_label_display_prefs(plugin)": "dict"
+      "+apply_label_fields(plugin, fields_prefs)": ""
+      "+build_expression(role, active_fields)": "str"
+      "+sync_labels_after_rename(layer, role, reseau)": ""
+      "+set_force_all_labels(enabled, canvas, plugin)": ""
+      "+get_force_all_labels()": "bool"
+      "+get_label_min_scale(plugin)": "int"
+
+      "── Fabriques ──": ""
+      "-_make_line_labeling(reseau, role, expr, size, unit, min_scale)": "QgsRuleBasedLabeling"
+      "-_make_point_labeling(reseau, role, expr, size, unit, padding, min_scale, offset)": "QgsVectorLayerSimpleLabeling"
+      "-_line_text_format(reseau, role, size, unit)": "QgsTextFormat"
+      "-_line_current_settings(labeling)": "(expr, size, unit, min_scale)"
+      "-_make_callout(dashed, min_length_mm)": "QgsSimpleLineCallout"
+      "-_apply_placement_policy(pal, role, min_scale)": ""
+      "-_mutate_pal(labeling, func)": "labeling"
+      "-_ensure_label_fields(layer, role)": ""
+      "-_reset_label_visibility(layer)": ""
+      "-_clear_legacy_engine_flag()": ""
+
+      # ── Note placement ──
+      # Lignes (conduite ET branchement) : rule-based labeling.
+      #   Regle 1 (lbl_x IS NULL)     : placement Curved.
+      #   Regle 2 (lbl_x IS NOT NULL) : OverPoint epingle, orientation
+      #     figee par LBL_ROT, callout en tirets.
+      # LBL_ROT est ecrit par MoveTool (_line_angle_at) et efface par
+      # DeleteTool (_erase_label).
+      # Priorites : regard 10 > tabouret 9 > conduite 6 >
+      #   branchement 4 — le moteur sacrifie d abord ce qui se retrouve le
+      #   plus facilement dans la table.
+      # Obstacles : seuls les ouvrages ponctuels (facteur 1.5). Une
+      #   etiquette curviligne est censee reposer sur sa ligne, donc les
+      #   lignes ne sont pas des obstacles.
+      # Ouvrages ponctuels : pal.dist = LABEL_OFFSET_MAP_UNITS, en unites
+      #   carte comme les symboles (regard cercle 1 m, tabouret carre
+      #   0.4 m). Le pave n est jamais pose sur le symbole, et le
+      #   connecteur a un seuil NUL : il est toujours trace. A 1 m le pave
+      #   touchait le symbole et le trait disparaissait, d ou 1.5 m.
+      # Rappels des lignes : seuil en MILLIMETRES papier, pas en unites
+      #   carte, sinon il se declenche a une distance visuelle differente
+      #   selon l echelle.
+      # Forcage : displayAll pose couche par couche, et non le flag projet
+      #   UseAllLabels qui forcait aussi BAN / PCI / BD TOPO.
+      #   _clear_legacy_engine_flag() nettoie les projets <= 1.3.
+      # Seuil de dezoom : scaleVisibility + minimumScale, regle dans
+      #   EtiquetteTailleDialog et persiste dans le .bet. Le defaut est
+      #   DEDUIT de la taille du texte (coupe sous 1.5 mm papier) et non
+      #   une constante : mesure sur 1200 regards, un rendu au 1:1000
+      #   coutait 3.3 s pour des etiquettes de 0.6 mm illisibles, contre
+      #   6 a 16 ms une fois le seuil deduit (1:400 pour du 0.625 m).
+      #   Le cout est dans la tentative de placement, pas le resultat : la
+      #   plupart des etiquettes tentees sont ecartees en collision.
+      #
+      # ── Note reconstruction ──
+      # apply_etiquettes() part de remembered_size() (QSettings
+      #   BET_HUMIDE/label_size_*) et non de LABEL_SIZE_MAP_UNITS :
+      #   reconstruire un etiquetage ne doit pas ramener un plan monte au
+      #   1:250 (0.625 m) a la taille par defaut (2 m).
+      # sync_labels_after_rename() ne reconstruit QUE si la couche n a
+      #   jamais ete etiquetee — rebatir ecraserait la taille. Elle
+      #   rallume en revanche toujours les etiquettes : on renumerote pour
+      #   lire les nouveaux numeros. Reconstruction et rallumage etaient
+      #   auparavant lies dans la meme branche, d ou l ecrasement de
+      #   taille au moindre renommage.
+    }
+
+    WelcomeDialog: {
+      shape: class
+      "+NEW": "1"
+      "+OPEN": "2"
+      "+CANCEL": "0"
+      "+__init__(parent)": ""
+      "+chosen()": "int"
+      "-_build_ui()": ""
+      "-_pick(result)": ""
+      # Note : bouton "NEW" libelle "Debuter avec l'assistant" — lance
+      # ProjectWizardDialog (run_nouveau_projet_assistant), plus de
+      # save_projet_sous() direct.
+    }
+
+    ProjectWizardDialog: {
+      shape: class
+      "-_plugin": "ReseauAssainissementPlugin"
+      "-_iface": "QgisInterface"
+      "-_created": "bool"
+      "-_stack": "QStackedWidget"
+      "-_address_page": "_AddressPage"
+      "-_basemaps_page": "_BasemapsPage"
+      "-_config_page": "_QuickConfigPage"
+      "-_recap_page": "_RecapPage"
+      "+__init__(plugin, iface, parent)": ""
+      "-_update_nav()": ""
+      "-_go_prev()": ""
+      "-_go_next()": ""
+      "-_create_project()": ""
+      "+project_created()": "bool"
+      # Note : assistant de creation de projet, 4 etapes navigables
+      # librement (QStackedWidget). _create_project() : applique
+      # l'etendue de _AddressPage au vrai canvas, appelle
+      # plugin.run_fond_projet(options) avec le sous-ensemble choisi en
+      # etape 2, cree les 8 couches EU/EP (plugin._get_couches) — sans
+      # elles l'archive .bet ecrite n'a pas de data.gpkg — sauvegarde la
+      # config rapide (etape 3), puis save_projet_sous().
+    }
+
+    _AddressPage: {
+      shape: class
+      "-_search": "BanSearchWidget"
+      "-_canvas": "QgsMapCanvas"
+      "-_marker": "QgsVertexMarker"
+      "-_address_label": "str"
+      "+extent()": "QgsRectangle"
+      "+address_label()": "str"
+      "-_set_view(point, half_extent_m)": ""
+      "-_on_address_picked(lon, lat, label)": ""
+      # Note : mini-QgsMapCanvas dedie (couche OSM temporaire, jamais
+      # ajoutee au projet), vue par defaut centree sur Vichy. Utilise
+      # setExtent() (pas zoomScale(), qui depend de la taille en pixels
+      # du canvas et produit une etendue nulle avant le premier affichage).
+    }
+
+    _BasemapsPage: {
+      shape: class
+      "-_checks": "dict[str, QCheckBox]"
+      "+options()": "dict"
+      # Cles : osm / ortho (par defaut) / ban / noms_voie / pci_parcelles /
+      # pci_bati (optionnels) — transmises telles quelles a run_fond_projet().
+    }
+
+    _QuickConfigPage: {
+      shape: class
+      "+reseau_widget": "ReseauDefautWidget"
+      "+cubature_widget": "CubatureConfigWidget"
+      "+remblai_widget": "RemblaiConfigWidget"
+      "+save_settings()": ""
+      "+summary()": "str"
+      # QToolBox (accordeons repliables) autour des 3 widgets partages
+      # avec ConfigDialog — pas d'onglet Couches (pas de sens sur un
+      # projet neuf).
+    }
+
+    _RecapPage: {
+      shape: class
+      "-_text": "QTextEdit"
+      "+refresh(address_label, basemap_options, config_summary)": ""
+    }
+
+    BanSearchWidget: {
+      shape: class
+      "-_edit": "QLineEdit"
+      "-_list": "QListWidget"
+      "-_provider": "BanSearchProvider"
+      "+address_picked": "pyqtSignal(lon, lat, label)"
+      "-_on_text_edited(text)": ""
+      "-_show_results(results)": ""
+      "-_on_item_clicked(item)": ""
+      # Note : liste de suggestions integree dans le layout (pas un
+      # QListWidget top-level en Qt.Popup) — un popup flottant vole le
+      # focus du QLineEdit des son affichage et se referme aussitot.
+    }
+
+    ConfigDialog: {
+      shape: class
+      "-iface": "QgisInterface"
+      "-combos": "dict[str, QComboBox]"
+      "-_reseau_widget": "ReseauDefautWidget"
+      "-_cubature_widget": "CubatureConfigWidget"
+      "-_remblai_widget": "RemblaiConfigWidget"
+      "+__init__(iface, parent)": ""
+      "-_build_ui()": ""
+      "-_populate_combo(combo, geom_type)": ""
+      "-_load_settings()": ""
+      "-_save_and_accept()": ""
+      # Note : les 3 onglets Reseau/Cubature/Remblai delegue a des widgets
+      # partages avec l'assistant de creation de projet (voir
+      # quick_config_widgets ci-dessous). Seul l'onglet "Couches"
+      # (association aux couches existantes) reste construit ici : sans
+      # objet pour un projet neuf, il est absent de l'assistant.
+    }
+
+    quick_config_widgets: "quick_config_widgets" {
+      style.fill: "#FFF6E5"
+      style.stroke: "#C89A3C"
+
+      quick_config_widgets_functions: "quick_config_widgets «module»" {
+        shape: class
+        class: module
+        "+get_default_params()": "dict"
+        "+get_cubature_config()": "dict"
+        "+SETTINGS_KEY / MATERIAUX / MATERIAUX_REMBLAI / INITIAL_DEFAULTS": ""
+      }
+
+      ReseauDefautWidget: {
+        shape: class
+        "-_def_widgets": "dict"
+        "-_network_schemas": "dict[reseau, NetworkSchemaWidget]"
+        "+load_settings()": ""
+        "+save_settings()": ""
+        "+summary()": "str"
+      }
+
+      CubatureConfigWidget: {
+        shape: class
+        "-_cub_widgets": "dict"
+        "-_cubature_schema_widget": "CubatureSchemaWidget"
+        "+load_settings()": ""
+        "+save_settings()": ""
+        "+summary()": "str"
+      }
+
+      RemblaiConfigWidget: {
+        shape: class
+        "-_remblai_widgets / _remblai_mat / _remblai_cb": "dict"
+        "-_schema_widget": "TrenchSchemaWidget"
+        "+set_ep_lit_pose(value)": ""
+        "+load_settings()": ""
+        "+save_settings()": ""
+        "+summary()": "str"
+        # Note : ep_lit_pose vit dans CubatureConfigWidget mais alimente
+        # le schema de RemblaiConfigWidget — les deux widgets etant
+        # separes (ex-ConfigDialog._refresh_schema unique), la valeur est
+        # poussee explicitement via set_ep_lit_pose(), cable a la fois
+        # dans ConfigDialog et dans _QuickConfigPage.
+      }
+
+      NetworkSchemaWidget: {shape: class}
+      CubatureSchemaWidget: {shape: class}
+      TrenchSchemaWidget: {shape: class}
+      # Note : les 3 widgets de dessin (paintEvent) sont inchanges,
+      # deplaces tels quels depuis l'ancien gui/config_dialog.py.
+    }
+  }
+
+  # ───────────────────────────────────────────────────────────────────────
+  #  Package tools
+  # ───────────────────────────────────────────────────────────────────────
+  tools: "tools" {
+    style.fill: "#FFF0F4"
+    style.stroke: "#8888AA"
+
+    graph_utils: "graph_utils «module»" {
+      shape: class
+      class: module
+      "+_to_float(val)": "float"
+      "+build_graph(conduite_layer, regard_layer, tol)": "tuple"
+      "+bfs(graph, start_id, end_id)": "tuple"
+    }
+
+    layer_ok: "layer_ok «module»" {
+      shape: class
+      class: module
+      "+layer_ok(layer)": "bool"
+    }
+
+    layer_keys: "layer_keys «module»" {
+      shape: class
+      class: module
+      "+layer_key(role, reseau)": "str"
+      "+get_layer_id(role, reseau)": "str"
+      "+set_layer_id(role, reseau, layer_id)": ""
+      # Note : persiste les IDs de couches (regard / conduite / ...) dans
+      # les proprietes du projet QGIS (.qgs) plutot qu en QSettings
+      # globales — corrige le bug de confusion entre plusieurs projets
+      # ouverts successivement.
+    }
+
+    spatial_utils: "spatial_utils «module»" {
+      shape: class
+      class: module
+      "+rect_request(pt, tol)": "QgsFeatureRequest"
+      "+nearest_point_feature(layer, pt, tol)": "tuple"
+      "+nearest_line_feature(layer, pt, tol)": "tuple"
+      "+nearest_line_feature_expanding(layer, pt, tols)": "tuple"
+      # Note : recherches spatiales indexees (bbox + distance),
+      # mutualisees par tous les outils carte (dessin, deplacement,
+      # cubature...).
+    }
+
+    PointGrid: {
+      shape: class
+      "+__init__(items, cell)": ""
+      "+nearest(pt, tol)": "tuple"
+    }
+
+    wfs_utils: "wfs_utils «module»" {
+      shape: class
+      class: module
+      "+temp_dir()": "str"
+      "+purge_temp_dir()": ""
+      "+write_geojson(features, prefix)": "str"
+      "+current_bbox_l93(canvas)": "tuple"
+      "+fetch_wfs_async(description, requests, on_done, timeout=30)": ""
+      "-_fetch_features(typename, bbox, wfs_url, timeout) [static]": "list"
+      # Note : telechargement WFS mutualise (BAN / PCI / BD TOPO) execute
+      # en QgsTask (tache de fond), TLS verifie, nettoyage automatique des
+      # GeoJSON temporaires apres chargement des couches.
+    }
+
+    ban_search: "ban_search" {
+      style.fill: "#FFF6E5"
+      style.stroke: "#C89A3C"
+
+      BanSearchProvider: {
+        shape: class
+        "-_nam": "QgsNetworkAccessManager"
+        "-_timer": "QTimer"
+        "+results_ready": "pyqtSignal(list)"
+        "+search(query)": ""
+        "+cancel()": ""
+        "-_do_request()": ""
+        "-_on_finished()": ""
+      }
+      # Note : calque sur magic_search/providers/ban_provider.py, sans
+      # dependance a ce plugin (BET_HUMIDE doit fonctionner sans lui).
+      # Debounce 600 ms, QgsNetworkAccessManager (pas de fenetre parasite
+      # SSL/proxy).
+    }
+
+    calc_pentes: "calc_pentes «module»" {
+      shape: class
+      class: module
+      "+recalc_pentes(conduite_layer, regard_layer, tol, branchement_layer, tabouret_layer)": ""
+    }
+
+    calc_cubature: "calc_cubature «module»" {
+      shape: class
+      class: module
+      "+calculer_cubature_troncon(conduite_feat, r_start, r_end, config)": "dict"
+      "+calculer_cubature_branchement(br_feat, tabouret_feat, config, regard_layer, conduite_layer)": "dict"
+      "+calculer_cubature_bfs(start_regard, end_regard, couches, config)": "list[dict]"
+      "+_calc_remblai_volumes(largeur, l3d, diametre_mm, volume, config)": "tuple"
+      "+_build_graph(conduite_layer, regard_layer, tol)": "tuple"
+      "+_bfs(graph, start_id, end_id)": "tuple"
+      "+_profondeur_regard(feat, ep_lit_pose)": "float"
+      "+_profondeur_tabouret(feat, ep_lit_pose)": "float"
+      "+_longueur_3d(geom, z_start, z_end)": "float"
+      "+_to_float(val)": "float"
+      "+_nom_regard(feat)": "str"
+    }
+
+    projet_bet: "projet_bet «module»" {
+      shape: class
+      class: module
+      "+save_projet(plugin, iface)": ""
+      "+save_projet_sous(plugin, iface)": ""
+      "+load_projet(plugin, iface)": ""
+      "+cleanup_plugin_resources(plugin)": ""
+      "+project_dir()": "str"
+      "-_copy_to_memory(layer)": "QgsVectorLayer"
+      "-_ask_bet_path(iface)": "tuple"
+      "-_do_save(plugin, iface, gpkg_path, bet_path)": ""
+      "-_load_v2(plugin, iface, bet_path)": "tuple"
+      "-_load_v1(iface, bet_path)": "tuple"
+      "-_remove_temp_gpkg(gpkg_path)": ""
+      "-_get_or_create_group(project, reseau)": ""
+      "-_read_label_size(project, s)": "dict"
+    }
+
+    DrawConduiteTool: {
+      shape: class
+      "-reseau": "str"
+      "-conduite_layer": "QgsVectorLayer"
+      "-regard_layer": "QgsVectorLayer"
+      "-last_point": "QgsPointXY"
+      "-regard_ids": "list"
+      "-conduite_ids": "list"
+      "-rubber": "QgsRubberBand"
+      "+finished": "pyqtSignal"
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "+keyPressEvent(event)": ""
+      "-_add_point(point)": ""
+      "-_create_regard(point)": "int"
+      "-_create_troncon(pt_from, pt_to)": "int"
+      "-_undo_last()": ""
+      "-_cancel()": ""
+      "-_reset()": ""
+      "-_snap_to_regard(point)": "QgsPointXY"
+    }
+
+    DrawBranchementTool: {
+      shape: class
+      "-reseau": "str"
+      "-conduite_layer": "QgsVectorLayer"
+      "-regard_layer": "QgsVectorLayer"
+      "-tabouret_layer": "QgsVectorLayer"
+      "-branchement_layer": "QgsVectorLayer"
+      "-points": "list"
+      "-snapped_points": "list"
+      "-id_conduite": "int"
+      "-pk_debut": "float"
+      "-rubber": "QgsRubberBand"
+      "-snap_cross": "QgsRubberBand"
+      "-snap_ticks": "QgsRubberBand"
+      "+finished": "pyqtSignal"
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "+keyPressEvent(event)": ""
+      "-_snap_to_conduite(point)": ""
+      "-_snap_to_ouvrage(point)": ""
+      "-_finish()": ""
+      "-_create_tabouret(point)": ""
+      "-_create_branchement()": ""
+      "-_validate_topology()": "bool"
+      "-_compute_pk(line_geom, point)": "float"
+      "-_update_snap_indicator(point)": ""
+    }
+
+    InsertRegardTool: {
+      shape: class
+      "-couches": "dict"
+      "-snap_cross": "QgsRubberBand"
+      "-snap_line": "QgsRubberBand"
+      "+finished": "pyqtSignal"
+      "+DETECT_TOLERANCE_PX [static]": "50"
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "-_find_closest_conduite(point)": ""
+      "-_split_conduite(layer, feat, split_point)": ""
+    }
+
+    RenseignementTool: {
+      shape: class
+      "-couches": "dict"
+      "-_hover": "tuple"
+      "-_hover_band": "QgsRubberBand"
+      "+finished": "pyqtSignal"
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "-_update_hover(pixel_pos)": ""
+      "-_find_label_feature(click_pt, tol)": ""
+      "-_make_hover_band(feat, layer)": "QgsRubberBand"
+      "-_clear_hover()": ""
+    }
+
+    MoveTool: {
+      shape: class
+      "-couches": "dict"
+      "-_mode": "str"
+      "-_hover": "tuple"
+      "-_hover_band": "QgsRubberBand"
+      "-_label_hover": "QgsLabelPosition"
+      "-_sel_feat": "QgsFeature"
+      "-_sel_layer": "QgsVectorLayer"
+      "-_preview": "QgsRubberBand"
+      "-_line_previews": "list"
+      "── Mode piquage ──": ""
+      "-_hover_piquage": "QgsFeature"
+      "-_hover_piquage_band": "QgsRubberBand"
+      "-_piquage_feat": "QgsFeature"
+      "-_piquage_layer": "QgsVectorLayer"
+      "-_piquage_reseau": "str"
+      "-_piquage_cond_layer": "QgsVectorLayer"
+      "-_piquage_reg_layer": "QgsVectorLayer"
+      "-_piquage_snap_pt": "QgsPointXY"
+      "-_piquage_snap_cond": "QgsFeature"
+      "-_piquage_snap_band": "QgsRubberBand"
+      "-_piquage_line_prev": "QgsRubberBand"
+      "+finished": "pyqtSignal"
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "+keyPressEvent(event)": ""
+      "-_find_geom_near(pixel_pos)": "tuple"
+      "-_start_geom_move()": ""
+      "-_apply_geom_move(new_point)": ""
+      "-_start_label_move()": ""
+      "-_apply_label_move(new_point)": ""
+      "-_collect_line_previews(line_layer)": ""
+      "-_update_connected_lines(...)": ""
+      "-_reproject_branchements(...)": ""
+      "-_move_branchement_tabouret_end(branchement_layer, old_point, new_point)": ""
+      "-_set_label_hidden(lbl, hidden)": ""
+      "-_update_hover(pixel_pos)": ""
+      "-_find_piquage_near(pixel_pos)": "tuple"
+      "-_start_piquage_move()": ""
+      "-_apply_piquage_move(snap_pt, snap_cond)": ""
+      "-_update_piquage_snap(cursor_pt)": ""
+      "-_clear_piquage_hover()": ""
+      "-_line_angle_at(geom, pt) [static]": "float"
+      "-_reset()": ""
+      # Note : mode piquage — deplace le point de piquage d un
+      # branchement le long de sa conduite. Met a jour id_conduite,
+      # pk_debut, cote_piquage et geometrie.
+      # _find_label_near() couvre les QUATRE roles : regards, tabourets,
+      # conduites et branchements.
+      # _line_angle_at() calcule LBL_ROT (angle en degres) pour les
+      # etiquettes de conduite ET de branchement epinglees. Recalcule a
+      # chaque deplacement, donc l angle se remet d aplomb si la geometrie
+      # a bouge entre-temps.
+      # La rotation d etiquette QGIS est comptee en degres HORAIRES
+      # (cf. QgsPalLayerSettings.angleOffset), atan2 en anti-horaire :
+      # LBL_ROT = -angle de la ligne. Sans l oppose, le texte sortait au
+      # symetrique de sa conduite (ecart de 2 x l angle).
+      # Segment de reference cherche au droit du point de depose.
+      # Conduites incluses dans _find_geom_near (role conduite).
+      # INVARIANT tabouret / piquage : les deux extremites d un branchement
+      # sont independantes. Deplacer le tabouret ne bouge que le dernier
+      # sommet (_move_branchement_tabouret_end), le piquage reste sur sa
+      # conduite ; deplacer le piquage ne bouge que le premier sommet
+      # (_apply_piquage_move), le tabouret reste en place. Une translation
+      # rigide du branchement faisait glisser le piquage, voire sauter sur
+      # une conduite voisine plus proche.
+    }
+
+    DeleteTool: {
+      shape: class
+      "-couches": "dict"
+      "-_pending": "list"
+      "-_highlights": "list"
+      "-_lasso": "QgsRubberBand"
+      "-_hover": "tuple"
+      "-_hover_band": "QgsRubberBand"
+      "-_hover_label": "tuple"
+      "+finished": "pyqtSignal"
+      "+canvasPressEvent(event)": ""
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "-_update_hover(pixel_pos)": ""
+      "-_delete_hovered()": ""
+      "-_erase_label()": ""
+      "-_add_lasso_selection(sel_geom)": ""
+      "-_confirm_and_delete_lasso()": ""
+      "-_find_label_hover(click_pt, tol)": ""
+      "-_find_point_at(layer, point)": ""
+      # Note : _erase_label() remet a NULL LBL_X, LBL_Y, LBL_ROT,
+      # LBL_VISIBLE. Conduites incluses dans la detection de label hover
+      # (en plus de regards / tabourets).
+    }
+
+    CopyAttributesTool: {
+      shape: class
+      "-couches": "dict"
+      "-_mode": "str"
+      "-_copied_role": "str"
+      "-_copied_attrs": "dict"
+      "-_hover": "tuple"
+      "-_hover_band": "QgsRubberBand"
+      "-_source_band": "QgsRubberBand"
+      "-_targets": "list"
+      "-_highlights": "list"
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "+keyPressEvent(event)": ""
+      "-_copy_source(role, feat, layer)": ""
+      "-_apply()": ""
+      "-_find_best(click_pt, tol, roles)": ""
+      "-_reset()": ""
+    }
+
+    ProfilTool: {
+      shape: class
+      "-reseau": "str"
+      "-couches": "dict"
+      "-_start": "QgsFeature"
+      "-_start_band": "QgsRubberBand"
+      "-_hover_band": "QgsRubberBand"
+      "+_SNAP_TOL_PX [static]": "20"
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "+keyPressEvent(event)": ""
+      "-_build_graph()": "dict"
+      "-_bfs(graph, start_id, end_id)": "tuple"
+      "-_open_profil(start, end)": ""
+      "-_nearest_regard(point)": "QgsFeature"
+      "-_make_pt_band(color)": "QgsRubberBand"
+      "-_reset()": ""
+    }
+
+    ProfilGroupeTool: {
+      shape: class
+      "-couches_eu": "dict"
+      "-couches_ep": "dict"
+      "-_start": "QgsFeature"
+      "-_start_reseau": "str"
+      "-_start_band": "QgsRubberBand"
+      "-_hover_band": "QgsRubberBand"
+      "+_SNAP_TOL_PX [static]": "20"
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "+keyPressEvent(event)": ""
+      "-_build_graph(couches)": "dict"
+      "-_bfs(graph, start_id, end_id)": "tuple"
+      "-_open_profil(start_eu, end_eu, start_ep, end_ep)": ""
+      "-_nearest_regard(point, couches)": "QgsFeature"
+      "-_make_pt_band(color)": "QgsRubberBand"
+      "-_reset()": ""
+    }
+
+    RenommerTool: {
+      shape: class
+      "-reseau": "str"
+      "-couches": "dict"
+      "-_start": "QgsFeature"
+      "-_start_band": "QgsRubberBand"
+      "-_hover_band": "QgsRubberBand"
+      "+_SNAP_TOL_PX [static]": "20"
+      "+_SNAP_TOL_M [static]": "0.05"
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "+keyPressEvent(event)": ""
+      "-_build_graph()": "dict"
+      "-_bfs(graph, start_id, end_id)": "tuple"
+      "-_rename_path(start, end)": ""
+      "-_nearest_regard(point)": "QgsFeature"
+      "-_make_pt_band(color)": "QgsRubberBand"
+      "-_reset()": ""
+    }
+
+    CubatureTool: {
+      shape: class
+      "-canvas": "QgsMapCanvas"
+      "-iface": "QgisInterface"
+      "-couches_eu": "dict"
+      "-couches_ep": "dict"
+      "-opts": "dict"
+      "-_start": "QgsFeature"
+      "-_reseau_start": "str"
+      "-_start_band": "QgsRubberBand"
+      "-_hover_band": "QgsRubberBand"
+      "-_dialog": "CubatureDialog"
+      "+_SNAP_TOL_PX [static]": "20"
+      "+activate()": ""
+      "+deactivate()": ""
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "+keyPressEvent(event)": ""
+      "-_compute_bfs(start_feat, end_feat, reseau)": ""
+      "-_nearest_regard_any(point)": "tuple"
+      "-_find_layer_for_feat(feat)": "QgsVectorLayer"
+      "-_make_pt_band(color)": "QgsRubberBand"
+      "-_clear_band(attr)": ""
+      "-_reset()": ""
+    }
+
+    CoupeTransversaleTool: {
+      shape: class
+      "-canvas": "QgsMapCanvas"
+      "-iface": "QgisInterface"
+      "-couches_eu": "dict"
+      "-couches_ep": "dict"
+      "-_points": "list[QgsPointXY]"
+      "-_band": "QgsRubberBand"
+      "+activate()": ""
+      "+deactivate()": ""
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "+canvasDoubleClickEvent(event)": ""
+      "+keyPressEvent(event)": ""
+      "-_update_band(cursor_pt)": ""
+      "-_compute_and_show()": ""
+      "-_reset()": ""
+    }
+
+    CoupeTransversaleSingleTool: {
+      shape: class
+      "-_reseau_label": "str"
+      "+__init__(canvas, iface, reseau, couches)": ""
+      "+activate()": ""
+    }
+
+    PrintTool: {
+      shape: class
+      "-iface": "QgisInterface"
+      "-s": "dict"
+      "-_w": "float"
+      "-_h": "float"
+      "-_dpi": "int"
+      "-_state": "int"
+      "-_anchor": "QgsPointXY"
+      "-_cur_rot": "float"
+      "-_sheets": "list[dict]"
+      "-_bands": "list[QgsRubberBand]"
+      "-_preview": "QgsRubberBand"
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "+keyPressEvent(event)": ""
+      "-_place_sheet(center, rot)": ""
+      "-_generate_pdf(pdf_path)": ""
+      "-_start_render(cx, cy, rot, w_m, h_m, w_px, h_px) [static]": "QgsMapRendererParallelJob"
+      "-_split_two_lines(text) [static]": "str"
+      "-_ask_overview_settings(n, dpi) [static]": "bool"
+      "-_reset()": ""
+      # Note : PDF multi-pages — pre-rendu de toutes les images avant
+      # ouverture QPrinter (evite les interactions rendu/PDF Qt5).
+      # Jobs QgsMapRendererParallelJob tous lances en simultane (latences
+      # WMS/ortho recouvertes), attente via QProgressDialog annulable
+      # (plus de waitForFinished bloquant). Images liberees au fil de
+      # l ecriture des pages.
+      # Fleche du nord (medaillon, suit la rotation de la feuille).
+      # Retour arriere / Suppr : depile la derniere feuille posee.
+      # Echelle du plan d ensemble normalisee (1:500, 1:1000...) et
+      # affichee au cartouche ; barre d echelle propre a l ensemble.
+      # Confirmation avant ecrasement si output_dir predefini.
+      # Zone carte = h_mm - carto_h_mm ; centre ajuste :
+      #   cx_c = cx + (carto_h_m/2)*sin(rot),
+      #   cy_c = cy + (carto_h_m/2)*cos(rot).
+      # painter.save()/restore() obligatoire autour du dessin des
+      # polygones semi-transparents (contours feuilles) : Qt5 PDF writer
+      # ouvre un transparency group pour alpha<255 et ne le ferme pas sans
+      # restore(), causant un voile blanc.
+    }
+
+    AnnotationTool: {
+      shape: class
+      "-iface": "QgisInterface"
+      "-_paste_pending": "bool"
+      "-_cursor_pt": "QgsPointXY"
+      "+_clipboard [static]": "dict"
+      "+canvasMoveEvent(event)": ""
+      "+canvasReleaseEvent(event)": ""
+      "+keyPressEvent(event)": ""
+      "+deactivate()": ""
+      "-_annotation_at_cursor()": "tuple"
+      "-_paste_at(point)": "bool"
+      # Note : clic = creer/editer ; Ctrl+clic = duplique ;
+      # Ctrl+C / Ctrl+V = presse-papier interne (clipboard partage par
+      # variable de classe).
+    }
+
+    annotation_tool: "annotation_tool «module»" {
+      shape: class
+      class: module
+      "+freeze_annotations_to_map_units(canvas)": "int"
+      "+find_annotation_at(canvas, click_pt)": "tuple"
+      "+make_text_format(vals)": "QgsTextFormat"
+    }
+
+    profil_batch: "profil_batch «module»" {
+      shape: class
+      class: module
+      "+export_profils_eu_ep(couches, reseau, fmt, output_dir)": "tuple"
+      "+export_profils_groupe(eu, ep, fmt, output_dir, reseau_ref)": "tuple"
+      "-_main_trunk_chain(couches)": "tuple"
+      "-_compute_piquages(conduites, abscisses, couches)": "dict"
+      "-_compute_groupe_data(eu, ep, pts)": "dict"
+      "-_safe_name(s)": "str"
+      "-_regard_name(feat)": "str"
+    }
+
+    dxf_export: "dxf_export «module»" {
+      shape: class
+      class: module
+      "+run_export_dxf_with_ui(iface, path, extent, scale, ...)": ""
+      "+collect_visible_vector_layers()": "list"
+      "+open_dxf_externally(path)": ""
+    }
+
+    dxf_postprocess: "dxf_postprocess «module»" {
+      shape: class
+      class: module
+      "+add_label_decorations(dxf_path)": "int"
+      "+add_point_symbols(dxf_path)": "int"
+      "+apply_ltscale(dxf_path, scale)": ""
+    }
+
+    star_dt_import: "star_dt_import «module»" {
+      shape: class
+      class: module
+      "── Constantes ──": ""
+      "+NS": "dict (star-dt / gml / xlink)"
+      "+TYPE_STYLES": "dict[str, (QColor, largeur_mm, diam_m, pointille)]"
+      "-_OUTPUT_TYPE_ORDER": "list[str]"
+      "-_COMMON_FIELDS": "list[(nom, QVariant)]"
+      "── API publique ──": ""
+      "+scan_star_dt(gml_paths)": "dict[str, int]"
+      "+sort_output_types(names)": "list[str]"
+      "+import_star_dt(gml_paths, gpkg_path, selected_types)": "list"
+      "── Lecture GML ──": ""
+      "-_text(el, tag)": "str"
+      "-_dimension(geom_el, values_count)": "int"
+      "-_coords(text, dim)": "list[QgsPointXY]"
+      "-_parse_point / _parse_linestring / _parse_polygon(geom_el)": ""
+      "-_element_geometry(el)": "(QgsGeometry, srsName)"
+      "-_iter_objects(root)": ""
+      "-_output_type(el)": "str | None"
+      "-_cable_output_type(el)": "str"
+      "-_attribute_value(el, tag_name)": "str"
+      "-_discover_fields(elements)": "list"
+      "-_extract_file_identifier(gml_path)": "str"
+      "-_as_path_list(gml_paths)": "list[str]"
+      "── Ecriture / rendu ──": ""
+      "-_release_gpkg(project, gpkg_path)": ""
+      "-_same_file(path_a, path_b)": "bool"
+      "-_apply_style(layer, out_type, is_cable)": ""
+      "-_make_labeled_line_symbol(color, width, abbr, has_precision)": ""
+      "-_apply_labels(layer, out_type)": ""
+      "-_get_or_create_group(project, group_name)": ""
+      # Note : multi-fichiers — les arbres XML restent ouverts pendant le
+      # regroupement, sinon les elements deviennent invalides.
+      # Aucune classe codee en dur : tout objet portant une <geometrie>
+      # est importe. Seuls les CableElectrique sont scindes (HTA / BT via
+      # classeTension). Champs decouverts.
+      # SCR = srsName du GML, pas celui du projet.
+      # Ecriture en 2 phases (ecrire puis charger) : garder le GPKG ouvert
+      # pendant l ajout de tables perime le catalogue GDAL.
+      # Largeurs et textes en mm : rendu identique ecran/impression.
+    }
+
+    stareau_values: "stareau_values «module»" {
+      shape: class
+      class: module
+      "── Listes officielles StaR-Eau V2024 ──": ""
+      "+TYPE_RESEAU / ETAT_SERVICE / PRECISION": ""
+      "+MODE_CIRCULATION / TYPE_POSE / RAISON_POSE / ORIGINE": ""
+      "+FORME / TYPE_USAGER / REVETEMENT_INTERIEUR / MATERIAU": ""
+      "+CONTENU_CANALISATION": ""
+      "+FONCTION_CANALISATION / FONCTION_BRANCHEMENT": ""
+      "+TYPE_REGARD / POSITION_REGARD / TYPE_DESCENTE": ""
+      "+TYPE_POINT_COLLECTE / TYPE_RACCORD": ""
+      "+MATERIAUX_CONDUITE": ""
+      "── Helpers ──": ""
+      "+materiaux_labels()": "list[str]"
+      "+materiau_code(libelle, defaut)": "str"
+      "+labels(liste)": "list[str]"
+      "+code_at(liste, index)": "str"
+      "+index_of(liste, code)": "int"
+      "-_MATERIAU_ALIASES / _MATERIAU_EXACTS": ""
+      "-_normalize(text)": "str"
+      # Note : source unique des materiaux de conduite, partagee par
+      # ConfigDialog, TableauSaisieDialog et l export StaR-Eau, sinon la
+      # synthese de cubature groupee par materiau se scinde en deux lignes
+      # pour un meme materiau.
+    }
+
+    stareau_export: "stareau_export «module»" {
+      shape: class
+      class: module
+      "── Constantes ──": ""
+      "+CRS_STAREAU": "\"EPSG:2154\""
+      "+SNAP_TOL": "0.05"
+      "+LAYER_SCHEMAS": "dict[str, QgsFields]"
+      "+LAYER_ORDER": "tuple[str]"
+      "── API publique ──": ""
+      "+source_layers(project)": "dict"
+      "+check_conformity(project)": "list[dict]"
+      "+file_name(params)": "str"
+      "+export_stareau(params, out_path, project, progress)": "(str, dict)"
+      "── Schemas ──": ""
+      "-_fields(*specs)": "QgsFields"
+      "-_schema_canalisation() / _schema_canalisation_branchement()": ""
+      "-_schema_regard() / _schema_point_collecte() / _schema_raccord()": ""
+      "-_CHAMP_COMMUN / _DIMENSION / _CANALISATION": ""
+      "── Construction ──": ""
+      "-_build_features(params, project)": "dict"
+      "-_common_values(params, reseau)": "dict"
+      "-_reversed_geometry(geom)": "QgsGeometry"
+      "-_line_points(feat)": "list"
+      "-_set(feat, values)": ""
+      "-_val / _num / _txt(feat, name)": ""
+      "-_slug(text) / _mat_dn(code_materiau, diametre)": ""
+      # Note : arcs orientes dans le sens d ecoulement — StaR-Eau rattache
+      # altitude_fil_eau_amont a noeudinitial, la geometrie est inversee
+      # au besoin. Un branchement va de l ouvrage vers le piquage, ou un
+      # ass_raccord est cree (ref_canalisation).
+    }
+
+    _IdFactory: {
+      shape: class
+      "-prefix": "str  (code chantier)"
+      "-siren": "str"
+      "-date": "str"
+      "-_used": "set[str]"
+      "+__init__(params)": ""
+      "+make(reseau, key_parts, label_parts)": "(id_metier, cle_technique)"
+      # Note : cle technique = UUID v5 deterministe derive du SIREN et de
+      # la seule topologie — reexporter le meme chantier redonne les memes
+      # cles, et corriger un materiau ne fait pas voir au destinataire une
+      # suppression suivie d une creation.
+      # Identifiant metier = descriptif et lisible :
+      # 100-20260816-EU-C-PVC200-REU05-REU04
+    }
+
+    _NodeIndex: {
+      shape: class
+      "-_index": "QgsSpatialIndex"
+      "-_points": "dict[slot, QgsPointXY]"
+      "-_keys": "dict[slot, (role, fid)]"
+      "+add(role, feat)": ""
+      "+find(pt, tol)": "(role, fid) | None"
+      # Note : appariement geometrique des extremites d arc et des
+      # ouvrages a SNAP_TOL (5 cm) pour renseigner noeudinitial /
+      # noeudterminal. Cle composite (role, fid) : les fid de regard et de
+      # tabouret peuvent se recouvrir.
+    }
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Sous-package tools/dxf_convert
+    # ─────────────────────────────────────────────────────────────────────
+    dxf_convert: "dxf_convert" {
+      style.fill: "#FFE8E8"
+      style.stroke: "#8888AA"
+
+      CadToGisDialog: {
+        shape: class
+        "-iface": "QgisInterface"
+        "+__init__(iface)": ""
+        "+exec_()": ""
+      }
+    }
+  }
+}
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Heritages
+# ═══════════════════════════════════════════════════════════════════════
+qgis_api.QgsMapToolEmitPoint -> qgis_api.QgsMapTool {class: inherit}
+bet.gui.NumericEdit -> qgis_api.QLineEdit {class: inherit}
+bet.ReseauAssainissementPlugin -> qgis_api.QObject {class: inherit}
+bet.gui.SidePanel -> qgis_api.QDockWidget {class: inherit}
+bet.gui.RenseignementDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.WelcomeDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.StarDtDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.StarEauExportDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.AboutDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.ConfigDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.PrintDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.ProfilDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.ProfilGroupeDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.ProfilOptionsDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.EtiquetteTailleDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.EtiquetteAffichageDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.CubatureDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.CubatureOptionsDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.CoupeTransversaleDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.CoupeTrancheeComposeeDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.TableauSaisieDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.AnnotationDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.ExportDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.ChainProfileWidget -> qgis_api.QWidget {class: inherit}
+bet.gui.ProjectWizardDialog -> qgis_api.QDialog {class: inherit}
+bet.gui._AddressPage -> qgis_api.QWidget {class: inherit}
+bet.gui._BasemapsPage -> qgis_api.QWidget {class: inherit}
+bet.gui._QuickConfigPage -> qgis_api.QWidget {class: inherit}
+bet.gui._RecapPage -> qgis_api.QWidget {class: inherit}
+bet.gui.BanSearchWidget -> qgis_api.QWidget {class: inherit}
+bet.gui.quick_config_widgets.ReseauDefautWidget -> qgis_api.QWidget {class: inherit}
+bet.gui.quick_config_widgets.CubatureConfigWidget -> qgis_api.QWidget {class: inherit}
+bet.gui.quick_config_widgets.RemblaiConfigWidget -> qgis_api.QWidget {class: inherit}
+bet.tools.DrawConduiteTool -> qgis_api.QgsMapToolEmitPoint {class: inherit}
+bet.tools.DrawBranchementTool -> qgis_api.QgsMapToolEmitPoint {class: inherit}
+bet.tools.InsertRegardTool -> qgis_api.QgsMapToolEmitPoint {class: inherit}
+bet.tools.RenseignementTool -> qgis_api.QgsMapTool {class: inherit}
+bet.tools.MoveTool -> qgis_api.QgsMapTool {class: inherit}
+bet.tools.DeleteTool -> qgis_api.QgsMapTool {class: inherit}
+bet.tools.CopyAttributesTool -> qgis_api.QgsMapTool {class: inherit}
+bet.tools.ProfilTool -> qgis_api.QgsMapTool {class: inherit}
+bet.tools.ProfilGroupeTool -> qgis_api.QgsMapTool {class: inherit}
+bet.tools.RenommerTool -> qgis_api.QgsMapTool {class: inherit}
+bet.tools.CubatureTool -> qgis_api.QgsMapTool {class: inherit}
+bet.tools.PrintTool -> qgis_api.QgsMapTool {class: inherit}
+bet.tools.CoupeTransversaleTool -> qgis_api.QgsMapTool {class: inherit}
+bet.tools.CoupeTransversaleSingleTool -> bet.tools.CoupeTransversaleTool {class: inherit}
+bet.tools.AnnotationTool -> qgis_api.QgsMapTool {class: inherit}
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Compositions, agregations, associations
+# ═══════════════════════════════════════════════════════════════════════
+bet.ReseauAssainissementPlugin -> bet.gui.SidePanel: "cree / possede" {
+  class: compose
+  source-arrowhead.label: "1"
+  target-arrowhead.label: "1"
+}
+bet.gui.RenseignementDialog -> bet.gui.NumericEdit: "contient" {
+  class: compose
+  target-arrowhead.label: "0..*"
+}
+bet.ReseauAssainissementPlugin -> bet.gui.StarEauExportDialog: "_stareau_dlg (non modal)" {
+  class: aggregate
+  source-arrowhead.label: "1"
+  target-arrowhead.label: "0..1"
+}
+bet.tools.stareau_export -> bet.tools._IdFactory: "cles techniques + id metier" {class: compose}
+bet.tools.stareau_export -> bet.tools._NodeIndex: "appariement noeud / arc" {class: compose}
+
+# Back-reference du panneau vers le plugin
+bet.gui.SidePanel -> bet.ReseauAssainissementPlugin: "-plugin" {
+  class: assoc
+  target-arrowhead.label: "1"
+}
+
+# Back-reference de l'assistant vers le plugin
+bet.gui.ProjectWizardDialog -> bet.ReseauAssainissementPlugin: "-_plugin" {
+  class: assoc
+  target-arrowhead.label: "1"
+}
+
+bet.gui.ProjectWizardDialog -> bet.gui._AddressPage: "" {class: compose}
+bet.gui.ProjectWizardDialog -> bet.gui._BasemapsPage: "" {class: compose}
+bet.gui.ProjectWizardDialog -> bet.gui._QuickConfigPage: "" {class: compose}
+bet.gui.ProjectWizardDialog -> bet.gui._RecapPage: "" {class: compose}
+bet.gui._AddressPage -> bet.gui.BanSearchWidget: "" {class: compose}
+bet.gui._QuickConfigPage -> bet.gui.quick_config_widgets.ReseauDefautWidget: "" {class: compose}
+bet.gui._QuickConfigPage -> bet.gui.quick_config_widgets.CubatureConfigWidget: "" {class: compose}
+bet.gui._QuickConfigPage -> bet.gui.quick_config_widgets.RemblaiConfigWidget: "" {class: compose}
+bet.gui.ConfigDialog -> bet.gui.quick_config_widgets.ReseauDefautWidget: "" {class: compose}
+bet.gui.ConfigDialog -> bet.gui.quick_config_widgets.CubatureConfigWidget: "" {class: compose}
+bet.gui.ConfigDialog -> bet.gui.quick_config_widgets.RemblaiConfigWidget: "" {class: compose}
+
+# Note visible rattachee a CubatureDialog
+bet.gui.CubatureDialog_note -- bet.gui.CubatureDialog {
+  style.stroke: "#AAAAAA"
+  style.stroke-dash: 2
+}
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Dependances — Plugin vers GUI
+# ═══════════════════════════════════════════════════════════════════════
+bet.ReseauAssainissementPlugin -> bet.gui.ConfigDialog: "instancie et ouvre" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.gui.etiquettes: "apply_etiquettes()" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.gui.PrintDialog: "instancie et ouvre" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.gui.EtiquetteTailleDialog: "ouvre" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.gui.EtiquetteAffichageDialog: "ouvre" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.projet_bet: "save / load" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.gui.WelcomeDialog: "_ensure_project_loaded()" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.gui.ProjectWizardDialog: "run_nouveau_projet_assistant()" {class: depend}
+bet.gui.ProjectWizardDialog -> bet.tools.projet_bet: "save_projet_sous() (etape Creer)" {class: depend}
+bet.gui._AddressPage -> bet.tools.ban_search.BanSearchProvider: "" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.gui.AboutDialog: "ouvre (menu « A propos »)" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.gui.ExportDialog: "ouvre (export combine)" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.gui.CoupeTrancheeComposeeDialog: "ouvre (coupe tranchees composee)" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.gui.TableauSaisieDialog: "ouvre (tableau_saisie)" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.gui.StarDtDialog: "ouvre" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.dxf_convert.CadToGisDialog: "ouvre" {class: depend}
+
+# Plugin vers les outils carte (activation)
+bet.ReseauAssainissementPlugin -> bet.tools.DrawConduiteTool: "active" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.DrawBranchementTool: "active" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.InsertRegardTool: "active" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.RenseignementTool: "active" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.MoveTool: "active" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.DeleteTool: "active" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.CopyAttributesTool: "active" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.ProfilTool: "active" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.ProfilGroupeTool: "active" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.RenommerTool: "active" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.CubatureTool: "active" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.PrintTool: "active" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.CoupeTransversaleTool: "active (coupe_transversale)" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.CoupeTransversaleSingleTool: "active (coupe_eu / coupe_ep)" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.AnnotationTool: "active (annotation)" {class: depend}
+
+# Plugin vers les modules
+bet.ReseauAssainissementPlugin -> bet.tools.profil_batch: "export_profils_eu_ep / export_profils_groupe" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.dxf_export: "run_export_dxf_with_ui()" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.star_dt_import: "import_star_dt() / scan_star_dt()" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.stareau_export: "export_stareau()" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.wfs_utils: "run_ortho_ign / fond_projet (telechargement async)" {class: depend}
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Dependances — Outil vers dialogue
+# ═══════════════════════════════════════════════════════════════════════
+bet.tools.RenseignementTool -> bet.gui.RenseignementDialog: "ouvre" {class: depend}
+bet.tools.ProfilTool -> bet.gui.ProfilDialog: "ouvre" {class: depend}
+bet.tools.ProfilTool -> bet.gui.ProfilOptionsDialog: "ouvre (options export)" {class: depend}
+bet.tools.ProfilGroupeTool -> bet.gui.ProfilGroupeDialog: "ouvre" {class: depend}
+bet.tools.ProfilGroupeTool -> bet.gui.ProfilOptionsDialog: "ouvre (options export)" {class: depend}
+bet.tools.CubatureTool -> bet.gui.CubatureDialog: "ouvre" {class: depend}
+bet.tools.CubatureTool -> bet.gui.CubatureOptionsDialog: "ouvre" {class: depend}
+bet.tools.CoupeTransversaleTool -> bet.gui.CoupeTransversaleDialog: "ouvre" {class: depend}
+bet.tools.AnnotationTool -> bet.gui.AnnotationDialog: "ouvre" {class: depend}
+bet.gui.TableauSaisieDialog -> bet.gui.ChainProfileWidget: "onglet Chaine" {class: depend}
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Dependances — vers les modules partages
+# ═══════════════════════════════════════════════════════════════════════
+bet.tools.CubatureTool -> bet.tools.calc_cubature: "calculs BFS + volumes, _build_graph / _bfs" {class: depend}
+bet.tools.CubatureTool -> bet.tools.spatial_utils: "nearest_point_feature" {class: depend}
+bet.tools.CoupeTransversaleTool -> bet.tools.graph_utils: "_to_float / QGIS_NULL" {class: depend}
+bet.tools.AnnotationTool -> bet.tools.annotation_tool: "find_annotation_at / make_text_format" {class: depend}
+bet.gui.ExportDialog -> bet.tools.profil_batch: "delegue exports profils" {class: depend}
+bet.tools.PrintTool -> bet.tools.dxf_export: "run_export_dxf_with_ui()" {class: depend}
+bet.tools.dxf_export -> bet.tools.dxf_postprocess: "decorations etiquettes / symboles" {class: depend}
+bet.gui.StarDtDialog -> bet.tools.star_dt_import: "scan_star_dt / sort_output_types" {class: depend}
+bet.gui.StarEauExportDialog -> bet.tools.stareau_values: "alimente toutes les combos" {class: depend}
+bet.gui.StarEauExportDialog -> bet.tools.stareau_export: "check_conformity / source_layers / file_name" {class: depend}
+bet.tools.stareau_export -> bet.tools.stareau_values: "materiau_code()" {class: depend}
+bet.gui.ConfigDialog -> bet.tools.stareau_values: "materiaux_labels()" {class: depend}
+bet.gui.TableauSaisieDialog -> bet.tools.stareau_values: "materiaux_labels()" {class: depend}
+bet.gui.TableauSaisieDialog -> bet.tools.spatial_utils: "recherche ouvrage sous le curseur" {class: depend}
+bet.tools.spatial_utils -> bet.tools.PointGrid: "nearest() (index spatial en grille)" {class: depend}
+bet.tools.projet_bet -> bet.tools.layer_keys: "persistance des IDs de couches" {class: depend}
+bet.tools.projet_bet -> bet.tools.calc_pentes: "recalc_pentes() + cote_piquage apres chargement" {class: depend}
+
+# Outils vers utilitaires partages
+bet.tools.RenseignementTool -> bet.tools.layer_ok: "_ok()" {class: depend}
+bet.tools.MoveTool -> bet.tools.layer_ok: "_ok()" {class: depend}
+bet.tools.DeleteTool -> bet.tools.layer_ok: "_ok()" {class: depend}
+bet.tools.CopyAttributesTool -> bet.tools.layer_ok: "_ok()" {class: depend}
+bet.tools.RenommerTool -> bet.tools.layer_ok: "_ok()" {class: depend}
+
+# Outils vers etiquettes
+bet.tools.MoveTool -> bet.gui.etiquettes: "LBL_X / LBL_Y / LBL_ROT / LBL_VISIBLE" {class: depend}
+bet.tools.DeleteTool -> bet.gui.etiquettes: "LBL_X / LBL_Y / LBL_ROT / LBL_VISIBLE" {class: depend}
+
+# Outils BFS vers graph_utils
+bet.tools.ProfilTool -> bet.tools.graph_utils: "build_graph / bfs" {class: depend}
+bet.tools.RenommerTool -> bet.tools.graph_utils: "build_graph / bfs" {class: depend}
+bet.tools.calc_cubature -> bet.tools.graph_utils: "build_graph / bfs" {class: depend}
+bet.tools.calc_pentes -> bet.tools.graph_utils: "_to_float" {class: depend}

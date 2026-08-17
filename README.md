@@ -643,5 +643,5 @@ BET_HUMIDE/
 **Yoan Laloux** — [LinkedIn](https://www.linkedin.com/in/ylaloux/)
 
 Developpe dans le cadre du BET Humide.
-Depot : <https://github.com/cartoyoyo/bet_humide>
-Anomalies et demandes : <https://github.com/cartoyoyo/bet_humide/issues>
+Depot : <https://github.com/Cartoyoyo/BET_humide>
+Anomalies et demandes : <https://github.com/Cartoyoyo/BET_humide/issues>

@@ -14,9 +14,14 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor, QKeySequence
 
 from ..tools.spatial_utils import nearest_point_feature
+from ..tools.stareau_values import materiaux_labels as _materiaux_labels
 from .chain_profile_widget import ChainProfileWidget
 
-_MATERIAUX = ['PVC', 'Beton', 'Fonte', 'Gres', 'PEHD', 'Amiante-ciment', 'Acier']
+# Liste partagee avec la Configuration rapide et l'export StaR-Eau
+# (tools/stareau_values.MATERIAUX_CONDUITE) : un materiau saisi ici doit
+# donner le meme libelle qu'ailleurs, sinon la synthese de cubature groupee
+# par materiau se scinde en deux lignes pour un meme materiau.
+_MATERIAUX = _materiaux_labels()
 _SNAP_TOL = 0.5  # m : tolérance de proximité regard/tabouret <-> extrémité conduite
 
 _NUM_TOKEN_RE = re.compile(r'[+-]?\d*\.?\d+')
@@ -104,7 +109,9 @@ class TableauSaisieDialog(QDialog):
         self._combo_registry = {}  # (role, fid) -> QComboBox (matériau)
         self._col_index = {}       # role -> {fname: col}
         self._cond_state = {}      # fid conduite -> état (mode, amont, aval, items...)
-        self._branch_state = {}    # fid branchement -> état (mode, dep, items...)
+        self._branch_state = {}    # fid branchement -> état (mode, tab, cond_fid, items...)
+        self._branch_by_cond = {}  # fid conduite -> [fid branchement piqués dessus]
+        self._in_piquage = False   # garde anti-récursion des cascades de piquage
         self._sort_state = {}      # role -> (col, ascendant)
         self._undo_stack = []      # [{'layer','role','fid','fname','old'}]
         self._batch_items = []
@@ -264,6 +271,7 @@ class TableauSaisieDialog(QDialog):
         self._item_registry = {}
         self._cond_state = {}
         self._branch_state = {}
+        self._branch_by_cond = {}
         self._load_regard_tabouret('regard')
         self._load_regard_tabouret('tabouret')
         self._load_conduites()
@@ -444,22 +452,46 @@ class TableauSaisieDialog(QDialog):
                                    3: ('materiau', True), 5: 'pente'})
         table.setRowCount(len(feats))
 
+        conduite_layer = self.couches[self.reseau]['conduite']
+
         for row, feat in enumerate(feats):
             fid = feat.id()
             geom = feat.geometry()
-            dep_ref = None
+            # Géométrie d'un branchement : line[0] = point de piquage sur la
+            # conduite mère, line[-1] = tabouret (ou regard) desservi.
+            tab_ref = None
             nom_dep, nom_arr = '—', '—'
             if geom and not geom.isEmpty():
                 line = geom.asPolyline()
                 if line:
                     dep_ref = self._find_ouvrage(
                         regard_layer, tabouret_layer, QgsPointXY(line[0]))
-                    arr_ref = self._find_ouvrage(
+                    tab_ref = self._find_ouvrage(
                         regard_layer, tabouret_layer, QgsPointXY(line[-1]))
                     if dep_ref:
                         nom_dep = dep_ref[3]
-                    if arr_ref:
-                        nom_arr = arr_ref[3]
+                    if tab_ref:
+                        nom_arr = tab_ref[3]
+
+            # Conduite piquée + abscisse du piquage : permettent de recalculer la
+            # cote de piquage par interpolation dès que les FE de la conduite bougent.
+            cond_fid = feat['id_conduite']
+            cond_fid = int(cond_fid) if cond_fid not in (None, NULL) else None
+            pk = _fnum(feat['pk_debut'])
+            cond_len = None
+            if cond_fid is not None:
+                cond_feat = conduite_layer.getFeature(cond_fid)
+                if cond_feat.isValid():
+                    cgeom = cond_feat.geometry()
+                    if cgeom and not cgeom.isEmpty():
+                        cond_len = cgeom.length()
+                    if nom_dep == '—':
+                        cst = self._cond_state.get(cond_fid)
+                        if cst:
+                            am = cst['amont'][3] if cst['amont'] else '?'
+                            av = cst['aval'][3] if cst['aval'] else '?'
+                            nom_dep = f"piquage {am}-{av}"
+                self._branch_by_cond.setdefault(cond_fid, []).append(fid)
 
             item0 = QTableWidgetItem(f"{nom_dep} → {nom_arr}")
             item0.setFlags(item0.flags() & ~Qt.ItemIsEditable)
@@ -498,24 +530,29 @@ class TableauSaisieDialog(QDialog):
             table.setCellWidget(row, 3, combo)
             self._combo_registry[('branchement', fid)] = combo
 
-            fe_dep_val = _fnum(dep_ref[2]) if dep_ref else None
+            fe_tab_val = _fnum(tab_ref[2]) if tab_ref else None
 
             cote_val = _fnum(feat['cote_piquage'])
             it_cote = self._make_item(cote_val, 3, fid, 'cote_piquage')
+            if cond_len:
+                it_cote.setForeground(_COLOR_DERIVED)
+                it_cote.setToolTip(
+                    "Interpolée sur la conduite mère au PK du piquage — "
+                    "recalculée dès que les FE de la conduite changent.")
             table.setItem(row, 4, it_cote)
             self._item_registry[('branchement', fid, 'cote_piquage')] = it_cote
 
             pente_val = None
-            if fe_dep_val is not None and cote_val is not None and longueur:
-                pente_val = (fe_dep_val - cote_val) / longueur * 100
+            if fe_tab_val is not None and cote_val is not None and longueur:
+                pente_val = (cote_val - fe_tab_val) / longueur * 100
             else:
                 pente_val = _fnum(feat['pente'])
             it_pente = self._make_item(pente_val, 2, fid, 'pente')
             table.setItem(row, 5, it_pente)
             self._item_registry[('branchement', fid, 'pente')] = it_pente
 
-            it_fe = self._make_item(fe_dep_val, 3, fid, '__fe_tabouret')
-            if dep_ref is None:
+            it_fe = self._make_item(fe_tab_val, 3, fid, '__fe_tabouret')
+            if tab_ref is None:
                 it_fe.setFlags(it_fe.flags() & ~Qt.ItemIsEditable)
             it_fe.setForeground(_COLOR_DERIVED)
             table.setItem(row, 6, it_fe)
@@ -526,7 +563,8 @@ class TableauSaisieDialog(QDialog):
 
             self._branch_state[fid] = {
                 'mode': 'fe',
-                'dep': dep_ref,
+                'tab': tab_ref,
+                'cond_fid': cond_fid, 'pk': pk, 'cond_len': cond_len,
                 'longueur_item': it_long, 'pente_item': it_pente,
                 'fe_item': it_fe, 'cote_item': it_cote,
                 'sens_btn': btn,
@@ -638,8 +676,7 @@ class TableauSaisieDialog(QDialog):
         if role in ('regard', 'tabouret') and fname in ('tn', 'profondeur', _FE_FIELD[role]):
             table = self.tables[role]
             self._autofill_row(role, table, item.row())
-            self._refresh_conduite_refs(role, fid)
-            self._refresh_branchement_refs(role, fid)
+            self._propagate_ouvrage(role, fid)
 
         self._update_status()
 
@@ -676,7 +713,7 @@ class TableauSaisieDialog(QDialog):
             self._write_attr(self.couches[self.reseau][role], ouvrage_fid,
                               fe_field, value)
             self._refresh_ouvrage_item(role, ouvrage_fid, fe_field, value)
-            self._refresh_conduite_refs(role, ouvrage_fid)
+            self._propagate_ouvrage(role, ouvrage_fid)
             self._update_status()
             return
 
@@ -850,6 +887,10 @@ class TableauSaisieDialog(QDialog):
             self._write_attr(self.couches[self.reseau]['conduite'],
                               fid, 'pente', round(pente, 3))
 
+        # Les FE de la conduite viennent (potentiellement) de changer : les cotes
+        # de piquage des branchements portés par cette conduite suivent.
+        self._refresh_branch_piquages(fid)
+
     def _refresh_ouvrage_item(self, role, fid, fname, value):
         """Met à jour l'affichage de l'onglet Regards/Tabourets si la ligne est chargée,
         et relance le calcul TN/Profondeur/FE de cette ligne."""
@@ -904,14 +945,14 @@ class TableauSaisieDialog(QDialog):
         if fname == '__fe_tabouret':
             # Édition directe de la FE tabouret : on écrit sur l'ouvrage lié,
             # puis on propage (rafraîchit son onglet + recalcule les branchements
-            # connectés).
-            if not st or st['dep'] is None:
+            # et les conduites connectés).
+            if not st or st['tab'] is None:
                 return
-            role, ouvrage_fid, _old_fe, _nom, fe_field = st['dep']
+            role, ouvrage_fid, _old_fe, _nom, fe_field = st['tab']
             self._write_attr(self.couches[self.reseau][role], ouvrage_fid,
                               fe_field, value)
             self._refresh_ouvrage_item(role, ouvrage_fid, fe_field, value)
-            self._refresh_branchement_refs(role, ouvrage_fid)
+            self._propagate_ouvrage(role, ouvrage_fid)
             self._update_status()
             return
 
@@ -919,9 +960,9 @@ class TableauSaisieDialog(QDialog):
 
         if fname == 'pente':
             # La pente n'est écrite directement en base que si elle pilote le
-            # calcul (mode 'pente_aval' ou 'pente_amont') ; en mode 'fe' elle
+            # calcul (mode 'pente_fe' ou 'pente_cote') ; en mode 'fe' elle
             # reste une valeur dérivée réécrite par _recalc_branch_row.
-            if st and st['mode'] in ('pente_aval', 'pente_amont'):
+            if st and st['mode'] in ('pente_fe', 'pente_cote'):
                 self._write_attr(layer, fid, fname, value)
         else:
             self._write_attr(layer, fid, fname, value)
@@ -931,17 +972,20 @@ class TableauSaisieDialog(QDialog):
 
         self._update_status()
 
-    _BRANCH_MODES = ('fe', 'pente_aval', 'pente_amont')
+    _BRANCH_MODES = ('fe', 'pente_fe', 'pente_cote')
     _BRANCH_MODE_LABELS = {
-        'fe':          "🔒 FE + cote piquage",
-        'pente_aval':  "🔒 Pente → cote piquage",
-        'pente_amont': "🔒 Pente → FE tabouret",
+        'fe':         "🔒 Cote piquage + FE tabouret",
+        'pente_fe':   "🔒 Pente → FE tabouret",
+        'pente_cote': "🔒 Pente → cote piquage",
     }
     _BRANCH_MODE_TOOLTIPS = {
-        'fe':          "FE tabouret et cote piquage connus → la pente est calculée.",
-        'pente_aval':  "FE tabouret + pente connus → la cote piquage est calculée.",
-        'pente_amont': "Cote piquage + pente connus → FE tabouret est calculé et "
-                       "appliqué au tabouret/regard.",
+        'fe':         "Cote piquage et FE tabouret connus → la pente est calculée.\n"
+                      "La cote de piquage suit automatiquement les FE de la conduite mère.",
+        'pente_fe':   "Cote piquage + pente connus → FE tabouret est calculé et "
+                      "appliqué au tabouret/regard.\n"
+                      "La cote de piquage suit automatiquement les FE de la conduite mère.",
+        'pente_cote': "FE tabouret + pente connus → la cote de piquage est calculée.\n"
+                      "⚠ Dans ce mode la cote de piquage ne suit plus la conduite mère.",
     }
 
     def _apply_branch_mode_style(self, fid):
@@ -970,23 +1014,28 @@ class TableauSaisieDialog(QDialog):
         self._recalc_branch_row(fid)
 
     def _recalc_branch_row(self, fid):
+        """Recalcule la ligne d'un branchement.
+
+        Convention de signe alignée sur calc_pentes / calc_cubature /
+        RenseignementDialog : pente = (cote piquage − FE tabouret) / longueur × 100,
+        le branchement étant tracé du piquage vers le tabouret."""
         st = self._branch_state.get(fid)
         if not st:
             return
-        dep = st['dep']
+        tab = st['tab']
         longueur = _parse_num(st['longueur_item'].text())
         mode = st['mode']
 
-        if dep is None or not longueur:
+        if tab is None or not longueur:
             return
 
-        if mode == 'pente_aval':
+        if mode == 'pente_cote':
             # FE tabouret + pente connus -> cote piquage calculée
             pente = _parse_num(st['pente_item'].text())
-            fe_val = self._current_ouvrage_fe(dep[0], dep[1])
+            fe_val = self._current_ouvrage_fe(tab[0], tab[1])
             if pente is None or fe_val is None:
                 return
-            cote_new = fe_val - (pente / 100.0) * longueur
+            cote_new = fe_val + (pente / 100.0) * longueur
 
             layer = self.couches[self.reseau]['branchement']
             self._write_attr(layer, fid, 'cote_piquage', round(cote_new, 3))
@@ -996,15 +1045,15 @@ class TableauSaisieDialog(QDialog):
             st['cote_item'].setText(_fmt(cote_new, 3))
             self._updating = False
 
-        elif mode == 'pente_amont':
+        elif mode == 'pente_fe':
             # Cote piquage + pente connus -> FE tabouret calculé et appliqué au tabouret/regard
             pente = _parse_num(st['pente_item'].text())
             cote_val = _parse_num(st['cote_item'].text())
             if pente is None or cote_val is None:
                 return
-            fe_new = cote_val + (pente / 100.0) * longueur
+            fe_new = cote_val - (pente / 100.0) * longueur
 
-            role, ouvrage_fid, _fe, nom, fe_field = dep
+            role, ouvrage_fid, _fe, nom, fe_field = tab
             self._write_attr(self.couches[self.reseau][role], ouvrage_fid,
                               fe_field, round(fe_new, 3))
 
@@ -1012,17 +1061,17 @@ class TableauSaisieDialog(QDialog):
             st['fe_item'].setText(_fmt(fe_new, 3))
             st['cote_item'].setText(_fmt(cote_val, 3))
             self._updating = False
-            st['dep'] = (role, ouvrage_fid, fe_new, nom, fe_field)
+            st['tab'] = (role, ouvrage_fid, fe_new, nom, fe_field)
 
             self._refresh_ouvrage_item(role, ouvrage_fid, fe_field, fe_new)
 
         else:
-            # mode 'fe' : FE tabouret + cote piquage connus -> pente dérivée
-            fe_val = self._current_ouvrage_fe(dep[0], dep[1])
+            # mode 'fe' : cote piquage + FE tabouret connus -> pente dérivée
+            fe_val = self._current_ouvrage_fe(tab[0], tab[1])
             cote_val = _parse_num(st['cote_item'].text())
             if fe_val is None or cote_val is None:
                 return
-            pente = (fe_val - cote_val) / longueur * 100
+            pente = (cote_val - fe_val) / longueur * 100
 
             self._updating = True
             st['pente_item'].setText(_fmt(pente, 2))
@@ -1031,14 +1080,76 @@ class TableauSaisieDialog(QDialog):
             self._write_attr(self.couches[self.reseau]['branchement'],
                               fid, 'pente', round(pente, 3))
 
+    def _recalc_branch_cote(self, bfid):
+        """Réinterpole la cote de piquage d'un branchement sur sa conduite mère
+        (cote = FE amont + (FE aval − FE amont) × pk / longueur_conduite), puis
+        recalcule la ligne. Même formule que calc_pentes et DrawBranchementTool.
+
+        Sans effet en mode 'pente_cote', où l'utilisateur a explicitement demandé
+        que ce soit la pente qui pilote la cote."""
+        st = self._branch_state.get(bfid)
+        if not st or st['mode'] == 'pente_cote':
+            return
+        cond_fid, pk, cond_len = st['cond_fid'], st['pk'], st['cond_len']
+        if cond_fid is None or pk is None or not cond_len:
+            return
+        cst = self._cond_state.get(cond_fid)
+        if not cst or cst['amont'] is None or cst['aval'] is None:
+            return
+
+        fe_am = self._current_ouvrage_fe(cst['amont'][0], cst['amont'][1])
+        fe_av = self._current_ouvrage_fe(cst['aval'][0], cst['aval'][1])
+        if fe_am is None or fe_av is None:
+            return
+
+        cote = round(fe_am + (fe_av - fe_am) * (pk / cond_len), 3)
+        # Valeur entièrement dérivée de la conduite : hors pile d'annulation.
+        self._write_attr(self.couches[self.reseau]['branchement'], bfid,
+                          'cote_piquage', cote, role='branchement',
+                          record_undo=False)
+        self._updating = True
+        st['cote_item'].setText(_fmt(cote, 3))
+        st['cote_item'].setForeground(_COLOR_DERIVED)
+        self._updating = False
+
+        self._recalc_branch_row(bfid)
+
+    def _refresh_branch_piquages(self, cond_fid):
+        """Les FE d'une conduite ont changé : réinterpole la cote de piquage de
+        tous les branchements piqués dessus."""
+        if self._in_piquage:
+            return
+        self._in_piquage = True
+        try:
+            for bfid in self._branch_by_cond.get(cond_fid, []):
+                self._recalc_branch_cote(bfid)
+        finally:
+            self._in_piquage = False
+
     def _refresh_branchement_refs(self, role, fid):
         """Quand un TN/P/FE d'ouvrage change, met à jour les branchements qui le référencent."""
         for bfid, st in list(self._branch_state.items()):
-            dep = st['dep']
-            if dep and dep[0] == role and dep[1] == fid:
+            tab = st['tab']
+            if tab and tab[0] == role and tab[1] == fid:
                 new_val = self._current_ouvrage_fe(role, fid)
-                st['dep'] = (dep[0], dep[1], new_val, dep[3], dep[4])
+                st['tab'] = (tab[0], tab[1], new_val, tab[3], tab[4])
                 self._recalc_branch_row(bfid)
+
+    def _propagate_ouvrage(self, role, fid):
+        """Répercute le changement de FE d'un regard/tabouret sur tout le reste :
+        conduites qui s'y raccordent (FE amont/aval + pente), cotes de piquage des
+        branchements portés par ces conduites, et branchements desservant l'ouvrage."""
+        self._refresh_conduite_refs(role, fid)
+        self._refresh_branchement_refs(role, fid)
+
+    def _recalc_all_derived(self):
+        """Réécrit toutes les valeurs dérivées du réseau actif à partir des FE des
+        ouvrages : pente des conduites, cote de piquage puis pente des branchements.
+        Appelé après une action globale de l'onglet « Chaîne regards PENTE »."""
+        for cfid in list(self._cond_state):
+            self._recalc_cond_row(cfid)
+        for bfid in list(self._branch_state):
+            self._recalc_branch_row(bfid)
 
     # ------------------------------------------------------------------ sélection multiple / édition groupée
 
@@ -1353,8 +1464,7 @@ class TableauSaisieDialog(QDialog):
                 table = item.tableWidget()
                 if table is not None:
                     self._autofill_row(role, table, item.row())
-            self._refresh_conduite_refs(role, fid)
-            self._refresh_branchement_refs(role, fid)
+            self._propagate_ouvrage(role, fid)
         elif role == 'conduite':
             self._recalc_cond_row(fid)
         elif role == 'branchement':
@@ -1412,7 +1522,9 @@ class TableauSaisieDialog(QDialog):
             'FE (m NGF)', 'Longueur cumulée (m)', 'Pente vers suivant (%)'])
         self.chain_table.setToolTip(
             "Double-cliquez une cellule pour la modifier. Les valeurs se "
-            "recalculent automatiquement le long de la chaîne.\n"
+            "recalculent automatiquement le long de la chaîne, puis sont "
+            "reportées sur les onglets Regards, Tabourets, Conduites (pente) "
+            "et Branchements (cote de piquage + pente).\n"
             "Double-clic sur une ligne : zoom sur l'ouvrage dans QGIS.")
         self.chain_table.setAlternatingRowColors(True)
         self.chain_table.setSelectionBehavior(QAbstractItemView.SelectItems)
@@ -1431,7 +1543,8 @@ class TableauSaisieDialog(QDialog):
         grp1.setToolTip(
             "Choisissez une pente à la main : elle sera appliquée sur toute la "
             "chaîne en partant du regard de départ, en recalculant chaque FE "
-            "(et profondeur) en cascade.")
+            "(et profondeur) en cascade, puis la pente des conduites et la cote "
+            "de piquage des branchements concernés.")
         l1 = QHBoxLayout(grp1)
         self.chain_pente_input = QLineEdit()
         self.chain_pente_input.setPlaceholderText("ex : 0.5")
@@ -1474,7 +1587,7 @@ class TableauSaisieDialog(QDialog):
 
         self._chain_set_actions_enabled(False)
 
-        self.tabs.addTab(tab, "Chaîne regards")
+        self.tabs.addTab(tab, "Chaîne regards PENTE")
 
     def _chain_set_actions_enabled(self, enabled):
         for btn in (self.btn_chain_action1, self.btn_chain_action2, self.btn_chain_action3):
@@ -1850,6 +1963,9 @@ class TableauSaisieDialog(QDialog):
                 self._write_attr(layer_n, fid_n, 'profondeur', prof_n, role=role_n)
                 self._refresh_after_write(role_n, fid_n, 'profondeur', prof_n)
 
+            # _refresh_after_write() a déjà répercuté le nouveau FE sur les onglets
+            # Conduites (FE amont/aval + pente) et Branchements (cote de piquage
+            # + pente) via _propagate_ouvrage().
             fe_prev = fe_next
 
     def _get_fe(self, role, fid):
@@ -1887,6 +2003,7 @@ class TableauSaisieDialog(QDialog):
             fe_prev = fe_new
 
         self._reload_all()
+        self._recalc_all_derived()
         self._refresh_chain_table()
         return True
 
@@ -1902,7 +2019,8 @@ class TableauSaisieDialog(QDialog):
         if self._chain_cascade_pente(pente):
             self._chain_set_status(
                 f"✓ Pente de {pente:.3f} % appliquée depuis "
-                f"{self.combo_regard1.currentText()}.", 'success')
+                f"{self.combo_regard1.currentText()} — FE, profondeurs, pentes des "
+                "conduites et cotes de piquage mis à jour.", 'success')
 
     def _chain_apply_pente_calculee(self):
         if not self._chain_nodes or len(self._chain_nodes) < 2:
@@ -1948,8 +2066,10 @@ class TableauSaisieDialog(QDialog):
                 n_skipped += 1
 
         self._reload_all()
+        self._recalc_all_derived()
         self._refresh_chain_table()
-        msg = f"✓ Profondeur {prof:.2f} m appliquée à {len(self._chain_nodes)} ouvrage(s)."
+        msg = (f"✓ Profondeur {prof:.2f} m appliquée à {len(self._chain_nodes)} "
+               "ouvrage(s) — pentes des conduites et cotes de piquage mises à jour.")
         if n_skipped:
             msg += f" ({n_skipped} sans TN connu — FE non recalculé)"
         self._chain_set_status(msg, 'success')

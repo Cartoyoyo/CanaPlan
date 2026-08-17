@@ -8,13 +8,20 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtGui import QFont, QPainter, QColor, QPen, QBrush
 from qgis.core import QgsProject, QgsWkbTypes, QgsSettings
 
+from ..tools.stareau_values import materiaux_labels as _materiaux_labels
+
 SKETCHES_PREFIX = "BET_HUMIDE/"
 SETTINGS_KEY = SKETCHES_PREFIX + "default"
 
-MATERIAUX = ["", "PVC", "Fonte", "Beton", "PEHD", "Acier", "Gres",
-             "Sable", "2/6", "0/31.5", "Tout-venant",
-             "GB (Grave bitume)", "GC (Grave ciment)", "Enrobé"]
+# Materiaux de conduite : liste partagee avec le Tableau de saisie et l'export
+# StaR-Eau (tools/stareau_values.MATERIAUX_CONDUITE). Les materiaux de remblai
+# ci-dessous en sont volontairement separes : ils ne sont pas des materiaux de
+# canalisation et n'ont rien a faire dans une combo de conduite.
+MATERIAUX = [""] + _materiaux_labels()
 
+# Materiaux de remblai et de chaussee : lit de pose, enrobage, remblai,
+# chaussees inferieure et superieure. Sans rapport avec les materiaux de
+# canalisation ci-dessus, et hors du perimetre de l'export StaR-Eau.
 MATERIAUX_REMBLAI = ["", "Sable", "2/6", "0/31.5", "Tout-venant",
                      "GB (Grave bitume)", "GC (Grave ciment)", "Enrobé"]
 

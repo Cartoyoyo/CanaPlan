@@ -1,20 +1,51 @@
 [general]
 name=BET Humide – Réseau Assainissement
-description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF.
-version=1.2
+description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE).
+version=1.3
 qgisMinimumVersion=3.28
 author=Yoan Laloux
 email=yoan.laloux@laposte.net
+linkedin=https://www.linkedin.com/in/ylaloux/
 repository=https://github.com/cartoyoyo/bet_humide
 tracker=https://github.com/cartoyoyo/bet_humide/issues
 homepage=https://github.com/cartoyoyo/bet_humide
-tags=assainissement,réseau,EU,EP,profil en long,cubature,DXF,BET
+tags=assainissement,réseau,EU,EP,profil en long,cubature,DXF,BET,StaR-Eau,GeoPackage,CNIG,ASTEE,Star-DT,DT-DICT
 experimental=False
 deprecated=False
 
-about=Plugin de dessin de réseaux d'assainissement avec continuité topologique, recalage automatique des branchements et validation à l'enregistrement. Outils d'analyse : profils en long (EU/EP/groupé), cubatures et remblais de tranchées, coupes transversales, impression PDF multi-feuilles orientables avec plan d'ensemble, export DXF 2018 fidèle, fonds de plan IGN/BAN/PCI chargés en tâche de fond.
+about=Plugin de dessin de réseaux d'assainissement avec continuité topologique, recalage automatique des branchements et validation à l'enregistrement. Outils d'analyse : profils en long (EU/EP/groupé), cubatures et remblais de tranchées, coupes transversales, impression PDF multi-feuilles orientables avec plan d'ensemble, export DXF 2018 fidèle, export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE), import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond.
 
 changelog=
+    1.3  Export StaR-Eau (CNIG/ASTEE V2024) : génération d'un GeoPackage conforme
+         au géostandard des réseaux d'eau et d'assainissement, avec les cinq
+         couches ass_canalisation, ass_regard, ass_canalisation_branchement,
+         ass_point_collecte et ass_raccord. Arcs orientés dans le sens
+         d'écoulement, clés techniques UUID v5 déterministes (un même chantier
+         réexporté redonne les mêmes clés) et identifiants métier lisibles.
+         Dialogue en cinq onglets (Fichier, Chantier, Réseau, Ouvrages,
+         Contrôle) alimenté par les listes de valeurs officielles, non modal
+         pour permettre de corriger les anomalies dans QGIS sans le fermer ;
+         contrôle de conformité avec zoom sur l'objet fautif au double-clic et
+         mémorisation des saisies d'un chantier à l'autre. Nom de fichier
+         normalisé Stareau-fr<code>-<SIREN><type><date>.gpkg.
+         Import Star-DT étendu à StaR-Elec : sélection multi-fichiers et
+         glisser-déposer, découverte automatique des classes et des attributs
+         présents dans le GML (plus de liste figée), câbles HTA/BT séparés,
+         fourreaux, accessoires, coffrets, poteaux et points levés. Symbologie
+         en millimètres (rendu identique à l'écran et à l'impression) avec
+         marqueurs de classe de précision (« HTA-A », « BT-C ») insérés dans
+         les coupures du trait, et étiquettes ponctuelles.
+         Tableau de saisie : la cote de piquage d'un branchement est désormais
+         interpolée sur la conduite mère et se recalcule en cascade dès que
+         les fils d'eau de cette conduite changent. Modes de calcul renommés
+         (Pente → FE tabouret / Pente → cote piquage) et convention de signe
+         alignée sur les profils, la cubature et le formulaire Renseigner.
+         Liste des matériaux de conduite unifiée entre Configuration rapide,
+         Tableau de saisie et export StaR-Eau, et séparée des matériaux de
+         remblai. Menu QGIS réorganisé par catégories (mêmes groupes que le
+         panneau latéral), bascule d'affichage de la barre d'outils, dialogue
+         « À propos », renommage en « BET Humide », suppression du doublon
+         « Mise en place fond de projet » dans le panneau latéral.
     1.2  Fusion des outils Cubature et Remblai de tranchées en une seule fenêtre
          de résultats, avec case à cocher pour afficher/masquer à la volée les
          colonnes de détail remblai (lit de pose, enrobage, chaussée, remblai).

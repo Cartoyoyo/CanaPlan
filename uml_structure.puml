@@ -1,5 +1,7 @@
 @startuml BET_HUMIDE – Diagramme structurel
 
+title BET Humide – Diagramme structurel (v1.3)
+
 skinparam linetype ortho
 skinparam classAttributeIconSize 0
 skinparam packageStyle rectangle
@@ -90,6 +92,12 @@ package "BET_HUMIDE" #F0F4FF {
     + run_export()
     + run_import_dxf()
     + run_import_star_dt()
+    .. Export StaR-Eau ..
+    + run_export_stareau()
+    - _stareau_dlg : StarEauExportDialog
+    - _do_export_stareau()
+    .. Aide ..
+    + show_about_dialog()
     .. Fonds de plan ..
     + run_ban_vecteur()
     + run_nom_voie()
@@ -98,6 +106,12 @@ package "BET_HUMIDE" #F0F4FF {
     + run_osm_desature()
     .. Configuration ..
     + show_config_dialog()
+    .. Note menu ..
+    ' Le menu Extensions > BET Humide est construit en
+    ' sous-menus (menu_groups) reprenant exactement les
+    ' categories du SidePanel. En tete : toggleViewAction()
+    ' de la toolbar (etat synchronise par Qt). En pied :
+    ' l action "A propos" (hors toolbar).
     .. Privees ..
     - _get_couches(reseau) : dict
     - _get_or_create_group(reseau)
@@ -107,7 +121,7 @@ package "BET_HUMIDE" #F0F4FF {
     - _activate_tool(key, tool)
     - _deactivate_current()
     - _cleanup_tools()
-    - _add_action(...) : QAction
+    - _add_action(icon, text, cb, checkable, add_to_toolbar) : QAction
     - _wfs_emprise(typename, layer_name, wfs_url)
     - _style_pci_layer(layer, layer_name)
   }
@@ -331,10 +345,87 @@ package "BET_HUMIDE" #F0F4FF {
     }
 
     class StarDtDialog {
+      - _files : list[str]
+      - file_edit / out_edit : QLineEdit
+      - checkboxes : dict[str, QCheckBox]
+      - count_labels : dict[str, QLabel]
       + __init__(parent)
+      + file_paths() : list[str]
       + file_path() : str
       + output_path() : str
       + get_selected_types() : list
+      .. Glisser-deposer ..
+      + dragEnterEvent(event)
+      + dragMoveEvent(event)
+      + dropEvent(event)
+      - _paths_from_mime(mime) : list[str]
+      .. Privees ..
+      - _browse()
+      - _browse_out()
+      - _set_files(paths)
+      - _scan()
+      - _clear_types_layout()
+      .. Note ..
+      ' Multi-fichiers : QFileDialog.getOpenFileNames + drop
+      ' de .gml/.xml sur le dialogue (les QLineEdit refusent
+      ' le drop pour laisser l evenement remonter).
+      ' Le scan cumule les comptages de tous les fichiers.
+    }
+
+    class StarEauExportDialog {
+      - iface : QgisInterface
+      - tabs : QTabWidget
+      - buttons : QDialogButtonBox
+      - _issues : list[dict]
+      - _watched : list[(QgsVectorLayer, list[signal])]
+      - _check_timer : QTimer
+      + __init__(iface, parent)
+      + run_check()
+      + params() : dict
+      + output_path() : str
+      .. Onglets ..
+      - _tab_fichier()
+      - _tab_chantier()
+      - _tab_reseau()
+      - _tab_ouvrages()
+      - _tab_controle()
+      .. Controle live ..
+      - _watch_layers()
+      - _unwatch_layers()
+      - _schedule_check(...)
+      - _zoom_to_issue(item)
+      + changeEvent(event)
+      + closeEvent(event)
+      .. Persistance ..
+      - _widgets() : dict
+      - _save()
+      - _restore()
+      .. Privees ..
+      - _combo(liste) : QComboBox
+      - _code(combo) : str
+      - _browse_dir()
+      - _refresh_name()
+      - _name_params() : dict
+      - _on_accept()
+      .. Note ..
+      ' Dialogue NON modal : le controle renvoie vers des objets
+      ' a corriger dans QGIS. Un modal empecherait la correction
+      ' et "Relancer le controle" ne detecterait jamais rien.
+      ' Toutes les combos sont alimentees par stareau_values :
+      ' produire un code invalide est structurellement impossible.
+      ' Les couches sont ecoutees (featureAdded, geometryChanged,
+      ' attributeValueChanged...) et un QTimer de 400 ms regroupe
+      ' les modifications en rafale en un seul controle.
+    }
+
+    class AboutDialog {
+      - plugin_dir : str
+      + __init__(plugin_dir, parent)
+      - _read_metadata() : dict
+      - _build_ui()
+      .. Note ..
+      ' Lit metadata.txt (configparser) : nom, version, auteur,
+      ' about, homepage, linkedin. Aucune donnee dupliquee.
     }
 
     class CoupeTrancheeComposeeDialog {
@@ -410,6 +501,14 @@ package "BET_HUMIDE" #F0F4FF {
       - _recalc_cond_row(fid)
       - _recalc_branch_row(fid)
       - _write_attr(layer, fid, fname, value, role, record_undo)
+      .. Cascade de piquage ..
+      - _branch_by_cond : dict[fid conduite, list[fid branchement]]
+      - _in_piquage : bool  ' garde anti-recursion
+      - _recalc_branch_cote(bfid)
+      - _refresh_branch_piquages(cond_fid)
+      - _refresh_conduite_refs(role, fid)
+      - _refresh_branchement_refs(role, fid)
+      - _propagate_ouvrage(role, fid)
       .. Copier / coller / annuler ..
       - _copy_selection()
       - _paste_selection()
@@ -435,6 +534,16 @@ package "BET_HUMIDE" #F0F4FF {
       ' carte miniature de la ligne selectionnee. Onglet "Chaine" :
       ' trace le profil simplifie (ChainProfileWidget) entre deux
       ' regards choisis, chemin trouve par BFS local.
+      ' Cascade : changer le FE d un ouvrage recalcule les conduites
+      ' qui s y raccordent, PUIS reinterpole la cote de piquage des
+      ' branchements portes par ces conduites
+      ' (cote = FE amont + (FE aval - FE amont) x pk / longueur),
+      ' meme formule que calc_pentes et DrawBranchementTool.
+      ' Sans effet en mode 'pente_cote', ou la pente pilote la cote.
+      ' Modes conduite : fe / pente_aval / pente_amont.
+      ' Modes branchement : fe / pente_fe / pente_cote, pente =
+      ' (cote piquage - FE tabouret) / longueur x 100 (le trace va
+      ' du piquage vers le tabouret).
     }
 
     class ChainProfileWidget {
@@ -954,7 +1063,130 @@ package "BET_HUMIDE" #F0F4FF {
     }
 
     class "star_dt_import" <<module>> {
-      + import_star_dt(path, out, selected_types) : list
+      .. Constantes ..
+      + NS : dict (star-dt / gml / xlink)
+      + TYPE_STYLES : dict[str, (QColor, largeur_mm, diam_m, pointille)]
+      - _OUTPUT_TYPE_ORDER : list[str]
+      - _COMMON_FIELDS : list[(nom, QVariant)]
+      .. API publique ..
+      + scan_star_dt(gml_paths) : dict[str, int]
+      + sort_output_types(names) : list[str]
+      + import_star_dt(gml_paths, gpkg_path, selected_types) : list
+      .. Lecture GML ..
+      - _text(el, tag) : str
+      - _dimension(geom_el, values_count) : int
+      - _coords(text, dim) : list[QgsPointXY]
+      - _parse_point / _parse_linestring / _parse_polygon(geom_el)
+      - _element_geometry(el) : (QgsGeometry, srsName)
+      - _iter_objects(root)
+      - _output_type(el) : str | None
+      - _cable_output_type(el) : str
+      - _attribute_value(el, tag_name) : str
+      - _discover_fields(elements) : list
+      - _extract_file_identifier(gml_path) : str
+      - _as_path_list(gml_paths) : list[str]
+      .. Ecriture / rendu ..
+      - _release_gpkg(project, gpkg_path)
+      - _same_file(path_a, path_b) : bool
+      - _apply_style(layer, out_type, is_cable)
+      - _make_labeled_line_symbol(color, width, abbr, has_precision)
+      - _apply_labels(layer, out_type)
+      - _get_or_create_group(project, group_name)
+      .. Note ..
+      ' Multi-fichiers : les arbres XML restent ouverts pendant le
+      ' regroupement, sinon les elements deviennent invalides.
+      ' Aucune classe codee en dur : tout objet portant une
+      ' <geometrie> est importe. Seuls les CableElectrique sont
+      ' scindes (HTA / BT via classeTension). Champs decouverts.
+      ' SCR = srsName du GML, pas celui du projet.
+      ' Ecriture en 2 phases (ecrire puis charger) : garder le GPKG
+      ' ouvert pendant l ajout de tables perime le catalogue GDAL.
+      ' Largeurs et textes en mm : rendu identique ecran/impression.
+    }
+
+    class "stareau_values" <<module>> {
+      .. Listes officielles StaR-Eau V2024 ..
+      + TYPE_RESEAU / ETAT_SERVICE / PRECISION
+      + MODE_CIRCULATION / TYPE_POSE / RAISON_POSE / ORIGINE
+      + FORME / TYPE_USAGER / REVETEMENT_INTERIEUR / MATERIAU
+      + CONTENU_CANALISATION
+      + FONCTION_CANALISATION / FONCTION_BRANCHEMENT
+      + TYPE_REGARD / POSITION_REGARD / TYPE_DESCENTE
+      + TYPE_POINT_COLLECTE / TYPE_RACCORD
+      + MATERIAUX_CONDUITE
+      .. Helpers ..
+      + materiaux_labels() : list[str]
+      + materiau_code(libelle, defaut) : str
+      + labels(liste) : list[str]
+      + code_at(liste, index) : str
+      + index_of(liste, code) : int
+      - _MATERIAU_ALIASES / _MATERIAU_EXACTS
+      - _normalize(text) : str
+      .. Note ..
+      ' Source unique des materiaux de conduite : partagee par
+      ' ConfigDialog, TableauSaisieDialog et l export StaR-Eau,
+      ' sinon la synthese de cubature groupee par materiau se
+      ' scinde en deux lignes pour un meme materiau.
+    }
+
+    class "stareau_export" <<module>> {
+      .. Constantes ..
+      + CRS_STAREAU = "EPSG:2154"
+      + SNAP_TOL = 0.05
+      + LAYER_SCHEMAS : dict[str, QgsFields]
+      + LAYER_ORDER : tuple[str]
+      .. API publique ..
+      + source_layers(project) : dict
+      + check_conformity(project) : list[dict]
+      + file_name(params) : str
+      + export_stareau(params, out_path, project, progress) : (str, dict)
+      .. Schemas ..
+      - _fields(*specs) : QgsFields
+      - _schema_canalisation() / _schema_canalisation_branchement()
+      - _schema_regard() / _schema_point_collecte() / _schema_raccord()
+      - _CHAMP_COMMUN / _DIMENSION / _CANALISATION
+      .. Construction ..
+      - _build_features(params, project) : dict
+      - _common_values(params, reseau) : dict
+      - _reversed_geometry(geom) : QgsGeometry
+      - _line_points(feat) : list
+      - _set(feat, values)
+      - _val / _num / _txt(feat, name)
+      - _slug(text) / _mat_dn(code_materiau, diametre)
+      .. Note ..
+      ' Arcs orientes dans le sens d ecoulement : StaR-Eau rattache
+      ' altitude_fil_eau_amont a noeudinitial, la geometrie est
+      ' inversee au besoin. Un branchement va de l ouvrage vers le
+      ' piquage, ou un ass_raccord est cree (ref_canalisation).
+    }
+
+    class _IdFactory {
+      - prefix : str  ' code chantier
+      - siren : str
+      - date : str
+      - _used : set[str]
+      + __init__(params)
+      + make(reseau, key_parts, label_parts) : (id_metier, cle_technique)
+      .. Note ..
+      ' Cle technique = UUID v5 deterministe derive du SIREN et de
+      ' la seule topologie : reexporter le meme chantier redonne
+      ' les memes cles, et corriger un materiau ne fait pas voir au
+      ' destinataire une suppression suivie d une creation.
+      ' Identifiant metier = descriptif et lisible :
+      ' 100-20260816-EU-C-PVC200-REU05-REU04
+    }
+
+    class _NodeIndex {
+      - _index : QgsSpatialIndex
+      - _points : dict[slot, QgsPointXY]
+      - _keys : dict[slot, (role, fid)]
+      + add(role, feat)
+      + find(pt, tol) : (role, fid) | None
+      .. Note ..
+      ' Appariement geometrique des extremites d arc et des ouvrages
+      ' a SNAP_TOL (5 cm) pour renseigner noeudinitial /
+      ' noeudterminal. Cle composite (role, fid) : les fid de regard
+      ' et de tabouret peuvent se recouvrir.
     }
 
     package "dxf_convert" #FFE8E8 {
@@ -975,6 +1207,8 @@ SidePanel                   --|> QDockWidget
 RenseignementDialog         --|> QDialog
 WelcomeDialog               --|> QDialog
 StarDtDialog                --|> QDialog
+StarEauExportDialog         --|> QDialog
+AboutDialog                 --|> QDialog
 ConfigDialog                --|> QDialog
 PrintDialog                 --|> QDialog
 ProfilDialog                --|> QDialog
@@ -1071,7 +1305,20 @@ PrintTool                   ..> "dxf_export"            : run_export_dxf_with_ui
 ReseauAssainissementPlugin ..> CadToGisDialog  : ouvre
 ReseauAssainissementPlugin ..> StarDtDialog    : ouvre
 ReseauAssainissementPlugin ..> "dxf_export"    : run_export_dxf_with_ui()
-ReseauAssainissementPlugin ..> "star_dt_import": import_star_dt()
+ReseauAssainissementPlugin ..> "star_dt_import": import_star_dt() / scan_star_dt()
+
+' Plugin -> StaR-Eau
+ReseauAssainissementPlugin "1" o-- "0..1" StarEauExportDialog : _stareau_dlg (non modal)
+ReseauAssainissementPlugin ..> "stareau_export" : export_stareau()
+ReseauAssainissementPlugin ..> AboutDialog      : ouvre (menu « A propos »)
+StarEauExportDialog        ..> "stareau_values" : alimente toutes les combos
+StarEauExportDialog        ..> "stareau_export" : check_conformity / source_layers / file_name
+"stareau_export"           ..> "stareau_values" : materiau_code()
+"stareau_export"           *-- _IdFactory       : cles techniques + id metier
+"stareau_export"           *-- _NodeIndex       : appariement noeud / arc
+ConfigDialog               ..> "stareau_values" : materiaux_labels()
+TableauSaisieDialog        ..> "stareau_values" : materiaux_labels()
+StarDtDialog               ..> "star_dt_import" : scan_star_dt / sort_output_types
 ReseauAssainissementPlugin ..> WelcomeDialog   : _ensure_project_loaded()
 ReseauAssainissementPlugin ..> CoupeTrancheeComposeeDialog : ouvre (coupe tranchees composee)
 ReseauAssainissementPlugin ..> TableauSaisieDialog : ouvre (tableau_saisie)

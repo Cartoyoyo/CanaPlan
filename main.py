@@ -35,7 +35,7 @@ class ReseauAssainissementPlugin(QObject):
         except Exception:
             pass
 
-        self.toolbar = self.iface.addToolBar("Réseau Assainissement")
+        self.toolbar = self.iface.addToolBar("BET Humide")
         self.toolbar.setObjectName("ReseauAssainissementToolBar")
 
         # Groupe pour les outils de dessin (non exclusif pour permettre le toggle)
@@ -251,6 +251,13 @@ class ReseauAssainissementPlugin(QObject):
             checkable=False
         )
 
+        self.action_dict['export_stareau'] = self._add_action(
+            "config.svg",
+            "Exporter au format StaR-Eau",
+            self.run_export_stareau,
+            checkable=False
+        )
+
         self.action_dict['tableau_saisie'] = self._add_action(
             "config.svg",
             "Tableau de saisie - pente",
@@ -267,10 +274,45 @@ class ReseauAssainissementPlugin(QObject):
             checkable=False
         )
 
-        # Ajouter aussi dans le menu
-        self.menu = self.iface.pluginMenu().addMenu("Réseau Assainissement")
-        for action in self.actions:
-            self.menu.addAction(action)
+        # Ajouter aussi dans le menu, organisé par catégories (même
+        # regroupement que le panneau latéral)
+        self.menu = self.iface.pluginMenu().addMenu("BET Humide")
+
+        # Bascule affichage/masquage de la toolbar, synchronisée nativement
+        # par Qt avec son état réel (utile si l'utilisateur l'a fermée).
+        toggle_toolbar = self.toolbar.toggleViewAction()
+        toggle_toolbar.setText("Afficher la barre d'outils")
+        self.action_dict['toggle_toolbar'] = toggle_toolbar
+        self.menu.addAction(toggle_toolbar)
+        self.menu.addSeparator()
+
+        menu_groups = [
+            ("Projet", ['enregistrer_projet', 'enregistrer_projet_sous', 'charger_projet', 'import_dxf', 'import_star_dt']),
+            ("Général", ['renseignement', 'tableau_saisie', 'insert_regard', 'move', 'copy_attributes', 'delete', 'config']),
+            ("EU – Eaux Usées", ['conduite_eu', 'branchement_eu', 'profil_eu', 'coupe_eu', 'renommer_eu']),
+            ("EP – Eaux Pluviales", ['conduite_ep', 'branchement_ep', 'profil_ep', 'coupe_ep', 'renommer_ep']),
+            ("Étiquettes", ['creer_etiquettes', 'afficher_etiquettes', 'taille_etiquettes', 'forcer_etiquettes', 'affichage_etiquettes', 'annotation']),
+            ("Sorties & Impression", ['imprimer', 'profil_groupe', 'coupe_transversale', 'cubature', 'coupe_tranchee_composee', 'export_stareau']),
+            ("Fond de carte", ['fond_projet', 'osm_desature', 'ortho_ign', 'pci_emprise', 'ban_vecteur', 'nom_voie']),
+        ]
+        self.submenus = []
+        for title, keys in menu_groups:
+            submenu = self.menu.addMenu(title)
+            for key in keys:
+                action = self.action_dict.get(key)
+                if action is not None:
+                    submenu.addAction(action)
+            self.submenus.append(submenu)
+
+        self.menu.addSeparator()
+        self.action_dict['about'] = self._add_action(
+            "config.svg",
+            "À propos",
+            self.show_about_dialog,
+            checkable=False,
+            add_to_toolbar=False,
+        )
+        self.menu.addAction(self.action_dict['about'])
 
         # Synchronise le bouton avec l'état actuel du moteur d'étiquettes
         from .gui.etiquettes import get_force_all_labels
@@ -291,10 +333,17 @@ class ReseauAssainissementPlugin(QObject):
         self._cleanup_tools()
         from .tools.projet_bet import cleanup_plugin_resources
         cleanup_plugin_resources(self)
+        # Le dialogue StaR-Eau est non modal : il survivrait au rechargement
+        # du plugin s'il n'etait pas ferme explicitement.
+        dlg = getattr(self, '_stareau_dlg', None)
+        if dlg is not None and not sip.isdeleted(dlg):
+            dlg.close()
+            dlg.deleteLater()
+        self._stareau_dlg = None
         self.iface.removeDockWidget(self.side_panel)
         self.side_panel.deleteLater()
         for action in self.actions:
-            self.iface.removePluginMenu("Réseau Assainissement", action)
+            self.iface.removePluginMenu("BET Humide", action)
         self.actions.clear()
         # Suppression synchrone (sip.delete) pour éviter le warning de
         # widget dupliqué au rechargement : deleteLater() est asynchrone et
@@ -316,7 +365,7 @@ class ReseauAssainissementPlugin(QObject):
         self.tools.clear()
         self.iface.mapCanvas().refresh()
 
-    def _add_action(self, icon_name, text, callback, checkable=False):
+    def _add_action(self, icon_name, text, callback, checkable=False, add_to_toolbar=True):
         """Ajoute une action à la barre d'outils et au menu."""
         icon_path = os.path.join(self.plugin_dir, "icon", icon_name)
         action = QAction(QIcon(icon_path), text, self.iface.mainWindow())
@@ -326,9 +375,15 @@ class ReseauAssainissementPlugin(QObject):
             self.tool_group.addAction(action)
         else:
             action.triggered.connect(callback)
-        self.toolbar.addAction(action)
+        if add_to_toolbar:
+            self.toolbar.addAction(action)
         self.actions.append(action)
         return action
+
+    def show_about_dialog(self):
+        from .gui.about_dialog import AboutDialog
+        dlg = AboutDialog(self.plugin_dir, self.iface.mainWindow())
+        dlg.exec_()
 
     # --- Définition des champs par type de couche ---
 
@@ -1398,19 +1453,74 @@ class ReseauAssainissementPlugin(QObject):
         dlg = CadToGisDialog(self.iface)
         dlg.exec_()
 
+    def run_export_stareau(self):
+        """Ouvre le dialogue d'export StaR-Eau (CNIG/ASTEE).
+
+        Volontairement NON modal : le controle de conformite renvoie vers des
+        objets a corriger dans QGIS. Un dialogue modal empecherait justement
+        de les corriger, et le bouton « Relancer le controle » ne pourrait
+        jamais rien detecter de nouveau.
+        """
+        import sip
+        from .gui.stareau_export_dialog import StarEauExportDialog
+
+        dlg = getattr(self, '_stareau_dlg', None)
+        if dlg is not None and not sip.isdeleted(dlg):
+            dlg.run_check()
+            dlg.show()
+            dlg.raise_()
+            dlg.activateWindow()
+            return
+
+        dlg = StarEauExportDialog(self.iface, self.iface.mainWindow())
+        dlg.accepted.connect(self._do_export_stareau)
+        self._stareau_dlg = dlg
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
+    def _do_export_stareau(self):
+        """Genere le GeoPackage une fois le dialogue valide."""
+        from qgis.PyQt.QtWidgets import QApplication, QMessageBox
+        from qgis.PyQt.QtCore import Qt
+        from .tools.stareau_export import export_stareau
+
+        dlg = getattr(self, '_stareau_dlg', None)
+        if dlg is None:
+            return
+
+        out_path = dlg.output_path()
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            path, stats = export_stareau(dlg.params(), out_path)
+        except Exception as e:
+            QMessageBox.warning(
+                self.iface.mainWindow(), "StaR-Eau",
+                f"Erreur lors de l'export :\n{e}")
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        detail = ", ".join(f"{name} : {count}"
+                           for name, count in stats.get('couches', {}).items())
+        self.iface.messageBar().pushMessage(
+            "StaR-Eau",
+            f"Export terminé — {os.path.basename(path)} ({detail})",
+            level=0, duration=8)
+
     def run_import_star_dt(self):
         from .gui.star_dt_dialog import StarDtDialog
         from .tools.star_dt_import import import_star_dt
         dlg = StarDtDialog(self.iface.mainWindow())
         if dlg.exec_() != StarDtDialog.Accepted:
             return
-        path = dlg.file_path()
+        paths = dlg.file_paths()
         out = dlg.output_path()
         types = dlg.get_selected_types()
-        if not path or not types or not out:
+        if not paths or not types or not out:
             return
         try:
-            created = import_star_dt(path, out, selected_types=types)
+            created = import_star_dt(paths, out, selected_types=types)
         except Exception as e:
             from qgis.PyQt.QtWidgets import QMessageBox
             QMessageBox.warning(
@@ -1420,7 +1530,8 @@ class ReseauAssainissementPlugin(QObject):
         if created:
             self.iface.messageBar().pushMessage(
                 "Star-DT",
-                f"{len(created)} couche(s) importee(s) dans {out}",
+                f"{len(created)} couche(s) importee(s) depuis {len(paths)} "
+                f"fichier(s) dans {out}",
                 level=0, duration=5)
         else:
             self.iface.messageBar().pushMessage(

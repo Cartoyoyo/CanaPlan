@@ -59,14 +59,13 @@ class SidePanel(QDockWidget):
         self._item(folder_etiquettes, icon_dir, "etiquettes.svg",        "Placer une annotation texte",            "annotation")
 
         folder_projet = self._folder("Projet")
-        self._item(folder_projet, icon_dir, "config.svg", "Mise en place fond de projet", "fond_projet")
         self._item(folder_projet, icon_dir, "config.svg", "Enregistrer",                  "enregistrer_projet")
         self._item(folder_projet, icon_dir, "config.svg", "Enregistrer sous",             "enregistrer_projet_sous")
         self._item(folder_projet, icon_dir, "config.svg", "Charger un projet",            "charger_projet")
         self._item(folder_projet, icon_dir, "config.svg", "Importer DXF / DWG",           "import_dxf")
         self._item(folder_projet, icon_dir, "config.svg", "Importer Star-DT (GML)",     "import_star_dt")
 
-        folder_impression = self._folder("Impression")
+        folder_impression = self._folder("Sorties & Impression")
         self._item(folder_impression, icon_dir, "config.svg",
                    "Imprimer / Exporter PDF/DXF", "imprimer")
         self._item(folder_impression, icon_dir, "profil.svg",
@@ -77,6 +76,8 @@ class SidePanel(QDockWidget):
                    "Cubature / Remblai tranchées", "cubature")
         self._item(folder_impression, icon_dir, "profil.svg",
                    "Dessinateur – Coupe de tranchées", "coupe_tranchee_composee")
+        self._item(folder_impression, icon_dir, "config.svg",
+                   "Exporter StaR-Eau (GPKG)", "export_stareau")
 
         folder_fdc = self._folder("Fond de carte")
         self._item(folder_fdc, icon_dir, "config.svg",

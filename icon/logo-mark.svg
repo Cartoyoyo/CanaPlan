@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bh-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14456B"/>
+      <stop offset="1" stop-color="#072436"/>
+    </linearGradient>
+    <linearGradient id="bh-shaft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#FFFFFF"/>
+      <stop offset="0.55" stop-color="#E8EEF2"/>
+      <stop offset="1"    stop-color="#B9C7D1"/>
+    </linearGradient>
+    <linearGradient id="bh-cover" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC24A"/>
+      <stop offset="1" stop-color="#E8901C"/>
+    </linearGradient>
+    <clipPath id="bh-clip">
+      <rect x="0" y="0" width="256" height="256" rx="56"/>
+    </clipPath>
+  </defs>
+
+  <!-- fond -->
+  <rect x="0" y="0" width="256" height="256" rx="56" fill="url(#bh-bg)"/>
+
+  <g clip-path="url(#bh-clip)">
+    <!-- masse de sol (sous le terrain naturel) -->
+    <path d="M-10 84 Q76 48 128 76 T266 64 L266 266 L-10 266 Z"
+          fill="#FFFFFF" opacity="0.055"/>
+    <!-- terrain naturel -->
+    <path d="M-4 85 Q76 48 128 76 T260 64" fill="none"
+          stroke="#8FBF4D" stroke-width="9" stroke-linecap="round"/>
+
+    <!-- conduite : gaine + âme + reflet -->
+    <path d="M73 140 L181 174" stroke="#134E70" stroke-width="27" stroke-linecap="round"/>
+    <path d="M73 140 L181 174" stroke="#2E9BD6" stroke-width="19" stroke-linecap="round"/>
+    <path d="M83.4 137 L174.2 165.6" stroke="#8FD8F7" stroke-width="3.6"
+          stroke-linecap="round" opacity="0.55"/>
+    <!-- sens d'écoulement -->
+    <g fill="none" stroke="#EAF7FF" stroke-width="3.6"
+       stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+      <path d="M-6 -7 L4 0 L-6 7" transform="translate(112,152.3) rotate(17.5)"/>
+      <path d="M-6 -7 L4 0 L-6 7" transform="translate(142,161.7) rotate(17.5)"/>
+    </g>
+
+    <!-- regard amont -->
+    <rect x="56" y="74" width="34" height="68" rx="3" fill="url(#bh-shaft)"/>
+    <rect x="83" y="74" width="7"  height="68" fill="#0E3A5A" opacity="0.13"/>
+    <rect x="49" y="66" width="48" height="13" rx="6.5" fill="url(#bh-cover)"/>
+
+    <!-- regard aval (plus profond) -->
+    <rect x="164" y="66" width="34" height="110" rx="3" fill="url(#bh-shaft)"/>
+    <rect x="191" y="66" width="7"  height="110" fill="#0E3A5A" opacity="0.13"/>
+    <rect x="157" y="58" width="48" height="13" rx="6.5" fill="url(#bh-cover)"/>
+
+    <!-- cote de pente -->
+    <path d="M73 205 L181 205" stroke="#F5A623" stroke-width="4"
+          stroke-dasharray="9 9" stroke-linecap="round" opacity="0.5"/>
+  </g>
+
+  <!-- liseré de netteté sur fond clair -->
+  <rect x="0.75" y="0.75" width="254.5" height="254.5" rx="55.5"
+        fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.09"/>
+</svg>

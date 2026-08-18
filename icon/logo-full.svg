@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 990 260" width="990" height="260">
+  <defs>
+    <linearGradient id="f-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14456B"/><stop offset="1" stop-color="#072436"/>
+    </linearGradient>
+    <linearGradient id="f-shaft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="0.55" stop-color="#E8EEF2"/>
+      <stop offset="1" stop-color="#B9C7D1"/>
+    </linearGradient>
+    <linearGradient id="f-cover" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC24A"/><stop offset="1" stop-color="#E8901C"/>
+    </linearGradient>
+    <clipPath id="f-clip"><rect x="0" y="2" width="256" height="256" rx="56"/></clipPath>
+  </defs>
+
+  <g>
+    <rect x="0" y="2" width="256" height="256" rx="56" fill="url(#f-bg)"/>
+    <g clip-path="url(#f-clip)">
+      <path d="M-10 86 Q76 50 128 78 T266 66 L266 268 L-10 268 Z" fill="#FFFFFF" opacity="0.055"/>
+      <path d="M-4 87 Q76 50 128 78 T260 66" fill="none" stroke="#8FBF4D" stroke-width="9" stroke-linecap="round"/>
+      <path d="M73 142 L181 176" stroke="#134E70" stroke-width="27" stroke-linecap="round"/>
+      <path d="M73 142 L181 176" stroke="#2E9BD6" stroke-width="19" stroke-linecap="round"/>
+      <path d="M83.4 139 L174.2 167.6" stroke="#8FD8F7" stroke-width="3.6" stroke-linecap="round" opacity="0.55"/>
+      <g fill="none" stroke="#EAF7FF" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+        <path d="M-6 -7 L4 0 L-6 7" transform="translate(112,154.3) rotate(17.5)"/>
+        <path d="M-6 -7 L4 0 L-6 7" transform="translate(142,163.7) rotate(17.5)"/>
+      </g>
+      <rect x="56" y="76" width="34" height="68" rx="3" fill="url(#f-shaft)"/>
+      <rect x="83" y="76" width="7" height="68" fill="#0E3A5A" opacity="0.13"/>
+      <rect x="49" y="68" width="48" height="13" rx="6.5" fill="url(#f-cover)"/>
+      <rect x="164" y="68" width="34" height="110" rx="3" fill="url(#f-shaft)"/>
+      <rect x="191" y="68" width="7" height="110" fill="#0E3A5A" opacity="0.13"/>
+      <rect x="157" y="60" width="48" height="13" rx="6.5" fill="url(#f-cover)"/>
+      <path d="M73 207 L181 207" stroke="#F5A623" stroke-width="4" stroke-dasharray="9 9" stroke-linecap="round" opacity="0.5"/>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <text x="306" y="142" font-family="Montserrat, Inter, 'Segoe UI', Arial, sans-serif"
+        font-size="82" letter-spacing="1">
+    <tspan font-weight="800" fill="#0E3A5A">BET</tspan><tspan font-weight="800" fill="#0E3A5A"> </tspan><tspan font-weight="400" fill="#2E9BD6">HUMIDE</tspan>
+  </text>
+  <path d="M308 168 L332 168" stroke="#F5A623" stroke-width="5" stroke-linecap="round"/>
+  <text x="346" y="180" font-family="Montserrat, Inter, 'Segoe UI', Arial, sans-serif"
+        font-size="26" font-weight="500" letter-spacing="3.2" fill="#5A7A8C">
+    RÉSEAUX EU / EP DANS QGIS
+  </text>
+</svg>

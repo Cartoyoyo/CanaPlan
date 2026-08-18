@@ -1,13 +1,44 @@
-# BET Humide — Plugin QGIS Reseau Assainissement
+<div align="center">
 
-**Version 1.4** — QGIS >= 3.28
+<img src="icon/logo-full.svg" width="420" alt="BET Humide">
 
-Plugin QGIS de dessin topologique de reseaux d'assainissement **EU** (Eaux Usees) et **EP** (Eaux Pluviales), avec continuite geometrique, recalage automatique des branchements et gestion des etiquettes.
+# BET Humide
 
-Du trace sur le terrain jusqu'a la livraison : dessin, profils en long,
-cubatures et remblais, coupes de tranchees, impression PDF multi-feuilles,
-export DXF 2018 et export GeoPackage conforme au geostandard **StaR-Eau
-V2024** (CNIG / ASTEE).
+**Plugin QGIS de dessin topologique de réseaux d'assainissement — EU / EP, du tracé terrain à la livraison StaR-Eau**
+
+[![QGIS](https://img.shields.io/badge/QGIS-3.28%2B-green?logo=qgis&logoColor=white)](https://qgis.org)
+[![Version](https://img.shields.io/badge/version-1.4-blue)](#changelog)
+[![StaR-Eau](https://img.shields.io/badge/StaR--Eau-V2024%20CNIG%2FASTEE-orange)](#export-star-eau-cnig--astee-v2024)
+[![Langue](https://img.shields.io/badge/langue-FR-purple)](README.md)
+
+</div>
+
+---
+
+## Description
+
+**BET Humide** est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement **EU** (Eaux Usées) et **EP** (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge.
+
+La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie. L'outil produit les profils en long, calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée, imprime les plans au format PDF et permet d'exporter en DXF.
+
+Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne, avec en plus un tableau de saisie groupée, l'impression PDF multi-feuilles et l'export GeoPackage conforme au géostandard **StaR-Eau V2024** (CNIG / ASTEE).
+
+### Sommaire
+
+- [Fonctionnalités](#fonctionnalités)
+- [Captures d'écran](#captures-décran)
+- [Interface](#interface)
+- [Couches et attributs](#couches-et-attributs)
+- [Symbologie](#symbologie)
+- [Raccourcis clavier](#raccourcis-clavier)
+- [Import Star-DT / StaR-Elec](#import-star-dt--star-elec-dt-dict)
+- [Export StaR-Eau](#export-star-eau-cnig--astee-v2024)
+- [Format de projet .bet](#format-de-projet-bet)
+- [Installation](#installation)
+- [Structure du projet](#structure-du-projet)
+- [Changelog](#changelog)
+- [Genèse du projet](#genèse-du-projet)
+- [Auteur](#auteur)
 
 ---
 
@@ -198,6 +229,136 @@ etiquettes*, et suit le projet `.bet`.
 | **Imprimer / Exporter PDF / DXF** | Positionne les feuilles d'impression sur la carte (clic + rotation), puis genere un PDF multi-pages avec cartouche, barre d'echelle et page de vue d'ensemble optionnelle. Resolution PDF parametrable (96 / 150 / 200 / 300 dpi ou personnalisee) avec suggestion automatique selon le format (A4 → 300 dpi, A2/A3 → 200 dpi, A0/A1 → 150 dpi). Export DXF 2018 fidele en parallele : symbologie, etiquettes (MTEXT + decoration ezdxf : fond + cadre + callout), symboles ponctuels, pattern de tirets EU/EP. Encodage CP1252 (compatibilite AutoCAD). |
 | **Export combine** | Dialogue unique pour generer en une passe : plan PDF, plan DXF, profils EU, profils EP, profil groupe (avec choix du reseau de reference EU ou EP). Tous les exports vont dans un dossier choisi, noms de fichiers automatiques (1er regard / dernier regard). |
 | **Exporter StaR-Eau (GPKG)** | Genere un GeoPackage conforme au geostandard **StaR-Eau V2024** (CNIG / ASTEE). Menu *Sorties & Impression*. Voir la section dediee ci-dessous. |
+
+### Captures d'écran
+
+#### Assistant de création de projet
+
+Les 4 étapes de l'assistant (menu *Projet ▸ Créer un projet avec l'assistant*,
+ou bouton « Débuter avec l'assistant » du dialogue d'accueil) :
+
+**1. Localiser le projet** — recherche d'adresse BAN avec suggestions au fil
+de la frappe, mini-carte OSM pour ajuster la position exacte du projet.
+
+![Étape 1 — Localiser le projet](images/Assistant_etape1.png)
+
+**2. Fonds de plan** — choix des fonds à charger dans le nouveau projet (OSM
+désaturé et Orthophoto IGN cochés par défaut, BAN / Noms de voie / PCI Bâti /
+PCI Parcelles en option).
+
+![Étape 2 — Fonds de plan](images/Assistant_etape2.png)
+
+**3. Configuration rapide** — trois accordéons repliables (mêmes réglages que
+le dialogue *Configuration rapide*), avec aperçu schématique et cadres
+colorés par réseau (EU rouge, EP bleu) pour s'y retrouver d'un coup d'œil :
+
+- *Réseau par défaut* — diamètre et matériau des conduites et branchements EU/EP.
+
+  ![Étape 3.1 — Réseau par défaut](images/Assistant_etape31_choixreseau.png)
+
+- *Cubature* — épaisseur du lit de pose et largeurs de tranchée, avec aperçu
+  visuel de la coupe pour la sélection courante.
+
+  ![Étape 3.2 — Cubature](images/Assistant_etape32_cubature.png)
+
+- *Remblai* — matériaux et épaisseurs (lit de pose, enrobage, remblai,
+  chaussées inférieure/supérieure), avec schéma de coupe mis à jour en direct.
+
+  ![Étape 3.3 — Remblai](images/Assistant_etape33_remblai.png)
+
+**4. Récapitulatif** — nom du projet et dossier d'enregistrement, puis relecture
+visuelle de tous les choix (réseau, largeurs de tranchée par cadre EU/EP,
+coupe de remblai) avant de cliquer sur « Créer ».
+
+![Étape 4 — Récapitulatif](images/Assistant_etape4.png)
+
+#### Dessin de réseau
+
+Dessin d'une conduite EU par clics successifs — chaque sommet génère
+automatiquement un regard ; l'info-bulle en direct affiche longueur, gisement
+et pente du tronçon en cours de tracé.
+
+![Dessiner une conduite EU](images/DessinerconduiteEU.png)
+
+Dessin d'un branchement par piquage sur une conduite existante, jusqu'à
+l'ouvrage terminal (regard ou tabouret).
+
+![Dessiner un branchement](images/dessinerBrcht.png)
+
+#### Renumérotation
+
+Renumérote en série les regards et tabourets d'un réseau à partir d'un
+préfixe et d'un numéro de départ (ex. `REU00`, `REU01…` / `EU-BRCHT01…`).
+
+![Renumérotation des regards](images/renumeroterRegards.png)
+
+#### Tableau de saisie — pente
+
+Saisie groupée en tableau, par onglets **Regards**, **Tabourets**,
+**Conduites**, **Branchements** et **Chaîne regards PENTE** — avec calcul
+automatique de la pente ou de la cote fil d'eau, aperçu carte miniature et
+annulation (Ctrl+Z).
+
+![Onglet Regards](images/TSP_regards.png)
+
+![Onglet Tabourets](images/TSP_Taboutes.png)
+
+![Onglet Conduites — aperçu carte](images/TSP_conduite.png)
+
+![Onglet Branchements — aperçu carte](images/TSP_Branchements.png)
+
+L'onglet **Chaîne regards PENTE** trace le profil simplifié entre deux
+regards choisis et permet d'appliquer une pente constante, une pente
+calculée ou une profondeur fixe sur toute la chaîne d'un coup.
+
+![Onglet Chaîne regards PENTE](images/TSP_Pente.png)
+
+#### Profil en long
+
+Options avant tracé (tableau de valeurs, flèches et noms de piquage,
+distance de piquage, format papier), puis le profil généré : altitude du
+terrain naturel, fil d'eau, piquages des branchements, tableau de valeurs
+sous le graphique.
+
+![Options du profil en long](images/Profil_long_option.png)
+
+![Exemple de profil en long](images/Profil_long_exemple.png)
+
+#### Coupe transversale
+
+Coupe verticale de tranchée sur un tronçon choisi : mini-carte de situation
+à gauche, coupe cotée à droite (chaussées, remblai, enrobage, lit de pose,
+diamètre de la conduite), export PDF ou PNG au format et à l'échelle choisis.
+
+![Plan de coupe transversale](images/coupe_tranversale.png)
+
+#### Cubature et remblai
+
+Options de calcul (périmètre tout le projet / EU seul / EP seul, conduites
+et/ou branchements, sélection par parcours BFS entre deux regards ou par
+tracé d'un axe) puis résultats détaillés par tronçon : longueur, pente,
+volumes de lit de pose, enrobage, conduite, chaussées et remblai, avec
+sous-totaux et export CSV / PDF / Excel.
+
+![Options de cubature](images/cubature_remblai_option.png)
+
+![Résultats de cubature et remblai](images/cubature_remblai_exemple.png)
+
+#### Impression et export PDF / DXF
+
+Paramètres de la feuille (titre, format, orientation, échelle, résolution
+PDF), placement des cadres d'impression sur la carte par clic + rotation,
+puis le plan final avec cartouche, flèche du nord et barre d'échelle. Le
+dialogue *Export combiné* permet de générer en une passe plan PDF, plan DXF
+et profils en long EU / EP / groupé.
+
+![Paramètres d'impression](images/imprime_exporter_pdfdxf_parametreimpression.png)
+
+![Placement des cadres d'impression](images/imprime_exporter_pdfdxf_placementcadre.png)
+
+![Plan PDF final](images/plan_pdf.png)
+
+![Export combiné](images/imprime_exporter_pdfdxf_option.png)
 
 ### Fonds de plan
 
@@ -594,20 +755,33 @@ La compatibilite ascendante est assuree avec le format v1 (JSON brut + GPKG exte
 
 ## Installation
 
-1. Copier le dossier `BET_HUMIDE` dans :
-   ```
-   %APPDATA%\QGIS\QGIS3\profiles\default\python\plugins\
-   ```
-2. Dans QGIS : **Extensions → Installer/Gerer les extensions → Installees** → cocher **Reseau Assainissement**.
-3. La barre d'outils et le panneau lateral apparaissent automatiquement.
+1. Téléchargez ou clonez ce dépôt :
 
-### Prerequis
+   ```bash
+   git clone https://github.com/Cartoyoyo/BET_humide.git
+   ```
 
-- QGIS **>= 3.28** (recommande >= 3.38 pour eviter les avertissements `QMetaType`)
-- **matplotlib** (optionnel) — requis pour le profil en long, la coupe transversale et le dessinateur de coupes de tranchees composees
-- **ezdxf** (deja inclus dans `libs/`) — utilise pour le post-traitement de l'export DXF (fonds + cadres + lignes de rappel + symboles ponctuels)
-- **reportlab** (optionnel) — requis pour les exports PDF de cubature / remblai
-- **openpyxl** (optionnel) — requis pour les exports Excel de cubature / remblai
+2. Copiez le dossier `BET_HUMIDE` dans le répertoire des plugins QGIS :
+
+   | Système | Chemin |
+   |---------|--------|
+   | Windows | `C:\Users\<utilisateur>\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\` |
+   | macOS   | `~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins/` |
+   | Linux   | `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/` |
+
+3. Ouvrez QGIS, allez dans **Extensions → Installer/Gérer les extensions → Installées**, cochez **BET Humide** et cliquez sur **OK**.
+
+4. La barre d'outils et le panneau latéral apparaissent automatiquement.
+
+### Prérequis
+
+| Dépendance | Statut | Usage |
+|---|---|---|
+| QGIS **>= 3.28** | requis (>= 3.38 recommandé pour éviter les avertissements `QMetaType`) | — |
+| **matplotlib** | optionnel | profil en long, coupe transversale, dessinateur de coupes de tranchées composées |
+| **ezdxf** | inclus (`libs/`) | post-traitement de l'export DXF (fonds, cadres, lignes de rappel, symboles ponctuels) |
+| **reportlab** | optionnel | exports PDF de cubature / remblai |
+| **openpyxl** | optionnel | exports Excel de cubature / remblai |
 
 ---
 
@@ -684,6 +858,14 @@ BET_HUMIDE/
 ---
 
 ## Changelog
+
+| Version | Notes |
+|---------|-------|
+| **1.4** | Assistant de création de projet en 4 étapes (adresse BAN, fonds de plan, configuration rapide, récapitulatif) — PCI Vecteur basculé sur le Parcellaire Express IGN — Couches de fond WFS mises à jour en place |
+| **1.3** | Export StaR-Eau V2024 (CNIG/ASTEE), GeoPackage 5 couches, UUID v5 déterministes — Import Star-DT étendu à StaR-Elec, multi-fichiers et glisser-déposer — Interpolation en cascade des cotes de piquage |
+| **1.2** | Fusion Cubature / Remblai en une fenêtre unique avec détail à la volée — Tableau de saisie groupée (Ctrl+Z, copier/coller Excel) — Réseau AEP dans le dessinateur de coupes composées |
+| **1.1** | Rendu PDF parallèle et annulable — Index spatiaux sur tous les outils carte — Fonds WFS chargés en tâche de fond sans geler QGIS |
+| **1.0** | Version initiale |
 
 ### 1.4
 
@@ -762,10 +944,24 @@ BET_HUMIDE/
 
 ---
 
+## Genèse du projet
+
+Pourquoi ce plugin, et comment il a été construit sans bagage de développeur au départ : [interview complète](INTERVIEW.md).
+
+---
+
 ## Auteur
 
-**Yoan Laloux** — [LinkedIn](https://www.linkedin.com/in/ylaloux/)
+<div align="center">
 
-Developpe dans le cadre du BET Humide.
-Depot : <https://github.com/Cartoyoyo/BET_humide>
-Anomalies et demandes : <https://github.com/Cartoyoyo/BET_humide/issues>
+Développé par **Yoan Laloux**
+
+Technicien SIG — Vichy Communauté
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-ylaloux-blue?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/ylaloux/)
+[![Email](https://img.shields.io/badge/Email-yoan.laloux%40laposte.net-blue?logo=gmail&logoColor=white)](mailto:yoan.laloux@laposte.net)
+[![GitHub](https://img.shields.io/badge/GitHub-Cartoyoyo-black?logo=github)](https://github.com/Cartoyoyo)
+
+Dépôt : <https://github.com/Cartoyoyo/BET_humide> · Anomalies et demandes : <https://github.com/Cartoyoyo/BET_humide/issues>
+
+</div>

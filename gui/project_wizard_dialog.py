@@ -7,6 +7,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget,
     QWidget, QCheckBox, QGroupBox, QToolBox, QTextEdit, QFrame,
+    QLineEdit, QFileDialog, QMessageBox,
 )
 from qgis.PyQt.QtGui import QFont, QColor
 from qgis.core import (
@@ -18,7 +19,15 @@ from qgis.gui import QgsMapCanvas, QgsMapToolPan, QgsVertexMarker
 from .ban_search_widget import BanSearchWidget
 from .quick_config_widgets import (
     ReseauDefautWidget, CubatureConfigWidget, RemblaiConfigWidget,
+    NetworkSchemaWidget, CubatureSchemaWidget, TrenchSchemaWidget,
+    network_group_stylesheet,
 )
+
+# Libellés des largeurs de tranchée affichées en aperçu au récapitulatif.
+_CUBATURE_WIDTH_LABELS = {
+    'larg_cond_eu': "Conduite EU", 'larg_cond_ep': "Conduite EP",
+    'larg_branch_eu': "Branch. EU", 'larg_branch_ep': "Branch. EP",
+}
 
 CANVAS_CRS = QgsCoordinateReferenceSystem("EPSG:2154")
 WGS84_CRS = QgsCoordinateReferenceSystem("EPSG:4326")
@@ -189,11 +198,102 @@ class _RecapPage(QWidget):
             "Vérifiez les informations ci-dessous, ou revenez en arrière "
             "pour les modifier, puis cliquez sur « Créer »."))
 
+        save_group = QGroupBox("Enregistrement du projet")
+        save_layout = QVBoxLayout()
+
+        name_layout = QHBoxLayout()
+        name_layout.addWidget(QLabel("Nom du projet :"))
+        self._name_edit = QLineEdit()
+        self._name_edit.setPlaceholderText("Nom du projet")
+        name_layout.addWidget(self._name_edit)
+        save_layout.addLayout(name_layout)
+
+        folder_layout = QHBoxLayout()
+        folder_layout.addWidget(QLabel("Dossier :"))
+        self._folder_edit = QLineEdit()
+        self._folder_edit.setReadOnly(True)
+        self._folder_edit.setPlaceholderText("Choisir un dossier…")
+        folder_layout.addWidget(self._folder_edit)
+        btn_browse = QPushButton("Parcourir…")
+        btn_browse.clicked.connect(self._browse_folder)
+        folder_layout.addWidget(btn_browse)
+        save_layout.addLayout(folder_layout)
+
+        save_group.setLayout(save_layout)
+        layout.addWidget(save_group)
+
+        from ..tools.projet_bet import project_dir
+        default_dir = project_dir()
+        if default_dir:
+            self._folder_edit.setText(default_dir)
+
         self._text = QTextEdit()
         self._text.setReadOnly(True)
+        self._text.setMaximumHeight(90)
         layout.addWidget(self._text)
 
-    def refresh(self, address_label, basemap_options, config_summary):
+        # Aperçus schématiques (réseau, largeurs de tranchée, remblai),
+        # compacts pour ne pas surcharger le récapitulatif.
+        reseau_group = QGroupBox("Réseau")
+        reseau_layout = QHBoxLayout()
+        self._network_eu = NetworkSchemaWidget()
+        self._network_eu.setMinimumHeight(95)
+        self._network_ep = NetworkSchemaWidget()
+        self._network_ep.setMinimumHeight(95)
+        for sub_title, widget in (("EU", self._network_eu), ("EP", self._network_ep)):
+            sub_box = QGroupBox(sub_title)
+            sub_box.setStyleSheet(network_group_stylesheet(sub_title))
+            sub_layout = QVBoxLayout()
+            sub_layout.addWidget(widget)
+            sub_box.setLayout(sub_layout)
+            reseau_layout.addWidget(sub_box)
+        reseau_group.setLayout(reseau_layout)
+        layout.addWidget(reseau_group)
+
+        cubature_group = QGroupBox("Cubature — largeurs de tranchée")
+        cubature_layout = QHBoxLayout()
+        self._cubature_widgets = {}
+        for key in ('larg_cond_eu', 'larg_branch_eu', 'larg_cond_ep', 'larg_branch_ep'):
+            w = CubatureSchemaWidget()
+            w.setMinimumHeight(95)
+            w.setMinimumWidth(110)
+            self._cubature_widgets[key] = w
+            sub_box = QGroupBox(_CUBATURE_WIDTH_LABELS[key])
+            sub_reseau = "EU" if key.endswith("_eu") else "EP"
+            sub_box.setStyleSheet(network_group_stylesheet(sub_reseau))
+            sub_layout = QVBoxLayout()
+            sub_layout.addWidget(w)
+            sub_box.setLayout(sub_layout)
+            cubature_layout.addWidget(sub_box)
+        cubature_group.setLayout(cubature_layout)
+        layout.addWidget(cubature_group)
+
+        remblai_group = QGroupBox("Remblai")
+        remblai_layout = QVBoxLayout()
+        self._remblai_schema = TrenchSchemaWidget()
+        self._remblai_schema.setMinimumHeight(150)
+        remblai_layout.addWidget(self._remblai_schema)
+        remblai_group.setLayout(remblai_layout)
+        layout.addWidget(remblai_group)
+
+    def _browse_folder(self):
+        folder = QFileDialog.getExistingDirectory(
+            self, "Choisir le dossier de sauvegarde du projet",
+            self._folder_edit.text())
+        if folder:
+            self._folder_edit.setText(folder)
+
+    def project_name(self):
+        return self._name_edit.text().strip()
+
+    def project_folder(self):
+        return self._folder_edit.text().strip()
+
+    def set_default_name(self, name):
+        if not self._name_edit.text().strip():
+            self._name_edit.setText(name)
+
+    def refresh(self, address_label, basemap_options, config_page):
         basemap_labels = {
             'osm': "OSM désaturé", 'ortho': "Orthophoto IGN",
             'ban': "Adresses BAN", 'noms_voie': "Noms de voie",
@@ -206,10 +306,17 @@ class _RecapPage(QWidget):
             "",
             "Fonds de plan :",
             f"  {', '.join(chosen) if chosen else '(aucun)'}",
-            "",
-            config_summary,
         ]
         self._text.setPlainText("\n".join(lines))
+
+        self._network_eu.update_schema(config_page.reseau_widget.get_network_data("EU"))
+        self._network_ep.update_schema(config_page.reseau_widget.get_network_data("EP"))
+
+        for key, widget in self._cubature_widgets.items():
+            width = config_page.cubature_widget.get_width(key)
+            widget.update_schema(width, _CUBATURE_WIDTH_LABELS[key])
+
+        self._remblai_schema.update_schema(config_page.remblai_widget.get_schema_data())
 
 
 class ProjectWizardDialog(QDialog):
@@ -274,11 +381,14 @@ class ProjectWizardDialog(QDialog):
         last = idx == self._stack.count() - 1
         self._btn_next.setText("Créer" if last else "Suivant >")
         if last:
+            address_label = self._address_page.address_label()
             self._recap_page.refresh(
-                self._address_page.address_label(),
+                address_label,
                 self._basemaps_page.options(),
-                self._config_page.summary(),
+                self._config_page,
             )
+            if address_label:
+                self._recap_page.set_default_name(f"Projet {address_label}")
 
     def _go_prev(self):
         self._stack.setCurrentIndex(self._current_index() - 1)
@@ -292,7 +402,28 @@ class ProjectWizardDialog(QDialog):
         self._update_nav()
 
     def _create_project(self):
-        from ..tools.projet_bet import save_projet_sous
+        import os
+        from ..tools.projet_bet import _do_save
+
+        proj_name = self._recap_page.project_name()
+        proj_folder = self._recap_page.project_folder()
+        if not proj_name or not proj_folder:
+            QMessageBox.warning(
+                self, "Créer un projet avec l'assistant",
+                "Merci de renseigner le nom du projet et le dossier "
+                "d'enregistrement avant de cliquer sur « Créer ».")
+            return
+
+        bet_path = os.path.join(proj_folder, f"{proj_name}.bet")
+        if os.path.exists(bet_path):
+            reply = QMessageBox.question(
+                self, "Créer un projet avec l'assistant",
+                f"Le fichier « {proj_name}.bet » existe déjà dans ce "
+                "dossier. Voulez-vous l'écraser ?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply != QMessageBox.Yes:
+                return
+        gpkg_temp = os.path.join(proj_folder, f"{proj_name}_tmp.gpkg")
 
         canvas = self._iface.mapCanvas()
         canvas.setDestinationCrs(CANVAS_CRS)
@@ -309,7 +440,7 @@ class ProjectWizardDialog(QDialog):
         self._plugin._get_couches("EP")
 
         self._created = True
-        save_projet_sous(self._plugin, self._iface)
+        _do_save(self._plugin, self._iface, gpkg_temp, bet_path)
         self.accept()
 
     def project_created(self):

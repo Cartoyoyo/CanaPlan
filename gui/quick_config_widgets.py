@@ -31,6 +31,22 @@ MATERIAUX = [""] + _materiaux_labels()
 MATERIAUX_REMBLAI = ["", "Sable", "2/6", "0/31.5", "Tout-venant",
                      "GB (Grave bitume)", "GC (Grave ciment)", "Enrobé"]
 
+# Couleurs des réseaux (mêmes valeurs que main.py:COLORS — EU rouge, EP bleu),
+# reprises ici pour la visibilité dans les widgets de configuration/assistant.
+NETWORK_COLORS = {'EU': '#E30613', 'EP': '#0033CC'}
+
+
+def network_group_stylesheet(reseau):
+    """Style de cadre coloré (bordure + titre) pour un QGroupBox EU/EP."""
+    color = NETWORK_COLORS.get(reseau, '#888888')
+    return (
+        f"QGroupBox {{ border: 2px solid {color}; border-radius: 4px; "
+        f"margin-top: 10px; font-weight: bold; }} "
+        f"QGroupBox::title {{ subcontrol-origin: margin; left: 8px; "
+        f"padding: 0 4px; color: {color}; }}"
+    )
+
+
 INITIAL_DEFAULTS = {
     "conduite_eu":      (200, "PVC"),
     "conduite_ep":      (315, "PVC"),
@@ -370,6 +386,7 @@ class ReseauDefautWidget(QWidget):
         layout = QVBoxLayout(self)
         for reseau in ("EU", "EP"):
             group = QGroupBox(f"Réseau {reseau}")
+            group.setStyleSheet(network_group_stylesheet(reseau))
             group_layout = QVBoxLayout()
 
             form = QFormLayout()
@@ -403,23 +420,24 @@ class ReseauDefautWidget(QWidget):
 
     def _refresh_network_schemas(self):
         for reseau in ("EU", "EP"):
-            key_c = f"conduite_{reseau.lower()}"
-            key_b = f"branchement_{reseau.lower()}"
+            self._network_schemas[reseau].update_schema(self.get_network_data(reseau))
 
-            spin_c, mat_c = self._def_widgets.get(key_c, (None, None))
-            spin_b, mat_b = self._def_widgets.get(key_b, (None, None))
+    def get_network_data(self, reseau):
+        """Retourne les données courantes (diamètre/matériau) pour un
+        NetworkSchemaWidget, sans dépendre du widget d'aperçu affiché ici."""
+        key_c = f"conduite_{reseau.lower()}"
+        key_b = f"branchement_{reseau.lower()}"
 
-            diam_c = spin_c.value() if spin_c else 200
-            mat_c_str = mat_c.currentText() if mat_c else "PVC"
+        spin_c, mat_c = self._def_widgets.get(key_c, (None, None))
+        spin_b, mat_b = self._def_widgets.get(key_b, (None, None))
 
-            diam_b = spin_b.value() if spin_b else 160
-            mat_b_str = mat_b.currentText() if mat_b else "PVC"
-
-            self._network_schemas[reseau].update_schema({
-                'diam_cond': diam_c, 'mat_cond': mat_c_str,
-                'diam_branch': diam_b, 'mat_branch': mat_b_str,
-                'reseau_name': reseau
-            })
+        return {
+            'diam_cond': spin_c.value() if spin_c else 200,
+            'mat_cond': mat_c.currentText() if mat_c else "PVC",
+            'diam_branch': spin_b.value() if spin_b else 160,
+            'mat_branch': mat_b.currentText() if mat_b else "PVC",
+            'reseau_name': reseau,
+        }
 
     def load_settings(self):
         gs = QgsSettings()
@@ -528,9 +546,13 @@ class CubatureConfigWidget(QWidget):
     def _refresh_cubature_schema(self):
         idx = self._cubature_combo.currentIndex()
         key, label = self._cubature_mapping.get(idx, ('larg_cond_eu', "Conduite EU"))
+        self._cubature_schema_widget.update_schema(self.get_width(key), label)
+
+    def get_width(self, key):
+        """Largeur de tranchée courante (m) pour une clé
+        larg_cond_eu / larg_cond_ep / larg_branch_eu / larg_branch_ep."""
         spin = self._cub_widgets.get(key)
-        val = spin.value() if spin else 0.8
-        self._cubature_schema_widget.update_schema(val, label)
+        return spin.value() if spin else 0.8
 
     def load_settings(self):
         gs = QgsSettings()
@@ -674,6 +696,11 @@ class RemblaiConfigWidget(QWidget):
         self._refresh_schema()
 
     def _refresh_schema(self):
+        self._schema_widget.update_schema(self.get_schema_data())
+
+    def get_schema_data(self):
+        """Données courantes du schéma de remblai, sans dépendre du
+        TrenchSchemaWidget affiché ici."""
         lit = self._remblai_mat.get('materiau_lit_pose')
         enr = self._remblai_mat.get('materiau_enrobage')
         rem = self._remblai_mat.get('materiau_remblai')
@@ -715,7 +742,7 @@ class RemblaiConfigWidget(QWidget):
             'ep_cs': ep_cs_val,
             'ep_lit': ep_lit_val
         }
-        self._schema_widget.update_schema(data)
+        return data
 
     def load_settings(self):
         gs = QgsSettings()

@@ -2,7 +2,7 @@ import configparser
 import os
 
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QFont, QIcon, QPixmap
+from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame,
 )
@@ -16,6 +16,9 @@ class AboutDialog(QDialog):
         self.setWindowTitle("À propos de BET Humide")
         self.setModal(True)
         self.setMinimumWidth(420)
+        icon_path = os.path.join(self.plugin_dir, "icon", "icon.png")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         self._build_ui()
 
     def _read_metadata(self):
@@ -37,25 +40,18 @@ class AboutDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        header = QHBoxLayout()
-        icon_path = os.path.join(self.plugin_dir, "icon", "config.svg")
-        if os.path.exists(icon_path):
-            icon_label = QLabel()
-            icon_label.setPixmap(QIcon(icon_path).pixmap(48, 48))
-            header.addWidget(icon_label)
-
-        title_box = QVBoxLayout()
-        title = QLabel("BET Humide")
-        font = QFont()
-        font.setPointSize(14)
-        font.setBold(True)
-        title.setFont(font)
-        title_box.addWidget(title)
+        header = QVBoxLayout()
+        logo_path = os.path.join(self.plugin_dir, "icon", "logo-full.svg")
+        if os.path.exists(logo_path):
+            logo_label = QLabel()
+            logo_pixmap = QIcon(logo_path).pixmap(360, 94)
+            logo_label.setPixmap(logo_pixmap)
+            logo_label.setAlignment(Qt.AlignCenter)
+            header.addWidget(logo_label)
 
         version = QLabel(f"Version {meta['version']}")
-        title_box.addWidget(version)
-        header.addLayout(title_box)
-        header.addStretch()
+        version.setAlignment(Qt.AlignCenter)
+        header.addWidget(version)
         layout.addLayout(header)
 
         sep = QFrame()

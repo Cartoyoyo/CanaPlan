@@ -1,6 +1,7 @@
 [general]
 name=BET Humide – Réseau Assainissement
 description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE).
+icon=icon/icon.png
 version=1.4
 qgisMinimumVersion=3.28
 author=Yoan Laloux

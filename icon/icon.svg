@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect x="0" y="0" width="64" height="64" rx="13" fill="#0E3A5A"/>
+  <!-- terrain naturel -->
+  <path d="M5 21 Q19 12 32 19 T59 16" fill="none" stroke="#8FBF4D"
+        stroke-width="3.2" stroke-linecap="round"/>
+  <!-- regard amont -->
+  <rect x="14" y="19" width="8.5" height="16" rx="1" fill="#E8EEF2"/>
+  <rect x="12.5" y="17" width="11.5" height="3" rx="1.5" fill="#F5A623"/>
+  <!-- regard aval (plus profond) -->
+  <rect x="41" y="17" width="8.5" height="27" rx="1" fill="#E8EEF2"/>
+  <rect x="39.5" y="15" width="11.5" height="3" rx="1.5" fill="#F5A623"/>
+  <!-- conduite en pente -->
+  <path d="M18.2 35 L45.3 43.5" stroke="#2E9BD6" stroke-width="5.5"
+        stroke-linecap="round"/>
+  <!-- fil d'eau / cote de pente -->
+  <path d="M18.2 48 L45.3 48" stroke="#F5A623" stroke-width="1.6"
+        stroke-dasharray="3 3" stroke-linecap="round" opacity="0.85"/>
+</svg>

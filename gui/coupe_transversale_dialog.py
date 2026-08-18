@@ -271,10 +271,10 @@ def _build_title(crossings):
     return "  ·  ".join(_ordered_regard_names(crossings)) or "Coupe transversale"
 
 
-def _build_filename(crossings):
+def _build_filename(crossings, ext="pdf"):
     parts = _ordered_regard_names(crossings)
     safe  = "_".join(p.replace(" ", "_").replace("/", "-") for p in parts)
-    return f"{safe}_plan_de_coupe.pdf" if safe else "plan_de_coupe.pdf"
+    return f"{safe}_plan_de_coupe.{ext}" if safe else f"plan_de_coupe.{ext}"
 
 
 # ------------------------------------------------------------------ dialog
@@ -309,6 +309,9 @@ class CoupeTransversaleDialog(QDialog):
         btn_pdf = QPushButton("Exporter PDF…")
         btn_pdf.clicked.connect(self._export_pdf)
         ctrl.addWidget(btn_pdf)
+        btn_png = QPushButton("Exporter PNG…")
+        btn_png.clicked.connect(self._export_png)
+        ctrl.addWidget(btn_png)
         layout.addLayout(ctrl)
 
         self.figure = Figure()
@@ -574,4 +577,28 @@ class CoupeTransversaleDialog(QDialog):
         from qgis.PyQt.QtWidgets import QMessageBox
         QMessageBox.information(
             self, "Export PDF",
+            f"Plan de coupe exporté :\n{path}")
+
+    # ------------------------------------------------------------------ export PNG
+
+    def _export_png(self):
+        default_name = _build_filename(self.crossings, ext="png")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Enregistrer le plan de coupe en PNG",
+            default_name, "PNG (*.png)")
+        if not path:
+            return
+
+        fmt_name   = self.fmt_combo.currentText()
+        w_mm, h_mm = PAPER_SIZES[fmt_name]
+
+        old_size = self.figure.get_size_inches()
+        self.figure.set_size_inches(w_mm / 25.4, h_mm / 25.4)
+        self.figure.savefig(path, format='png', dpi=300, bbox_inches=None)
+        self.figure.set_size_inches(*old_size)
+        self.canvas.draw()
+
+        from qgis.PyQt.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self, "Export PNG",
             f"Plan de coupe exporté :\n{path}")

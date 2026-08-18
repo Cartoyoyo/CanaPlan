@@ -7,44 +7,44 @@
 **Plugin QGIS de dessin topologique de réseaux d'assainissement — EU / EP, du tracé terrain à la livraison StaR-Eau**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.28%2B-green?logo=qgis&logoColor=white)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-1.4-blue)](#changelog)
-[![StaR-Eau](https://img.shields.io/badge/StaR--Eau-V2024%20CNIG%2FASTEE-orange)](#export-star-eau-cnig--astee-v2024)
+[![Version](https://img.shields.io/badge/version-1.4-blue)](#-changelog)
+[![StaR-Eau](https://img.shields.io/badge/StaR--Eau-V2024%20CNIG%2FASTEE-orange)](#-export-star-eau-cnig--astee-v2024)
 [![Langue](https://img.shields.io/badge/langue-FR-purple)](README.md)
 
 </div>
 
 ---
 
-## Description
+## 📝 Description
 
-**BET Humide** est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement **EU** (Eaux Usées) et **EP** (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge.
+**BET Humide** est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement **EU** (Eaux Usées) et **EP** (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement.
 
-La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie. L'outil produit les profils en long, calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée, imprime les plans au format PDF et permet d'exporter en DXF.
+La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle.
 
-Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne, avec en plus un tableau de saisie groupée, l'impression PDF multi-feuilles et l'export GeoPackage conforme au géostandard **StaR-Eau V2024** (CNIG / ASTEE).
+Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard **StaR-Eau V2024** (CNIG / ASTEE).
 
-### Sommaire
+### 🗂️ Sommaire
 
-- [Fonctionnalités](#fonctionnalités)
-- [Captures d'écran](#captures-décran)
-- [Interface](#interface)
-- [Couches et attributs](#couches-et-attributs)
-- [Symbologie](#symbologie)
-- [Raccourcis clavier](#raccourcis-clavier)
-- [Import Star-DT / StaR-Elec](#import-star-dt--star-elec-dt-dict)
-- [Export StaR-Eau](#export-star-eau-cnig--astee-v2024)
-- [Format de projet .bet](#format-de-projet-bet)
-- [Installation](#installation)
-- [Structure du projet](#structure-du-projet)
-- [Changelog](#changelog)
-- [Genèse du projet](#genèse-du-projet)
-- [Auteur](#auteur)
+- [⚙️ Fonctionnalités](#-fonctionnalites)
+- [🖼️ Captures d'écran](#-captures-décran)
+- [🖥️ Interface](#-interface)
+- [🗃️ Couches et attributs](#-couches-et-attributs)
+- [🎨 Symbologie](#-symbologie)
+- [⌨️ Raccourcis clavier](#-raccourcis-clavier)
+- [📥 Import Star-DT / StaR-Elec](#-import-star-dt--star-elec-dt-dict)
+- [📤 Export StaR-Eau](#-export-star-eau-cnig--astee-v2024)
+- [📦 Format de projet .bet](#-format-de-projet-bet)
+- [🚀 Installation](#-installation)
+- [🌳 Structure du projet](#-structure-du-projet)
+- [📜 Changelog](#-changelog)
+- [💡 Genèse du projet](#-genèse-du-projet)
+- [👤 Auteur](#-auteur)
 
 ---
 
-## Fonctionnalites
+## ⚙️ Fonctionnalites
 
-### Dessin de reseau
+### ✏️ Dessin de reseau
 
 | Outil | Description |
 |---|---|
@@ -52,7 +52,7 @@ Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne,
 | **Branchement EU / EP** | Piquage sur une conduite existante, trace libre jusqu'a un ouvrage (regard ou tabouret). |
 | **Inserer un regard** | Insere un regard sur une conduite existante en cliquant sur la conduite. |
 
-### Edition
+### 🛠️ Edition
 
 | Outil | Description |
 |---|---|
@@ -87,7 +87,7 @@ au PK du piquage, et se recalcule automatiquement quand ces fils d'eau
 changent. Le mode `pente_cote` rompt volontairement ce lien, puisque la cote
 de piquage y devient une valeur calculee a partir de la pente.
 
-### Analyse
+### 📊 Analyse
 
 | Outil | Description |
 |---|---|
@@ -98,19 +98,19 @@ de piquage y devient une valeur calculee a partir de la pente.
 | **Coupe transversale des tranchees** | Trace un axe de coupe croisant les reseaux EU et EP simultanement. Genere un plan de coupe A4/A3 (**paysage par defaut**) avec : profil de coupe (tranchees empilees par largeur configuree, cotes NGF), plan de situation (couches QGIS visibles + trait de coupe), titre et cartouche. Export PDF. |
 | **Dessinateur – Coupe de tranchees composee** | Dialogue de dessin de coupes de tranchees composees (EU, EP et **AEP** — eau potable, cote a cote). Gestion de N tranches juxtaposees : reseau (EU/EP/AEP), DN, materiau, profondeur fil d'eau, ecarts gauche/droit, lit de pose, enrobage, remblai, chaussee inferieure (GB/GC) et superieure (enrobe). Apercu matplotlib temps reel avec cotes, annotations de couches et couleurs conventionnelles (EU rouge, EP bleu, AEP cyan). Export PDF et PNG (200 dpi). Les valeurs par defaut des couches de remblai heritent de la configuration rapide. Memorisation automatique des dernieres tranches saisies (QgsSettings). Necessite **matplotlib**. |
 
-### Cubature et Remblai
+### 🚧 Cubature et Remblai
 
 | Outil | Description |
 |---|---|
 | **Cubature / Remblai tranchees** | Calcule le volume de deblai des tranchees. Mode BFS (2 regards), axe trace (buffer 3 m) ou reseau complet. Formule : `Volume = largeur × L3D × (prof_debut + prof_fin) / 2`. Une case a cocher **« Afficher le detail remblai »** dans la fenetre de resultats affiche/masque a la volee les colonnes de decomposition du remblai (lit de pose, enrobage, conduite, chaussee inf/sup, remblai) sans refaire le calcul — parametrage des materiaux et epaisseurs dans la Configuration rapide (onglet Remblai). Sous-totaux par colonne (lineaires, surfaces, volumes) sur chaque ligne de sous-total EU/EP. Onglet/section **Synthese des ouvrages** (tronçons et branchements groupes par materiau/diametre, comptage des regards et tabourets). Fenetre redimensionnable, plein ecran, et qui s'ajuste automatiquement au nombre de lignes et de colonnes affichees. Export CSV, PDF, Excel. |
 
-### Renumerotation
+### 🔢 Renumerotation
 
 | Outil | Description |
 |---|---|
 | **Renuméroter EU / EP** | Selectionner deux regards pour renumeroter tous les regards et tabourets du chemin (BFS). Un dialogue permet de saisir les prefixes et le numero de depart. |
 
-### Etiquettes
+### 🏷️ Etiquettes
 
 | Outil | Description |
 |---|---|
@@ -208,7 +208,7 @@ changer a l'echelle de travail.
 Le seuil se regle (ou se desactive) dans le dialogue *Taille des
 etiquettes*, et suit le projet `.bet`.
 
-### Annotations
+### 💬 Annotations
 
 | Outil | Description |
 |---|---|
@@ -216,7 +216,7 @@ etiquettes*, et suit le projet `.bet`.
 | **Copier / coller** | `Ctrl + clic` sur une annotation = duplication immediate avec leger decalage. `Ctrl + C` (curseur sur l'annotation) = copie dans un presse-papier interne au plugin. `Ctrl + V` puis clic = collage au point clique. `Echap` annule un coller en attente. |
 | **Figer en map units** | Fonction `freeze_annotations_to_map_units(canvas)` exposable dans la console Python : convertit toutes les annotations existantes (qui seraient en pt) vers map units, calcule a la vue courante du canvas — regle la vue sur 1:200 avant de lancer pour avoir une taille coherente. |
 
-### Gestion de projet
+### 💾 Gestion de projet
 
 | Outil | Description |
 |---|---|
@@ -230,9 +230,9 @@ etiquettes*, et suit le projet `.bet`.
 | **Export combine** | Dialogue unique pour generer en une passe : plan PDF, plan DXF, profils EU, profils EP, profil groupe (avec choix du reseau de reference EU ou EP). Tous les exports vont dans un dossier choisi, noms de fichiers automatiques (1er regard / dernier regard). |
 | **Exporter StaR-Eau (GPKG)** | Genere un GeoPackage conforme au geostandard **StaR-Eau V2024** (CNIG / ASTEE). Menu *Sorties & Impression*. Voir la section dediee ci-dessous. |
 
-### Captures d'écran
+### 🖼️ Captures d'écran
 
-#### Assistant de création de projet
+#### 🧙 Assistant de création de projet
 
 Les 4 étapes de l'assistant (menu *Projet ▸ Créer un projet avec l'assistant*,
 ou bouton « Débuter avec l'assistant » du dialogue d'accueil) :
@@ -272,7 +272,7 @@ coupe de remblai) avant de cliquer sur « Créer ».
 
 ![Étape 4 — Récapitulatif](images/Assistant_etape4.png)
 
-#### Dessin de réseau
+#### ✏️ Dessin de réseau
 
 Dessin d'une conduite EU par clics successifs — chaque sommet génère
 automatiquement un regard ; l'info-bulle en direct affiche longueur, gisement
@@ -285,14 +285,14 @@ l'ouvrage terminal (regard ou tabouret).
 
 ![Dessiner un branchement](images/dessinerBrcht.png)
 
-#### Renumérotation
+#### 🔢 Renumérotation
 
 Renumérote en série les regards et tabourets d'un réseau à partir d'un
 préfixe et d'un numéro de départ (ex. `REU00`, `REU01…` / `EU-BRCHT01…`).
 
 ![Renumérotation des regards](images/renumeroterRegards.png)
 
-#### Tableau de saisie — pente
+#### 📋 Tableau de saisie — pente
 
 Saisie groupée en tableau, par onglets **Regards**, **Tabourets**,
 **Conduites**, **Branchements** et **Chaîne regards PENTE** — avec calcul
@@ -313,7 +313,7 @@ calculée ou une profondeur fixe sur toute la chaîne d'un coup.
 
 ![Onglet Chaîne regards PENTE](images/TSP_Pente.png)
 
-#### Profil en long
+#### 📈 Profil en long
 
 Options avant tracé (tableau de valeurs, flèches et noms de piquage,
 distance de piquage, format papier), puis le profil généré : altitude du
@@ -324,7 +324,7 @@ sous le graphique.
 
 ![Exemple de profil en long](images/Profil_long_exemple.png)
 
-#### Coupe transversale
+#### ✂️ Coupe transversale
 
 Coupe verticale de tranchée sur un tronçon choisi : mini-carte de situation
 à gauche, coupe cotée à droite (chaussées, remblai, enrobage, lit de pose,
@@ -332,7 +332,7 @@ diamètre de la conduite), export PDF ou PNG au format et à l'échelle choisis.
 
 ![Plan de coupe transversale](images/coupe_tranversale.png)
 
-#### Cubature et remblai
+#### 🚧 Cubature et remblai
 
 Options de calcul (périmètre tout le projet / EU seul / EP seul, conduites
 et/ou branchements, sélection par parcours BFS entre deux regards ou par
@@ -344,23 +344,27 @@ sous-totaux et export CSV / PDF / Excel.
 
 ![Résultats de cubature et remblai](images/cubature_remblai_exemple.png)
 
-#### Impression et export PDF / DXF
+#### 🖨️ Impression et export PDF / DXF
 
-Paramètres de la feuille (titre, format, orientation, échelle, résolution
-PDF), placement des cadres d'impression sur la carte par clic + rotation,
-puis le plan final avec cartouche, flèche du nord et barre d'échelle. Le
-dialogue *Export combiné* permet de générer en une passe plan PDF, plan DXF
-et profils en long EU / EP / groupé.
+Du réglage de la feuille jusqu'au plan livré, en quatre temps :
+
+1. **Paramètres d'impression** — titre du plan, format, orientation, échelle
+   et résolution PDF (avec suggestion automatique selon le format).
+2. **Export combiné** — une seule passe pour générer plan PDF, plan DXF et
+   profils en long EU / EP / groupé, dans un dossier choisi.
+3. **Placement des cadres** — positionnement des feuilles sur la carte par
+   clic + rotation, numérotation automatique.
+4. **Plan final** — cartouche, flèche du nord, barre d'échelle, prêt à livrer.
 
 ![Paramètres d'impression](images/imprime_exporter_pdfdxf_parametreimpression.png)
+
+![Export combiné](images/imprime_exporter_pdfdxf_option.png)
 
 ![Placement des cadres d'impression](images/imprime_exporter_pdfdxf_placementcadre.png)
 
 ![Plan PDF final](images/plan_pdf.png)
 
-![Export combiné](images/imprime_exporter_pdfdxf_option.png)
-
-### Fonds de plan
+### 🗺️ Fonds de plan
 
 | Outil | Description |
 |---|---|
@@ -374,7 +378,7 @@ et profils en long EU / EP / groupé.
 
 ---
 
-## Interface
+## 🖥️ Interface
 
 Les outils sont accessibles par trois chemins, qui exposent tous les memes
 actions :
@@ -398,7 +402,7 @@ toujours celle du plugin installe.
 
 ---
 
-## Couches et attributs
+## 🗃️ Couches et attributs
 
 Le plugin gere 4 types de couches, declinees pour chaque reseau (`_EU` / `_EP`) :
 
@@ -456,7 +460,7 @@ Le plugin gere 4 types de couches, declinees pour chaque reseau (`_EU` / `_EP`) 
 
 ---
 
-## Symbologie
+## 🎨 Symbologie
 
 Toutes les dimensions sont en **map units (metres)** — la symbologie suit le zoom et reste proportionnelle au plan a 1:200.
 
@@ -473,7 +477,10 @@ Etiquettes : couleur du reseau (rouge EU / bleu EP), halo blanc 0.8 mm pour les 
 
 ---
 
-## Raccourcis clavier
+## ⌨️ Raccourcis clavier
+
+<details>
+<summary>Voir tous les raccourcis par outil</summary>
 
 ### Outils de dessin (conduite, branchement)
 
@@ -534,9 +541,11 @@ Etiquettes : couleur du reseau (rouge EU / bleu EP), halo blanc 0.8 mm pour les 
 
 Les operateurs `*` et `/` ne sont pas supportes — uniquement `+` et `-`.
 
+</details>
+
 ---
 
-## Import Star-DT / StaR-Elec (DT-DICT)
+## 📥 Import Star-DT / StaR-Elec (DT-DICT)
 
 Star-DT est le format d'echange GML des reseaux enterres utilise pour les
 **declarations de travaux** (DT-DICT). StaR-Elec en est la declinaison
@@ -570,7 +579,7 @@ Le systeme de coordonnees est celui declare par le `srsName` du GML, pas
 celui du projet QGIS. La geometrie de sortie (point, ligne ou polygone) est
 deduite des donnees, un meme type pouvant porter plusieurs geometries.
 
-### Symbologie
+### 🎨 Symbologie
 
 Les epaisseurs de trait et les tailles de texte sont exprimees en
 **millimetres** : le rendu est identique a l'ecran et a l'impression, a
@@ -606,7 +615,7 @@ regroupees sous un groupe nomme d'apres l'identifiant du fichier.
 
 ---
 
-## Export StaR-Eau (CNIG / ASTEE V2024)
+## 📤 Export StaR-Eau (CNIG / ASTEE V2024)
 
 StaR-Eau est le geostandard des reseaux enterres d'eau et d'assainissement.
 Ce n'est **pas un format de fichier** mais un modele de donnees relationnel,
@@ -741,7 +750,7 @@ destinataire exige un import PostGIS strict ou la colonne est `NOT NULL`.
 
 ---
 
-## Format de projet .bet
+## 📦 Format de projet .bet
 
 Le fichier `.bet` est une archive ZIP contenant :
 - `metadata.json` — version, CRS, etat des etiquettes, visibilite des couches
@@ -753,7 +762,7 @@ La compatibilite ascendante est assuree avec le format v1 (JSON brut + GPKG exte
 
 ---
 
-## Installation
+## 🚀 Installation
 
 1. Téléchargez ou clonez ce dépôt :
 
@@ -785,7 +794,7 @@ La compatibilite ascendante est assuree avec le format v1 (JSON brut + GPKG exte
 
 ---
 
-## Structure du projet
+## 🌳 Structure du projet
 
 ```
 BET_HUMIDE/
@@ -857,7 +866,7 @@ BET_HUMIDE/
 
 ---
 
-## Changelog
+## 📜 Changelog
 
 | Version | Notes |
 |---------|-------|
@@ -866,6 +875,9 @@ BET_HUMIDE/
 | **1.2** | Fusion Cubature / Remblai en une fenêtre unique avec détail à la volée — Tableau de saisie groupée (Ctrl+Z, copier/coller Excel) — Réseau AEP dans le dessinateur de coupes composées |
 | **1.1** | Rendu PDF parallèle et annulable — Index spatiaux sur tous les outils carte — Fonds WFS chargés en tâche de fond sans geler QGIS |
 | **1.0** | Version initiale |
+
+<details>
+<summary>Détail complet des versions</summary>
 
 ### 1.4
 
@@ -942,15 +954,17 @@ BET_HUMIDE/
 
 - Version initiale.
 
+</details>
+
 ---
 
-## Genèse du projet
+## 💡 Genèse du projet
 
 Pourquoi ce plugin, et comment il a été construit sans bagage de développeur au départ : [interview complète](INTERVIEW.md).
 
 ---
 
-## Auteur
+## 👤 Auteur
 
 <div align="center">
 

@@ -240,13 +240,17 @@ ou bouton « Débuter avec l'assistant » du dialogue d'accueil) :
 **1. Localiser le projet** — recherche d'adresse BAN avec suggestions au fil
 de la frappe, mini-carte OSM pour ajuster la position exacte du projet.
 
-![Étape 1 — Localiser le projet](images/Assistant_etape1.png)
+<div align="center">
+  <img src="images/Assistant_etape1.png" alt="Étape 1 — Localiser le projet">
+</div>
 
 **2. Fonds de plan** — choix des fonds à charger dans le nouveau projet (OSM
 désaturé et Orthophoto IGN cochés par défaut, BAN / Noms de voie / PCI Bâti /
 PCI Parcelles en option).
 
-![Étape 2 — Fonds de plan](images/Assistant_etape2.png)
+<div align="center">
+  <img src="images/Assistant_etape2.png" alt="Étape 2 — Fonds de plan">
+</div>
 
 **3. Configuration rapide** — trois accordéons repliables (mêmes réglages que
 le dialogue *Configuration rapide*), avec aperçu schématique et cadres
@@ -254,23 +258,31 @@ colorés par réseau (EU rouge, EP bleu) pour s'y retrouver d'un coup d'œil :
 
 - *Réseau par défaut* — diamètre et matériau des conduites et branchements EU/EP.
 
-  ![Étape 3.1 — Réseau par défaut](images/Assistant_etape31_choixreseau.png)
+  <div align="center">
+    <img src="images/Assistant_etape31_choixreseau.png" alt="Étape 3.1 — Réseau par défaut">
+  </div>
 
 - *Cubature* — épaisseur du lit de pose et largeurs de tranchée, avec aperçu
   visuel de la coupe pour la sélection courante.
 
-  ![Étape 3.2 — Cubature](images/Assistant_etape32_cubature.png)
+  <div align="center">
+    <img src="images/Assistant_etape32_cubature.png" alt="Étape 3.2 — Cubature">
+  </div>
 
 - *Remblai* — matériaux et épaisseurs (lit de pose, enrobage, remblai,
   chaussées inférieure/supérieure), avec schéma de coupe mis à jour en direct.
 
-  ![Étape 3.3 — Remblai](images/Assistant_etape33_remblai.png)
+  <div align="center">
+    <img src="images/Assistant_etape33_remblai.png" alt="Étape 3.3 — Remblai">
+  </div>
 
 **4. Récapitulatif** — nom du projet et dossier d'enregistrement, puis relecture
 visuelle de tous les choix (réseau, largeurs de tranchée par cadre EU/EP,
 coupe de remblai) avant de cliquer sur « Créer ».
 
-![Étape 4 — Récapitulatif](images/Assistant_etape4.png)
+<div align="center">
+  <img src="images/Assistant_etape4.png" alt="Étape 4 — Récapitulatif">
+</div>
 
 #### ✏️ Dessin de réseau
 
@@ -278,19 +290,25 @@ Dessin d'une conduite EU par clics successifs — chaque sommet génère
 automatiquement un regard ; l'info-bulle en direct affiche longueur, gisement
 et pente du tronçon en cours de tracé.
 
-![Dessiner une conduite EU](images/DessinerconduiteEU.png)
+<div align="center">
+  <img src="images/DessinerconduiteEU.png" alt="Dessiner une conduite EU">
+</div>
 
 Dessin d'un branchement par piquage sur une conduite existante, jusqu'à
 l'ouvrage terminal (regard ou tabouret).
 
-![Dessiner un branchement](images/dessinerBrcht.png)
+<div align="center">
+  <img src="images/dessinerBrcht.png" alt="Dessiner un branchement">
+</div>
 
 #### 🔢 Renumérotation
 
 Renumérote en série les regards et tabourets d'un réseau à partir d'un
 préfixe et d'un numéro de départ (ex. `REU00`, `REU01…` / `EU-BRCHT01…`).
 
-![Renumérotation des regards](images/renumeroterRegards.png)
+<div align="center">
+  <img src="images/renumeroterRegards.png" alt="Renumérotation des regards">
+</div>
 
 #### 📋 Tableau de saisie — pente
 
@@ -299,19 +317,29 @@ Saisie groupée en tableau, par onglets **Regards**, **Tabourets**,
 automatique de la pente ou de la cote fil d'eau, aperçu carte miniature et
 annulation (Ctrl+Z).
 
-![Onglet Regards](images/TSP_regards.png)
+<div align="center">
+  <img src="images/TSP_regards.png" alt="Onglet Regards">
+</div>
 
-![Onglet Tabourets](images/TSP_Taboutes.png)
+<div align="center">
+  <img src="images/TSP_Taboutes.png" alt="Onglet Tabourets">
+</div>
 
-![Onglet Conduites — aperçu carte](images/TSP_conduite.png)
+<div align="center">
+  <img src="images/TSP_conduite.png" alt="Onglet Conduites — aperçu carte">
+</div>
 
-![Onglet Branchements — aperçu carte](images/TSP_Branchements.png)
+<div align="center">
+  <img src="images/TSP_Branchements.png" alt="Onglet Branchements — aperçu carte">
+</div>
 
 L'onglet **Chaîne regards PENTE** trace le profil simplifié entre deux
 regards choisis et permet d'appliquer une pente constante, une pente
 calculée ou une profondeur fixe sur toute la chaîne d'un coup.
 
-![Onglet Chaîne regards PENTE](images/TSP_Pente.png)
+<div align="center">
+  <img src="images/TSP_Pente.png" alt="Onglet Chaîne regards PENTE">
+</div>
 
 #### 📈 Profil en long
 
@@ -320,9 +348,13 @@ distance de piquage, format papier), puis le profil généré : altitude du
 terrain naturel, fil d'eau, piquages des branchements, tableau de valeurs
 sous le graphique.
 
-![Options du profil en long](images/Profil_long_option.png)
+<div align="center">
+  <img src="images/Profil_long_option.png" alt="Options du profil en long">
+</div>
 
-![Exemple de profil en long](images/Profil_long_exemple.png)
+<div align="center">
+  <img src="images/Profil_long_exemple.png" alt="Exemple de profil en long">
+</div>
 
 #### ✂️ Coupe transversale
 
@@ -330,7 +362,9 @@ Coupe verticale de tranchée sur un tronçon choisi : mini-carte de situation
 à gauche, coupe cotée à droite (chaussées, remblai, enrobage, lit de pose,
 diamètre de la conduite), export PDF ou PNG au format et à l'échelle choisis.
 
-![Plan de coupe transversale](images/coupe_tranversale.png)
+<div align="center">
+  <img src="images/coupe_tranversale.png" alt="Plan de coupe transversale">
+</div>
 
 #### 🚧 Cubature et remblai
 
@@ -340,9 +374,13 @@ tracé d'un axe) puis résultats détaillés par tronçon : longueur, pente,
 volumes de lit de pose, enrobage, conduite, chaussées et remblai, avec
 sous-totaux et export CSV / PDF / Excel.
 
-![Options de cubature](images/cubature_remblai_option.png)
+<div align="center">
+  <img src="images/cubature_remblai_option.png" alt="Options de cubature">
+</div>
 
-![Résultats de cubature et remblai](images/cubature_remblai_exemple.png)
+<div align="center">
+  <img src="images/cubature_remblai_exemple.png" alt="Résultats de cubature et remblai">
+</div>
 
 #### 🖨️ Impression et export PDF / DXF
 
@@ -356,13 +394,21 @@ Du réglage de la feuille jusqu'au plan livré, en quatre temps :
    clic + rotation, numérotation automatique.
 4. **Plan final** — cartouche, flèche du nord, barre d'échelle, prêt à livrer.
 
-![Paramètres d'impression](images/imprime_exporter_pdfdxf_parametreimpression.png)
+<div align="center">
+  <img src="images/imprime_exporter_pdfdxf_parametreimpression.png" alt="Paramètres d'impression">
+</div>
 
-![Export combiné](images/imprime_exporter_pdfdxf_option.png)
+<div align="center">
+  <img src="images/imprime_exporter_pdfdxf_option.png" alt="Export combiné">
+</div>
 
-![Placement des cadres d'impression](images/imprime_exporter_pdfdxf_placementcadre.png)
+<div align="center">
+  <img src="images/imprime_exporter_pdfdxf_placementcadre.png" alt="Placement des cadres d'impression">
+</div>
 
-![Plan PDF final](images/plan_pdf.png)
+<div align="center">
+  <img src="images/plan_pdf.png" alt="Plan PDF final">
+</div>
 
 ### 🗺️ Fonds de plan
 
@@ -973,7 +1019,6 @@ Développé par **Yoan Laloux**
 Technicien SIG — Vichy Communauté
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-ylaloux-blue?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/ylaloux/)
-[![Email](https://img.shields.io/badge/Email-yoan.laloux%40laposte.net-blue?logo=gmail&logoColor=white)](mailto:yoan.laloux@laposte.net)
 [![GitHub](https://img.shields.io/badge/GitHub-Cartoyoyo-black?logo=github)](https://github.com/Cartoyoyo)
 
 Dépôt : <https://github.com/Cartoyoyo/BET_humide> · Anomalies et demandes : <https://github.com/Cartoyoyo/BET_humide/issues>

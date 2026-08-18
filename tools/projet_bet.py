@@ -38,31 +38,29 @@ _KEY_BET_PATH = _PREFIX + "current_bet_path"
 
 def _read_label_size(project, s):
     """Lit la taille des étiquettes depuis la première couche disponible.
-    Retourne un dict {'unit': 'points'|'map_units', 'value': float} ou None."""
+    Retourne un dict {'unit': 'points'|'map_units', 'value': float} ou None.
+
+    Les conduites sont étiquetées en rule-based : la lecture passe
+    obligatoirement par etiquettes.pal_settings(), qui descend dans la 1re
+    règle. labeling.settings() renvoie ici un réglage PAR DÉFAUT (10 points,
+    sans seuil) sans jamais lever — le lire directement faisait enregistrer
+    10 pt dans le .bet, puis réappliquer cette taille à tout le projet à
+    chaque enregistrement.
+    """
     from .layer_keys import get_layer_id
+    from ..gui.etiquettes import pal_settings
     for reseau in _RESEAUX:
         layer_id = get_layer_id('conduite', reseau)
         layer    = project.mapLayer(layer_id) if layer_id else None
         if layer is None:
             continue
-        labeling = layer.labeling()
-        if labeling is None:
+        pal = pal_settings(layer.labeling())
+        if pal is None:
             continue
-        # Conduites = rule-based : lire le format depuis la 1re règle
-        try:
-            fmt = labeling.settings().format()
-        except AttributeError:
-            try:
-                fmt = labeling.rootRule().children()[0].settings().format()
-            except Exception:
-                continue
+        fmt  = pal.format()
         unit = ('points' if fmt.sizeUnit() == QgsUnitTypes.RenderPoints
                 else 'map_units')
         # Seuil de dézoom : lu sur les mêmes settings (0 = pas de seuil).
-        try:
-            pal = labeling.settings()
-        except AttributeError:
-            pal = labeling.rootRule().children()[0].settings()
         min_scale = int(pal.minimumScale) if pal.scaleVisibility else 0
         return {'unit': unit, 'value': fmt.size(), 'min_scale': min_scale}
     return None

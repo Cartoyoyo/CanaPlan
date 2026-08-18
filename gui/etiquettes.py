@@ -370,6 +370,37 @@ def _line_current_settings(labeling):
     return None
 
 
+def pal_settings(labeling):
+    """Réglages représentatifs d'un étiquetage, rule-based compris.
+
+    À n'utiliser QUE pour lire un étiquetage existant (taille, unité, seuil).
+
+    QgsRuleBasedLabeling.settings() ne lève pas et ne renvoie pas None :
+    appelé sans providerId il fait findRuleByKey('') , ne trouve aucune règle
+    et retourne un QgsPalLayerSettings PAR DÉFAUT — 10 points, sans seuil
+    d'échelle. Un appelant qui compte sur une AttributeError pour se rabattre
+    sur rootRule() lit donc silencieusement le format par défaut de QGIS et
+    croit que la couche est étiquetée en 10 pt, ce qui écrase le réglage du
+    plan à la première réécriture.
+    """
+    if labeling is None:
+        return None
+    if isinstance(labeling, QgsRuleBasedLabeling):
+        try:
+            children = labeling.rootRule().children()
+        except Exception:
+            return None
+        for rule in children:
+            settings = rule.settings()
+            if settings is not None:
+                return settings
+        return None
+    try:
+        return labeling.settings()
+    except Exception:
+        return None
+
+
 def _make_point_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
                          unit=QgsUnitTypes.RenderMapUnits,
                          padding=LABEL_PADDING_MAP_UNITS,
@@ -572,15 +603,8 @@ def get_label_min_scale(plugin):
     """Seuil d'échelle courant, lu sur la première couche étiquetée (0 = aucun)."""
     for reseau in ('EU', 'EP'):
         for layer in plugin._get_couches(reseau).values():
-            labeling = layer.labeling()
-            if labeling is None:
-                continue
-            try:
-                if isinstance(labeling, QgsRuleBasedLabeling):
-                    pal = labeling.rootRule().children()[0].settings()
-                else:
-                    pal = labeling.settings()
-            except Exception:
+            pal = pal_settings(layer.labeling())
+            if pal is None:
                 continue
             return int(pal.minimumScale) if pal.scaleVisibility else 0
     # Aucune couche étiquetée : proposer le seuil déduit de la taille

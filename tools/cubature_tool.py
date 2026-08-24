@@ -6,6 +6,8 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QMessageBox
 
+from . import i18n
+
 BUFFER_DIST = 3.0  # mètres
 
 
@@ -45,15 +47,14 @@ class CubatureTool(QgsMapTool):
         self.canvas.setCursor(Qt.CrossCursor)
         if self._axe_mode:
             self.iface.messageBar().pushMessage(
-                "Cubature tranchées",
-                "Tracez l'axe de référence : clic gauche = ajouter un point  ·  "
-                "Double-clic ou clic droit = terminer  ·  Échap = annuler",
+                i18n.tr('msg_cubature_titre'),
+                i18n.tr('po_aide_axe'),
                 level=0, duration=0,
             )
         else:
             self.iface.messageBar().pushMessage(
-                "Cubature tranchées",
-                "1er clic : regard départ (vert)  ·  2e clic : regard arrivée → calcul  ·  Échap : annuler",
+                i18n.tr('msg_cubature_titre'),
+                i18n.tr('ot_aide_cubature_regards'),
                 level=0, duration=0,
             )
 
@@ -103,9 +104,8 @@ class CubatureTool(QgsMapTool):
                         return
                     if reseau != self._reseau_start:
                         QMessageBox.warning(
-                            None, "Cubature tranchées",
-                            "Les deux regards doivent appartenir au même réseau.\n"
-                            f"Départ : {self._reseau_start}, arrivée : {reseau}.")
+                            None, i18n.tr('msg_cubature_titre'),
+                            i18n.tr('ot_reseaux_differents', debut=self._reseau_start, fin=reseau))
                         self._reset()
                         return
                     self._compute_bfs(self._start, feat, reseau)
@@ -153,8 +153,8 @@ class CubatureTool(QgsMapTool):
         ref_line = QgsGeometry.fromPolylineXY(pts)
         ref_len = ref_line.length()
         if ref_len < 0.01:
-            QMessageBox.warning(None, "Cubature tranchées",
-                                "L'axe tracé est trop court.")
+            QMessageBox.warning(None, i18n.tr('msg_cubature_titre'),
+                                i18n.tr('po_axe_court'))
             return
 
         buffer_geom = ref_line.buffer(BUFFER_DIST, 8)
@@ -272,9 +272,8 @@ class CubatureTool(QgsMapTool):
 
         if not results:
             QMessageBox.warning(
-                None, "Cubature tranchées",
-                f"Aucune conduite trouvée dans le buffer de {BUFFER_DIST} m\n"
-                "autour de l'axe tracé.")
+                None, i18n.tr('msg_cubature_titre'),
+                i18n.tr('ot_aucune_conduite_buffer', rayon=BUFFER_DIST))
             return
 
         from ..gui.cubature_dialog import CubatureDialog
@@ -345,9 +344,8 @@ class CubatureTool(QgsMapTool):
 
         if r_ids is None:
             QMessageBox.warning(
-                None, "Cubature tranchées",
-                "Aucun chemin trouvé entre les deux regards sélectionnés.\n"
-                "Vérifiez que le réseau est correctement connecté.")
+                None, i18n.tr('msg_cubature_titre'),
+                i18n.tr('po_aucun_chemin'))
             return
 
         results = []
@@ -401,8 +399,8 @@ class CubatureTool(QgsMapTool):
 
         if not results:
             QMessageBox.information(
-                None, "Cubature tranchées",
-                "Aucun élément à afficher sur le chemin sélectionné.")
+                None, i18n.tr('msg_cubature_titre'),
+                i18n.tr('ot_rien_a_afficher'))
             return
 
         from ..gui.cubature_dialog import CubatureDialog

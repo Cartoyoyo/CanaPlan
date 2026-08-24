@@ -2,6 +2,8 @@
 """Dialogue d'import Star-DT : selection des types d'elements a importer."""
 
 import os
+
+from ..tools import i18n
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QCheckBox, QDialogButtonBox, QFileDialog, QGroupBox,
@@ -13,7 +15,7 @@ _ACCEPTED_EXT = (".gml", ".xml")
 class StarDtDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Importer un fichier Star-DT")
+        self.setWindowTitle(i18n.tr('sdt_titre'))
         self.setMinimumWidth(520)
         self.setAcceptDrops(True)
 
@@ -23,14 +25,14 @@ class StarDtDialog(QDialog):
 
         # Fichier(s) GML
         file_row = QHBoxLayout()
-        file_row.addWidget(QLabel("Fichier GML :"))
+        file_row.addWidget(QLabel(i18n.tr('sdt_fichier_gml')))
         self.file_edit = QLineEdit()
         self.file_edit.setReadOnly(True)
         self.file_edit.setPlaceholderText(
-            "Parcourir... ou glisser-deposer un ou plusieurs fichiers ici")
+            i18n.tr('sdt_deposer'))
         # Laisse le drop remonter au dialogue plutot que d'etre avale par le champ
         self.file_edit.setAcceptDrops(False)
-        btn_browse = QPushButton("Parcourir...")
+        btn_browse = QPushButton(i18n.tr('parcourir'))
         btn_browse.clicked.connect(self._browse)
         file_row.addWidget(self.file_edit)
         file_row.addWidget(btn_browse)
@@ -38,7 +40,7 @@ class StarDtDialog(QDialog):
 
         # Fichier GPKG de sortie
         out_row = QHBoxLayout()
-        out_row.addWidget(QLabel("Sortie GPKG :"))
+        out_row.addWidget(QLabel(i18n.tr('sdt_sortie_gpkg')))
         self.out_edit = QLineEdit()
         # Repertoire par defaut = repertoire du projet .bet
         proj_dir = ""
@@ -50,18 +52,18 @@ class StarDtDialog(QDialog):
         if proj_dir:
             self.out_edit.setText(os.path.join(proj_dir, ""))
         self.out_edit.setAcceptDrops(False)
-        btn_out = QPushButton("Parcourir...")
+        btn_out = QPushButton(i18n.tr('parcourir'))
         btn_out.clicked.connect(self._browse_out)
         out_row.addWidget(self.out_edit)
         out_row.addWidget(btn_out)
         layout.addLayout(out_row)
 
-        btn_scan = QPushButton("Analyser le fichier")
+        btn_scan = QPushButton(i18n.tr('sdt_analyser'))
         btn_scan.clicked.connect(self._scan)
         layout.addWidget(btn_scan)
 
         # Types trouves
-        self.types_group = QGroupBox("Types d'elements trouves")
+        self.types_group = QGroupBox(i18n.tr('sdt_types_trouves'))
         self.types_layout = QVBoxLayout(self.types_group)
         layout.addWidget(self.types_group)
 
@@ -83,8 +85,8 @@ class StarDtDialog(QDialog):
         except Exception:
             pass
         paths, _ = QFileDialog.getOpenFileNames(
-            self, "Fichier(s) Star-DT", start_dir,
-            "Star-DT GML (*.gml *.xml);;Tous (*.*)")
+            self, i18n.tr('sdt_choisir_fichiers'), start_dir,
+            i18n.tr('fic_star_dt'))
         if paths:
             self._set_files(paths)
 
@@ -145,7 +147,7 @@ class StarDtDialog(QDialog):
             self.file_edit.setText(files[0])
         else:
             noms = ", ".join(os.path.basename(p) for p in files)
-            self.file_edit.setText(f"{len(files)} fichiers : {noms}")
+            self.file_edit.setText(i18n.tr('sdt_nb_fichiers', nb=len(files), noms=noms))
         self.file_edit.setToolTip("\n".join(files))
         self.file_edit.setCursorPosition(0)
 
@@ -173,9 +175,9 @@ class StarDtDialog(QDialog):
             except Exception:
                 start_dir = ""
         path, _ = QFileDialog.getSaveFileName(
-            self, "GeoPackage de sortie",
+            self, i18n.tr('sdt_gpkg_sortie'),
             os.path.join(start_dir, os.path.basename(self.out_edit.text().strip())),
-            "GeoPackage (*.gpkg)")
+            i18n.tr('fic_gpkg'))
         if path:
             self.out_edit.setText(path)
 
@@ -193,7 +195,7 @@ class StarDtDialog(QDialog):
         self.count_labels.clear()
 
         if not counts:
-            label = QLabel("Aucun type d'element Star-DT detecte.")
+            label = QLabel(i18n.tr('sdt_aucun_type'))
             label.setStyleSheet("color: #888;")
             self.types_layout.addWidget(label)
             return
@@ -206,7 +208,7 @@ class StarDtDialog(QDialog):
             row = QHBoxLayout()
             cb = QCheckBox(type_name)
             cb.setChecked(True)
-            lbl = QLabel(f"{count} element(s)")
+            lbl = QLabel(i18n.tr('sdt_nb_elements', nb=count))
             lbl.setStyleSheet("color: #888;")
             row.addWidget(cb)
             row.addStretch()

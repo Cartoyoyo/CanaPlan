@@ -23,9 +23,11 @@ Stratégie :
 import os
 import re
 import traceback
+
+from . import i18n
 from qgis.core import QgsProject, QgsVectorLayer, QgsMessageLog, Qgis
 
-_LOG_TAG = "BET_HUMIDE/DXF"
+_LOG_TAG = "CanaPlan/DXF"
 
 
 def _log(msg, level=Qgis.Info):
@@ -33,11 +35,11 @@ def _log(msg, level=Qgis.Info):
 
 
 def _plugin_libs_dir():
-    """Retourne le chemin du dossier `libs/` à la racine du plugin BET_HUMIDE,
+    """Retourne le chemin du dossier `libs/` à la racine du plugin CanaPlan,
     en le créant et en l'ajoutant au sys.path si nécessaire.
     """
     import sys
-    # Le module dxf_postprocess est dans BET_HUMIDE/tools/, donc on remonte de 2.
+    # Le module dxf_postprocess est dans CanaPlan/tools/, donc on remonte de 2.
     plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     libs = os.path.join(plugin_root, "libs")
     os.makedirs(libs, exist_ok=True)
@@ -126,7 +128,7 @@ _TABOURET_HALF  = 0.2   # carré 0.4 m → demi-côté 0.2 m
 _SYM_LINEWEIGHT = 25    # 0.25 mm contour symbole
 
 # XDATA — attributs QGIS attachés à chaque INSERT regard/tabouret
-_XDATA_APPID = "BET_HUMIDE"
+_XDATA_APPID = "CANAPLAN"
 _ROLE_FIELDS = {
     'regard':   ['nom', 'tn', 'fe_radier', 'profondeur'],
     'tabouret': ['nom', 'tn', 'fe_entree',  'profondeur'],
@@ -570,7 +572,7 @@ def add_point_symbols(dxf_path):
     doc = ezdxf.readfile(dxf_path)
     msp = doc.modelspace()
 
-    # Enregistre l'AppID BET_HUMIDE (nécessaire avant tout set_xdata)
+    # Enregistre l'AppID CanaPlan (nécessaire avant tout set_xdata)
     if _XDATA_APPID not in doc.appids:
         doc.appids.add(_XDATA_APPID)
 
@@ -732,9 +734,7 @@ def add_label_decorations(dxf_path):
             _log(f"Installation ezdxf échouée : {exc}\n{traceback.format_exc()}",
                  Qgis.Critical)
             raise RuntimeError(
-                f"ezdxf est requis et son installation automatique a échoué : {exc}\n"
-                "Installez-le manuellement depuis l'OSGeo4W Shell : "
-                "« python -m pip install ezdxf »"
+                i18n.tr('dxf_ezdxf_manquant', detail=exc)
             ) from exc
 
     from ezdxf.enums import TextEntityAlignment

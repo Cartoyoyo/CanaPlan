@@ -7,6 +7,8 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QMessageBox
 
+from . import i18n
+
 from .graph_utils import _to_float, QGIS_NULL
 
 _SNAP_TOL = 0.05
@@ -50,9 +52,8 @@ class CoupeTransversaleTool(QgsMapTool):
         super().activate()
         self.canvas.setCursor(Qt.CrossCursor)
         self.iface.messageBar().pushMessage(
-            "Coupe transversale",
-            "Tracez l'axe de coupe : clic gauche = ajouter un point  ·  "
-            "Double-clic ou clic droit = terminer  ·  Échap = annuler",
+            i18n.tr('coupe_transversale'),
+            i18n.tr('ot_aide_coupe'),
             level=0, duration=0,
         )
 
@@ -112,7 +113,7 @@ class CoupeTransversaleTool(QgsMapTool):
 
         cut_line = QgsGeometry.fromPolylineXY(pts)
         if cut_line.length() < 0.01:
-            QMessageBox.warning(None, "Coupe transversale", "L'axe tracé est trop court.")
+            QMessageBox.warning(None, i18n.tr('coupe_transversale'), i18n.tr('po_axe_court'))
             return
 
         from ..config_dialog import get_cubature_config
@@ -185,11 +186,11 @@ class CoupeTransversaleTool(QgsMapTool):
 
                 if fe0 is None and fe1 is None:
                     warnings.append(
-                        f"Conduite id={c_feat.id()} ({reseau}) : FE radier manquant — ignorée.")
+                        i18n.tr('ct_sans_fe', id=c_feat.id(), reseau=reseau))
                     continue
                 if tn0 is None and tn1 is None:
                     warnings.append(
-                        f"Conduite id={c_feat.id()} ({reseau}) : TN manquant — ignorée.")
+                        i18n.tr('ct_sans_tn', id=c_feat.id(), reseau=reseau))
                     continue
 
                 if fe0 is None: fe0 = fe1
@@ -222,14 +223,13 @@ class CoupeTransversaleTool(QgsMapTool):
 
         if warnings:
             self.iface.messageBar().pushMessage(
-                "Coupe transversale", "  ·  ".join(warnings),
+                i18n.tr('coupe_transversale'), "  ·  ".join(warnings),
                 level=1, duration=10)
 
         if not crossings:
             QMessageBox.warning(
-                None, "Coupe transversale",
-                "Aucune conduite EU ou EP croisée par le trait de coupe.\n"
-                "Vérifiez que le trait intersecte bien les conduites.")
+                None, i18n.tr('coupe_transversale'),
+                i18n.tr('ot_aucune_conduite_coupe'))
             return
 
         crossings.sort(key=lambda c: c['x'])
@@ -268,8 +268,7 @@ class CoupeTransversaleSingleTool(CoupeTransversaleTool):
         _Base.activate(self)
         self.canvas.setCursor(Qt.CrossCursor)
         self.iface.messageBar().pushMessage(
-            f"Coupe transversale {self._reseau_label}",
-            "Tracez l'axe de coupe : clic gauche = ajouter un point  ·  "
-            "Double-clic ou clic droit = terminer  ·  Échap = annuler",
+            "%s %s" % (i18n.tr('coupe_transversale'), self._reseau_label),
+            i18n.tr('ot_aide_coupe'),
             level=0, duration=0,
         )

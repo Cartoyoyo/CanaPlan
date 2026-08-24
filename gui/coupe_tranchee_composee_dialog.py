@@ -3,6 +3,8 @@ import json
 import copy
 
 from qgis.PyQt.QtCore import Qt
+
+from ..tools import i18n
 from qgis.PyQt.QtGui import QFont
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QSplitter,
@@ -29,7 +31,7 @@ MATERIAUX_REMBLAI  = [
     "GB (Grave bitume)", "GC (Grave ciment)", "Enrobé", "",
 ]
 
-SETTINGS_KEY = "BET_HUMIDE/coupe_tranchee_composee"
+SETTINGS_KEY = "CanaPlan/coupe_tranchee_composee"
 
 DEFAULT_TRANCHE = {
     'reseau':          'EU',
@@ -91,7 +93,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Dessinateur – Coupe de tranchées composée")
+        self.setWindowTitle(i18n.tr('coupe_tranchee_composee'))
         self.setMinimumSize(1050, 680)
         self.resize(1300, 750)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
@@ -126,7 +128,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
         ll.setContentsMargins(2, 2, 2, 2)
         ll.setSpacing(4)
 
-        lbl = QLabel("Tranches")
+        lbl = QLabel(i18n.tr('dt_tranches'))
         lbl.setFont(QFont("", -1, QFont.Bold))
         ll.addWidget(lbl)
 
@@ -136,8 +138,8 @@ class CoupeTrancheeComposeeDialog(QDialog):
         ll.addWidget(self._list)
 
         btn_row = QHBoxLayout()
-        self._btn_add = QPushButton("+ Ajouter")
-        self._btn_del = QPushButton("Supprimer")
+        self._btn_add = QPushButton(i18n.tr('dt_ajouter'))
+        self._btn_del = QPushButton(i18n.tr('dt_supprimer'))
         self._btn_up  = QPushButton("↑")
         self._btn_dn  = QPushButton("↓")
         self._btn_up.setFixedWidth(28)
@@ -164,9 +166,9 @@ class CoupeTrancheeComposeeDialog(QDialog):
 
         # Boutons export / fermer
         exp_row = QHBoxLayout()
-        self._btn_pdf   = QPushButton("Exporter PDF")
-        self._btn_png   = QPushButton("Exporter PNG")
-        self._btn_close = QPushButton("Fermer")
+        self._btn_pdf   = QPushButton(i18n.tr('cb_export_pdf'))
+        self._btn_png   = QPushButton(i18n.tr('ct_export_png').rstrip('…'))
+        self._btn_close = QPushButton(i18n.tr('fermer'))
         self._btn_pdf.clicked.connect(lambda: self._export('pdf'))
         self._btn_png.clicked.connect(lambda: self._export('png'))
         self._btn_close.clicked.connect(self.close)
@@ -187,7 +189,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
             self._canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             rl.addWidget(self._canvas)
         else:
-            rl.addWidget(QLabel("matplotlib non disponible — installer matplotlib pour QGIS"))
+            rl.addWidget(QLabel(i18n.tr('dt_matplotlib')))
 
         splitter.addWidget(right)
         splitter.setStretchFactor(0, 0)
@@ -198,7 +200,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
         vb = self._form_vbox
 
         # ── Canalisation ─────────────────────────────────────────────────────
-        grp1 = QGroupBox("Canalisation")
+        grp1 = QGroupBox(i18n.tr('dt_canalisation'))
         f1   = QFormLayout(grp1)
         f1.setSpacing(4)
 
@@ -218,29 +220,29 @@ class CoupeTrancheeComposeeDialog(QDialog):
         rnet_row.addWidget(self._rb_aep)
         rnet_row.addStretch()
         rw = QWidget(); rw.setLayout(rnet_row)
-        f1.addRow("Réseau :", rw)
+        f1.addRow(i18n.tr('dt_lbl_reseau'), rw)
 
         self._sp_dn = QDoubleSpinBox()
         self._sp_dn.setRange(60, 3000); self._sp_dn.setDecimals(0)
         self._sp_dn.setSuffix(" mm"); self._sp_dn.setSingleStep(50)
         self._sp_dn.valueChanged.connect(self._on_field_changed)
-        f1.addRow("DN :", self._sp_dn)
+        f1.addRow(i18n.tr('dt_lbl_dn'), self._sp_dn)
 
         self._cb_mat = QComboBox(); self._cb_mat.setEditable(True)
         self._cb_mat.addItems(MATERIAUX_CONDUITE)
         self._cb_mat.currentTextChanged.connect(self._on_field_changed)
-        f1.addRow("Matériau :", self._cb_mat)
+        f1.addRow(i18n.tr('dt_lbl_materiau'), self._cb_mat)
 
         self._sp_prof = QDoubleSpinBox()
         self._sp_prof.setRange(0.10, 10.0); self._sp_prof.setDecimals(2)
         self._sp_prof.setSuffix(" m"); self._sp_prof.setSingleStep(0.05)
         self._sp_prof.valueChanged.connect(self._on_field_changed)
-        f1.addRow("Prof. fil d'eau :", self._sp_prof)
+        f1.addRow(i18n.tr('dt_lbl_prof_fe'), self._sp_prof)
 
         vb.addWidget(grp1)
 
         # ── Tranchée ─────────────────────────────────────────────────────────
-        grp2 = QGroupBox("Tranchée")
+        grp2 = QGroupBox(i18n.tr('dt_tranchee'))
         f2   = QFormLayout(grp2)
         f2.setSpacing(4)
 
@@ -248,24 +250,24 @@ class CoupeTrancheeComposeeDialog(QDialog):
         self._sp_esp_g.setRange(0.0, 20.0); self._sp_esp_g.setDecimals(2)
         self._sp_esp_g.setSuffix(" m"); self._sp_esp_g.setSingleStep(0.10)
         self._sp_esp_g.valueChanged.connect(self._on_field_changed)
-        f2.addRow("Espace terrain gauche :", self._sp_esp_g)
+        f2.addRow(i18n.tr('dt_lbl_espace_gauche'), self._sp_esp_g)
 
         self._sp_ecg = QDoubleSpinBox()
         self._sp_ecg.setRange(0.05, 5.0); self._sp_ecg.setDecimals(2)
         self._sp_ecg.setSuffix(" m"); self._sp_ecg.setSingleStep(0.05)
         self._sp_ecg.valueChanged.connect(self._on_field_changed)
-        f2.addRow("Écart gauche tuyau :", self._sp_ecg)
+        f2.addRow(i18n.tr('dt_lbl_ecart_gauche'), self._sp_ecg)
 
         self._sp_ecd = QDoubleSpinBox()
         self._sp_ecd.setRange(0.05, 5.0); self._sp_ecd.setDecimals(2)
         self._sp_ecd.setSuffix(" m"); self._sp_ecd.setSingleStep(0.05)
         self._sp_ecd.valueChanged.connect(self._on_field_changed)
-        f2.addRow("Écart droit tuyau :", self._sp_ecd)
+        f2.addRow(i18n.tr('dt_lbl_ecart_droit'), self._sp_ecd)
 
         vb.addWidget(grp2)
 
         # ── Remblai ───────────────────────────────────────────────────────────
-        grp3 = QGroupBox("Remblai")
+        grp3 = QGroupBox(i18n.tr('dt_remblai'))
         f3   = QFormLayout(grp3)
         f3.setSpacing(4)
 
@@ -277,7 +279,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
         self._cb_mat_lit.addItems(MATERIAUX_REMBLAI)
         self._cb_mat_lit.currentTextChanged.connect(self._on_field_changed)
         row_lit = _hrow(self._sp_ep_lit, self._cb_mat_lit)
-        f3.addRow("Lit de pose :", row_lit)
+        f3.addRow(i18n.tr('dt_lbl_lit_pose'), row_lit)
 
         self._sp_ep_enr = QDoubleSpinBox()
         self._sp_ep_enr.setRange(0.05, 1.0); self._sp_ep_enr.setDecimals(2)
@@ -287,21 +289,21 @@ class CoupeTrancheeComposeeDialog(QDialog):
         self._cb_mat_enr.addItems(MATERIAUX_REMBLAI)
         self._cb_mat_enr.currentTextChanged.connect(self._on_field_changed)
         row_enr = _hrow(self._sp_ep_enr, self._cb_mat_enr)
-        f3.addRow("Enrobage :", row_enr)
+        f3.addRow(i18n.tr('dt_lbl_enrobage'), row_enr)
 
         self._cb_mat_rem = QComboBox(); self._cb_mat_rem.setEditable(True)
         self._cb_mat_rem.addItems(MATERIAUX_REMBLAI)
         self._cb_mat_rem.currentTextChanged.connect(self._on_field_changed)
-        f3.addRow("Remblai :", self._cb_mat_rem)
+        f3.addRow(i18n.tr('dt_lbl_remblai'), self._cb_mat_rem)
 
         vb.addWidget(grp3)
 
         # ── Chaussée ──────────────────────────────────────────────────────────
-        grp4 = QGroupBox("Chaussée")
+        grp4 = QGroupBox(i18n.tr('dt_chaussee'))
         f4   = QFormLayout(grp4)
         f4.setSpacing(4)
 
-        self._chk_inf = QCheckBox("Chaussée inférieure (GB/GC)")
+        self._chk_inf = QCheckBox(i18n.tr('dt_chaussee_inf'))
         self._chk_inf.toggled.connect(self._on_field_changed)
         self._chk_inf.toggled.connect(self._update_ch_enabled)
         f4.addRow(self._chk_inf)
@@ -315,9 +317,9 @@ class CoupeTrancheeComposeeDialog(QDialog):
         self._cb_mat_ci.addItems(MATERIAUX_REMBLAI)
         self._cb_mat_ci.setEnabled(False)
         self._cb_mat_ci.currentTextChanged.connect(self._on_field_changed)
-        f4.addRow("Ép. + mat. :", _hrow(self._sp_ep_ci, self._cb_mat_ci))
+        f4.addRow(i18n.tr('dt_lbl_ep_mat'), _hrow(self._sp_ep_ci, self._cb_mat_ci))
 
-        self._chk_sup = QCheckBox("Chaussée supérieure (enrobé)")
+        self._chk_sup = QCheckBox(i18n.tr('dt_chaussee_sup'))
         self._chk_sup.toggled.connect(self._on_field_changed)
         self._chk_sup.toggled.connect(self._update_ch_enabled)
         f4.addRow(self._chk_sup)
@@ -331,7 +333,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
         self._cb_mat_cs.addItems(MATERIAUX_REMBLAI)
         self._cb_mat_cs.setEnabled(False)
         self._cb_mat_cs.currentTextChanged.connect(self._on_field_changed)
-        f4.addRow("Ép. + mat. :", _hrow(self._sp_ep_cs, self._cb_mat_cs))
+        f4.addRow(i18n.tr('dt_lbl_ep_mat'), _hrow(self._sp_ep_cs, self._cb_mat_cs))
 
         vb.addWidget(grp4)
         vb.addStretch()
@@ -556,7 +558,8 @@ class CoupeTrancheeComposeeDialog(QDialog):
             _fill(ax, xl, d['y_fe'], w, d['dn_m'] + d['ep_enr'],
                   _layer_color(t['mat_enrobage']),
                   t.get('mat_enrobage', ''),
-                  f"enr. {d['ep_enr']:.2f} m")
+                  i18n.tr('dt_cote_enrobage',
+                          valeur=f"{d['ep_enr']:.2f}"))
 
             # Remblai
             if d['rem_h'] > 1e-4:
@@ -633,19 +636,19 @@ class CoupeTrancheeComposeeDialog(QDialog):
         # Segments (ybot, ytop, label_couche, ep)
         segs = []
         segs.append((d_ref['y_lit_bot'], d_ref['y_fe'],
-                     'Lit de pose', d_ref['ep_lit']))
+                     i18n.tr('ct_couche_lit_pose'), d_ref['ep_lit']))
         segs.append((d_ref['y_fe'], d_ref['y_enr_top'],
-                     'Enrobage', d_ref['ep_enr']))
+                     i18n.tr('ct_couche_enrobage'), d_ref['ep_enr']))
         if d_ref['rem_h'] > 1e-4:
             segs.append((d_ref['y_enr_top'], d_ref['y_rem_top'],
-                         'Remblai', d_ref['rem_h']))
+                         i18n.tr('ct_couche_remblai'), d_ref['rem_h']))
         if d_ref['ep_ci'] > 1e-4:
             y_ci_bot = -(d_ref['ep_cs'] + d_ref['ep_ci'])
             segs.append((y_ci_bot, -d_ref['ep_cs'],
-                         'Ch. inf.', d_ref['ep_ci']))
+                         i18n.tr('ct_couche_chaussee_inf'), d_ref['ep_ci']))
         if d_ref['ep_cs'] > 1e-4:
             segs.append((-d_ref['ep_cs'], 0.0,
-                         'Ch. sup.', d_ref['ep_cs']))
+                         i18n.tr('ct_couche_chaussee_sup'), d_ref['ep_cs']))
 
         # Trait vertical + limites horizontales (witness)
         y_vc_bot = d_ref['y_lit_bot']
@@ -739,7 +742,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
     def _export(self, fmt):
         ext = fmt.lower()
         path, _ = QFileDialog.getSaveFileName(
-            self, f"Exporter en {fmt.upper()}", "",
+            self, i18n.tr('dt_exporter_en', format=fmt.upper()), "",
             f"{fmt.upper()} (*.{ext})"
         )
         if not path:
@@ -750,7 +753,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
             self._fig.savefig(path, dpi=200, bbox_inches='tight',
                               facecolor='white')
         except Exception as e:
-            QMessageBox.warning(self, "Erreur export", str(e))
+            QMessageBox.warning(self, i18n.tr('dt_erreur_export'), str(e))
 
     # ── Persistance ───────────────────────────────────────────────────────────
 

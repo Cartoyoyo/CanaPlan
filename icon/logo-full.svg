@@ -38,7 +38,7 @@
   <!-- wordmark -->
   <text x="306" y="142" font-family="Montserrat, Inter, 'Segoe UI', Arial, sans-serif"
         font-size="82" letter-spacing="1">
-    <tspan font-weight="800" fill="#0E3A5A">BET</tspan><tspan font-weight="800" fill="#0E3A5A"> </tspan><tspan font-weight="400" fill="#2E9BD6">HUMIDE</tspan>
+    <tspan font-weight="800" fill="#0E3A5A">CANA</tspan><tspan font-weight="400" fill="#2E9BD6">PLAN</tspan>
   </text>
   <path d="M308 168 L332 168" stroke="#F5A623" stroke-width="5" stroke-linecap="round"/>
   <text x="346" y="180" font-family="Montserrat, Inter, 'Segoe UI', Arial, sans-serif"

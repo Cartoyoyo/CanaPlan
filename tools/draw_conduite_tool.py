@@ -10,6 +10,8 @@ from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import QMessageBox, QToolTip
 from qgis.PyQt.QtGui import QColor
 
+from . import i18n
+
 from .spatial_utils import nearest_point_feature, rect_request
 
 
@@ -50,7 +52,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             f"Conduite {self.reseau}",
-            "Clic gauche : ajouter un point  ·  Clic droit : terminer  ·  ← : annuler le dernier point  ·  Échap : tout annuler",
+            i18n.tr('ot_aide_conduite'),
             level=0, duration=0,
         )
 
@@ -126,8 +128,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
                 from qgis.utils import iface as _iface
                 _iface.messageBar().pushMessage(
                     "Topologie",
-                    f"Regard existant à moins de {self._TOPO_MIN_DIST_M:.1f} m — "
-                    "rapprochez le curseur pour snapper ou vérifiez la connexion.",
+                    i18n.tr('ot_regard_proche', distance=i18n.nombre(SNAP_WARN_M)),
                     level=1, duration=4,
                 )
             regard_id = self._create_regard(point)

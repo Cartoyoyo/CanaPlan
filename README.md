@@ -1,23 +1,33 @@
+<!-- Badges : syntaxe, styles et encodage des URL shields.io
+     https://github.com/badges/shields
+     espace = %20 · barre verticale = %7C · tiret littéral = --
+     « langues » désigne l'interface du plugin, traduite ;
+     un badge « docs » ne couvrirait que cette documentation. -->
+
 <div align="center">
 
-<img src="icon/logo-full.svg" width="420" alt="BET Humide">
+<img src="icon/logo-full.svg" width="420" alt="CanaPlan">
 
-# BET Humide
+# CanaPlan
 
 **Plugin QGIS de dessin topologique de réseaux d'assainissement — EU / EP, du tracé terrain à la livraison StaR-Eau**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.28%2B-green?logo=qgis&logoColor=white)](https://qgis.org)
 [![Version](https://img.shields.io/badge/version-1.4-blue)](#-changelog)
 [![StaR-Eau](https://img.shields.io/badge/StaR--Eau-V2024%20CNIG%2FASTEE-orange)](#-export-star-eau-cnig--astee-v2024)
-[![Langue](https://img.shields.io/badge/langue-FR-purple)](README.md)
+[![Langues](https://img.shields.io/badge/langues-FR%20%7C%20EN%20%7C%20ES%20%7C%20PT%20%7C%20DE-purple)](#-langues--languages)
+
+**[Français](#-français) · [English](#-english) · [Español](#-español) · [Português](#-português) · [Deutsch](#-deutsch)**
 
 </div>
 
 ---
 
+## 🇫🇷 Français
+
 ## 📝 Description
 
-**BET Humide** est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement **EU** (Eaux Usées) et **EP** (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement.
+**CanaPlan** est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement **EU** (Eaux Usées) et **EP** (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement.
 
 La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle.
 
@@ -429,9 +439,9 @@ Du réglage de la feuille jusqu'au plan livré, en quatre temps :
 Les outils sont accessibles par trois chemins, qui exposent tous les memes
 actions :
 
-- la **barre d'outils** « BET Humide » ;
+- la **barre d'outils** « CanaPlan » ;
 - le **panneau lateral** (dock), arborescence repliable par categorie ;
-- le **menu** *Extensions ▸ BET Humide*, organise en sous-menus reprenant
+- le **menu** *Extensions ▸ CanaPlan*, organise en sous-menus reprenant
   exactement les categories du panneau lateral : Projet, General,
   EU – Eaux Usees, EP – Eaux Pluviales, Etiquettes, Sorties & Impression,
   Fond de carte.
@@ -674,7 +684,7 @@ base StaR-Eau.
 
 ### Correspondance des objets
 
-| BET Humide | Couche StaR-Eau | Schema du modele |
+| CanaPlan | Couche StaR-Eau | Schema du modele |
 |---|---|---|
 | Conduite | `ass_canalisation` | `stareau_ass` |
 | Regard | `ass_regard` | `stareau_ass` |
@@ -813,10 +823,10 @@ La compatibilite ascendante est assuree avec le format v1 (JSON brut + GPKG exte
 1. Téléchargez ou clonez ce dépôt :
 
    ```bash
-   git clone https://github.com/Cartoyoyo/BET_humide.git
+   git clone https://github.com/Cartoyoyo/CanaPlan.git
    ```
 
-2. Copiez le dossier `BET_HUMIDE` dans le répertoire des plugins QGIS :
+2. Copiez le dossier `CanaPlan` dans le répertoire des plugins QGIS :
 
    | Système | Chemin |
    |---------|--------|
@@ -824,7 +834,7 @@ La compatibilite ascendante est assuree avec le format v1 (JSON brut + GPKG exte
    | macOS   | `~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins/` |
    | Linux   | `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/` |
 
-3. Ouvrez QGIS, allez dans **Extensions → Installer/Gérer les extensions → Installées**, cochez **BET Humide** et cliquez sur **OK**.
+3. Ouvrez QGIS, allez dans **Extensions → Installer/Gérer les extensions → Installées**, cochez **CanaPlan** et cliquez sur **OK**.
 
 4. La barre d'outils et le panneau latéral apparaissent automatiquement.
 
@@ -840,10 +850,197 @@ La compatibilite ascendante est assuree avec le format v1 (JSON brut + GPKG exte
 
 ---
 
+## 🌍 Langues · Languages
+
+L'**interface du plugin** et **cette documentation** sont disponibles en cinq langues.
+
+| Langue | Interface | Documentation |
+|---|:---:|:---:|
+| Français | ✅ | ✅ complète |
+| English | ✅ | ✅ complète |
+| Español | ✅ | ✅ condensée |
+| Português | ✅ | ✅ condensée |
+| Deutsch | ✅ | ✅ condensée |
+
+Au premier lancement, le plugin suit la langue de QGIS. Dès que vous choisissez une langue, ce choix est mémorisé et prime sur celle de QGIS — l'entrée **Automatique (langue de QGIS)** rétablit le suivi. Le sélecteur est présent à trois endroits, synchronisés entre eux : en pied du **panneau latéral**, dans **Extensions → CanaPlan → Langue**, et dans la fenêtre **À propos**. Le changement est immédiat, sans redémarrage.
+
+> Les listes de valeurs du géostandard **StaR-Eau** ne sont pas traduites : leurs codes et libellés sont normatifs (CNIG / ASTEE) et servent de clés étrangères dans le modèle PostGIS.
+
+Le séparateur décimal des rapports suit la langue : `128,31` en français, espagnol, portugais et allemand, `128.31` en anglais.
+
+---
+
+## 🇬🇧 English
+
+### 📝 Description
+
+**CanaPlan** is a design-drawing tool for laying out **wastewater (EU)** and **stormwater (EP)** sewer networks directly inside QGIS, over a basemap the plugin loads for you (BAN addresses, PCI cadastre, IGN orthophoto, OSM, or an existing DXF/DWG drawing), with native geometric continuity: every pipe joins two structures, and every service connection re-anchors itself onto its parent pipe when that pipe moves, with validation on save.
+
+Network slope can be set or corrected straight from the drawing and data-entry tools (a four-step project wizard, a bulk entry table). The plugin produces longitudinal profiles (EU / EP / combined), computes trench volumes (excavation and imported backfill materials), generates cross-section drawings, prints multi-sheet orientable PDF plans with an overview sheet, and exports faithful DXF 2018.
+
+From field survey to delivery, one tool covers the whole chain: Star-DT / StaR-Elec (DT-DICT) import, IGN/BAN/PCI basemaps fetched in the background, and GeoPackage export compliant with the **StaR-Eau V2024** geostandard (CNIG / ASTEE).
+
+> Workflow screenshots are in the [Captures d'écran](#-captures-décran) section above.
+
+### ⚙️ Features
+
+- **Topological drawing:** each pipe vertex creates a manhole; service connections tap into an existing pipe and run to a structure.
+- **Attribute form:** hover to highlight, click to edit. Numeric fields accept **additive expressions** (`1-0.25` → `0.750`); ground level, invert level and depth recompute from one another.
+- **Move with re-anchoring:** moving a structure drags the connected pipes and connections along. Tap-in points slide along their parent pipe, updating chainage and tap-in level.
+- **Slope entry table:** find the chain between two manholes, then apply a constant slope, a slope computed from the two known invert levels, or a fixed depth over the whole chain.
+- **Longitudinal profiles:** EU, EP or combined along a drawn axis, with a value table and tap-in markers.
+- **Trench volumes and backfill:** excavation and imported materials broken down into bedding, surround, pipe and backfill, with optional road sub-base and surface course.
+- **Cross sections and a composite trench designer**, exportable to PDF and PNG.
+- **Labels:** fixed point size or scaled to a printing scale, with a zoom-out threshold, per-network and per-type visibility, and a choice of displayed fields.
+- **Renumbering** of manholes and inspection chambers along a chain, with configurable prefixes and starting numbers.
+- **Multi-sheet printing:** place sheets on the map, aim each one with the mouse, then export a PDF with an optional overview page, or a DXF 2018 plan.
+- **StaR-Eau V2024 export** to GeoPackage, with a compliance check that lists blocking issues before writing.
+- **Star-DT / StaR-Elec (DT-DICT) import** and DXF/DWG import into GeoPackage.
+
+### 📋 Requirements
+
+| Dependency | Status | Used for |
+|---|---|---|
+| QGIS **>= 3.28** | required (>= 3.38 recommended, avoids `QMetaType` warnings) | — |
+| **matplotlib** | optional | longitudinal profiles, cross sections, composite trench designer |
+| **ezdxf** | bundled (`libs/`) | DXF export post-processing (hatches, frames, extension lines, point symbols) |
+| **reportlab** | optional | volume / backfill PDF reports |
+| **openpyxl** | optional | volume / backfill Excel reports |
+
+### 🚀 Installation
+
+1. Download or clone this repository:
+
+   ```bash
+   git clone https://github.com/Cartoyoyo/CanaPlan.git
+   ```
+
+2. Copy the `CanaPlan` folder into the QGIS plugins directory:
+
+   | System | Path |
+   |---------|--------|
+   | Windows | `C:\Users\<user>\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\` |
+   | macOS   | `~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins/` |
+   | Linux   | `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/` |
+
+3. Open QGIS, go to **Plugins → Manage and Install Plugins → Installed**, tick **CanaPlan** and click **OK**.
+
+4. A single icon appears in the Plugins toolbar; it shows and hides the side panel, which is the plugin's only interface.
+
+### 📦 The .bet project format
+
+A CanaPlan project is a single `.bet` file — a ZIP archive holding a `metadata.json` manifest, a `data.gpkg` GeoPackage with the eight working layers, and a `fonds/` folder with the basemaps. Two rotating backups (`.bak1`, `.bak2`) are kept beside it.
+
+Basemaps are saved with the project: WMS streams by reference (URI, opacity, scale thresholds), while vector layers — BAN addresses, street names, PCI, DXF and Star-DT imports — are copied into the archive with their style, so they survive the temporary-folder purge and travel with the project.
+
+---
+
+## 🇪🇸 Español
+
+> Las capturas de pantalla del flujo de trabajo se encuentran en la sección [Captures d'écran](#-captures-décran) al inicio de este documento.
+
+### 📝 Descripción
+
+**CanaPlan** es una herramienta de dibujo de proyecto que permite trazar redes de saneamiento de **aguas residuales (EU)** y **aguas pluviales (EP)** directamente en QGIS, sobre un mapa base que el propio complemento carga (direcciones BAN, catastro PCI, ortofoto IGN, OSM o un plano DXF/DWG existente), con continuidad geométrica nativa: cada tubería une dos obras y cada acometida se reajusta automáticamente sobre su tubería madre cuando esta se mueve.
+
+Del levantamiento de campo a la entrega, una sola herramienta cubre toda la cadena: importación Star-DT / StaR-Elec (DT-DICT), mapas base IGN/BAN/PCI cargados en segundo plano y exportación GeoPackage conforme al geoestándar **StaR-Eau V2024** (CNIG / ASTEE).
+
+### ⚙️ Funcionalidades
+
+- **Dibujo topológico:** cada vértice de tubería crea un pozo; las acometidas se conectan a una tubería existente y llegan hasta una obra.
+- **Formulario de atributos** con expresiones aditivas y recálculo automático de cota de terreno, cota de solera y profundidad.
+- **Movimiento con reajuste** de las tuberías y acometidas conectadas.
+- **Tabla de entrada de pendiente** sobre la cadena entre dos pozos: pendiente constante, calculada o profundidad fija.
+- **Perfiles longitudinales** EU, EP o agrupados, con tabla de valores.
+- **Cubicación y relleno:** desmonte y materiales aportados desglosados (cama, recubrimiento, tubería, relleno, calzada).
+- **Secciones transversales** y diseñador de zanjas compuestas, exportables a PDF y PNG.
+- **Etiquetas** con tamaño fijo o adaptado a la escala de impresión, y umbral de visualización.
+- **Impresión multihoja** en PDF con plano de conjunto, y exportación DXF 2018.
+- **Exportación StaR-Eau V2024** a GeoPackage, con control de conformidad previo.
+
+### 🚀 Instalación
+
+1. Clone el repositorio: `git clone https://github.com/Cartoyoyo/CanaPlan.git`
+2. Copie la carpeta `CanaPlan` en el directorio de complementos de QGIS (rutas en la sección [Installation](#-installation)).
+3. En QGIS, vaya a **Complementos → Administrar e instalar complementos → Instalados**, marque **CanaPlan** y pulse **Aceptar**.
+4. Un único icono aparece en la barra de complementos: muestra y oculta el panel lateral.
+
+Requisitos: QGIS **>= 3.28**; *matplotlib*, *reportlab* y *openpyxl* son opcionales, *ezdxf* viene incluido.
+
+---
+
+## 🇵🇹 Português
+
+> As capturas de ecrã do fluxo de trabalho encontram-se na secção [Captures d'écran](#-captures-décran) no início deste documento.
+
+### 📝 Descrição
+
+**CanaPlan** é uma ferramenta de desenho de projeto que permite traçar redes de saneamento de **águas residuais (EU)** e **águas pluviais (EP)** diretamente no QGIS, sobre um mapa base que o próprio módulo carrega (endereços BAN, cadastro PCI, ortofoto IGN, OSM ou uma planta DXF/DWG existente), com continuidade geométrica nativa: cada conduta liga duas estruturas e cada ramal reajusta-se automaticamente à sua conduta principal quando esta se desloca.
+
+Do levantamento de campo à entrega, uma só ferramenta cobre toda a cadeia: importação Star-DT / StaR-Elec (DT-DICT), mapas base IGN/BAN/PCI carregados em segundo plano e exportação GeoPackage conforme ao geopadrão **StaR-Eau V2024** (CNIG / ASTEE).
+
+### ⚙️ Funcionalidades
+
+- **Desenho topológico:** cada vértice de conduta cria uma caixa; os ramais ligam-se a uma conduta existente e terminam numa estrutura.
+- **Formulário de atributos** com expressões aditivas e recálculo automático de cota do terreno, soleira e profundidade.
+- **Deslocação com reajuste** das condutas e ramais ligados.
+- **Tabela de entrada de declive** na cadeia entre duas caixas: declive constante, calculado ou profundidade fixa.
+- **Perfis longitudinais** EU, EP ou agrupados, com tabela de valores.
+- **Cubagem e aterro:** escavação e materiais aplicados decompostos (leito, envolvimento, conduta, aterro, faixa de rodagem).
+- **Cortes transversais** e desenhador de valas compostas, exportáveis para PDF e PNG.
+- **Rótulos** com tamanho fixo ou adaptado à escala de impressão, e limiar de exibição.
+- **Impressão multifolha** em PDF com planta de conjunto, e exportação DXF 2018.
+- **Exportação StaR-Eau V2024** para GeoPackage, com controlo de conformidade prévio.
+
+### 🚀 Instalação
+
+1. Clone o repositório: `git clone https://github.com/Cartoyoyo/CanaPlan.git`
+2. Copie a pasta `CanaPlan` para o diretório de módulos do QGIS (caminhos na secção [Installation](#-installation)).
+3. No QGIS, vá a **Módulos → Gerir e instalar módulos → Instalados**, marque **CanaPlan** e clique em **OK**.
+4. Um único ícone aparece na barra de módulos: mostra e oculta o painel lateral.
+
+Requisitos: QGIS **>= 3.28**; *matplotlib*, *reportlab* e *openpyxl* são opcionais, *ezdxf* está incluído.
+
+---
+
+## 🇩🇪 Deutsch
+
+> Die Bildschirmfotos des Arbeitsablaufs finden Sie im Abschnitt [Captures d'écran](#-captures-décran) am Anfang dieses Dokuments.
+
+### 📝 Beschreibung
+
+**CanaPlan** ist ein Entwurfswerkzeug zum Zeichnen von **Schmutzwasser- (EU)** und **Regenwasserkanalnetzen (EP)** direkt in QGIS, über einer Hintergrundkarte, die die Erweiterung selbst lädt (BAN-Adressen, PCI-Kataster, IGN-Orthofoto, OSM oder eine vorhandene DXF/DWG-Zeichnung), mit nativer geometrischer Kontinuität: Jede Leitung verbindet zwei Bauwerke, und jeder Hausanschluss richtet sich automatisch neu an seiner Hauptleitung aus, wenn diese verschoben wird.
+
+Von der Feldaufnahme bis zur Übergabe deckt ein einziges Werkzeug die gesamte Kette ab: Star-DT- / StaR-Elec-Import (DT-DICT), im Hintergrund geladene IGN/BAN/PCI-Hintergrundkarten und GeoPackage-Export konform zum Geostandard **StaR-Eau V2024** (CNIG / ASTEE).
+
+### ⚙️ Funktionen
+
+- **Topologisches Zeichnen:** Jeder Leitungsknoten erzeugt einen Schacht; Hausanschlüsse binden an eine bestehende Leitung an und enden an einem Bauwerk.
+- **Attributformular** mit additiven Ausdrücken und automatischer Neuberechnung von Geländehöhe, Sohlhöhe und Tiefe.
+- **Verschieben mit Nachführung** der angeschlossenen Leitungen und Hausanschlüsse.
+- **Gefälle-Eingabetabelle** für die Kette zwischen zwei Schächten: konstantes, berechnetes Gefälle oder feste Tiefe.
+- **Längsschnitte** EU, EP oder kombiniert, mit Werttabelle.
+- **Massenberechnung und Verfüllung:** Aushub und eingebaute Materialien aufgeschlüsselt (Bettung, Ummantelung, Leitung, Verfüllung, Fahrbahn).
+- **Querschnitte** und Zeichner für zusammengesetzte Gräben, als PDF und PNG exportierbar.
+- **Beschriftungen** mit fester Größe oder an den Druckmaßstab angepasst, mit Anzeigeschwelle.
+- **Mehrblattdruck** als PDF mit Übersichtsplan sowie DXF-2018-Export.
+- **StaR-Eau-V2024-Export** ins GeoPackage, mit vorheriger Konformitätsprüfung.
+
+### 🚀 Installation
+
+1. Repository klonen: `git clone https://github.com/Cartoyoyo/CanaPlan.git`
+2. Den Ordner `CanaPlan` in das QGIS-Erweiterungsverzeichnis kopieren (Pfade im Abschnitt [Installation](#-installation)).
+3. In QGIS **Erweiterungen → Erweiterungen verwalten und installieren → Installiert** öffnen, **CanaPlan** ankreuzen und auf **OK** klicken.
+4. Ein einziges Symbol erscheint in der Erweiterungs-Werkzeugleiste; es blendet die Seitenleiste ein und aus.
+
+Voraussetzungen: QGIS **>= 3.28**; *matplotlib*, *reportlab* und *openpyxl* sind optional, *ezdxf* ist enthalten.
+
+---
+
 ## 🌳 Structure du projet
 
 ```
-BET_HUMIDE/
+CanaPlan/
 ├── main.py                         # Classe principale du plugin
 ├── config_dialog.py                # Dialogue de configuration (reseaux, couches, cubature, remblai)
 ├── __init__.py
@@ -968,7 +1165,7 @@ BET_HUMIDE/
   Tableau de saisie et export StaR-Eau, et separee des materiaux de remblai.
 - **Interface** : menu QGIS organise en sous-menus reprenant les categories
   du panneau lateral, bascule d'affichage de la barre d'outils, dialogue
-  « A propos », renommage en « BET Humide », suppression du doublon
+  « A propos », renommage en « CanaPlan », suppression du doublon
   « Mise en place fond de projet » dans le panneau lateral.
 
 ### 1.2
@@ -1021,6 +1218,6 @@ Technicien SIG — Vichy Communauté
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-ylaloux-blue?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/ylaloux/)
 [![GitHub](https://img.shields.io/badge/GitHub-Cartoyoyo-black?logo=github)](https://github.com/Cartoyoyo)
 
-Dépôt : <https://github.com/Cartoyoyo/BET_humide> · Anomalies et demandes : <https://github.com/Cartoyoyo/BET_humide/issues>
+Dépôt : <https://github.com/Cartoyoyo/CanaPlan> · Anomalies et demandes : <https://github.com/Cartoyoyo/CanaPlan/issues>
 
 </div>

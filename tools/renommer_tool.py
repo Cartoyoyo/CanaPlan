@@ -8,6 +8,8 @@ from qgis.PyQt.QtWidgets import (
     QSpinBox, QDialogButtonBox, QLabel, QMessageBox,
 )
 
+from . import i18n
+
 from .graph_utils import _to_float, build_graph, bfs
 
 _DEFAULTS = {
@@ -24,7 +26,7 @@ class _PrefixDialog(QDialog):
 
     def __init__(self, default_regard, default_tabouret, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Renumérotation – préfixes et numéros de départ")
+        self.setWindowTitle(i18n.tr('ot_renum_titre'))
         layout = QVBoxLayout(self)
 
         def _spinbox(default=1):
@@ -40,14 +42,13 @@ class _PrefixDialog(QDialog):
         self.ed_tabouret    = QLineEdit(default_tabouret)
         self.sb_start_tab   = _spinbox(1)
 
-        form.addRow("Préfixe regards :",          self.ed_regard)
-        form.addRow("N° de départ regards :",     self.sb_start_reg)
-        form.addRow("Préfixe tabourets :",        self.ed_tabouret)
-        form.addRow("N° de départ tabourets :",   self.sb_start_tab)
+        form.addRow(i18n.tr('ot_lbl_prefixe_regards'),   self.ed_regard)
+        form.addRow(i18n.tr('ot_lbl_depart_regards'),   self.sb_start_reg)
+        form.addRow(i18n.tr('ot_lbl_prefixe_tabourets'), self.ed_tabouret)
+        form.addRow(i18n.tr('ot_lbl_depart_tabourets'), self.sb_start_tab)
         layout.addLayout(form)
 
-        note = QLabel("<i>Exemple : regards dès 00 → REU00, REU01 …  "
-                      "tabourets dès 01 → EU-BRCHT01, EU-BRCHT02 …</i>")
+        note = QLabel(i18n.tr('ot_renum_exemple'))
         note.setWordWrap(True)
         layout.addWidget(note)
 
@@ -103,8 +104,8 @@ class RenommerTool(QgsMapTool):
         super().activate()
         self.canvas.setCursor(Qt.CrossCursor)
         self.iface.messageBar().pushMessage(
-            f"Renumérotation {self.reseau}",
-            "1er clic : regard départ (vert)  ·  2e clic : regard arrivée → dialogue préfixes  ·  Échap : annuler",
+            i18n.tr('ot_titre_renum', reseau=self.reseau),
+            i18n.tr('ot_aide_renum'),
             level=0, duration=0,
         )
 
@@ -153,9 +154,8 @@ class RenommerTool(QgsMapTool):
 
         if r_ids is None:
             QMessageBox.warning(
-                None, "Renumérotation",
-                "Aucun chemin trouvé entre les deux regards sélectionnés.\n"
-                "Vérifiez que le réseau est correctement connecté.")
+                None, i18n.tr('ot_renumerotation'),
+                i18n.tr('po_aucun_chemin'))
             return
 
         defaults = _DEFAULTS.get(self.reseau, _DEFAULTS['EU'])
@@ -228,14 +228,18 @@ class RenommerTool(QgsMapTool):
 
         nb_reg = len(r_ids)
         nb_tab = tab_num - n_tab_start
-        msg = (f"{nb_reg} regard(s) renommé(s) : "
-               f"{reg_prefix}{n_reg:02d} → {reg_prefix}{n_reg + nb_reg - 1:02d}")
+        msg = i18n.tr(
+            'ot_renum_regards', nb=nb_reg,
+            debut=f"{reg_prefix}{n_reg:02d}",
+            fin=f"{reg_prefix}{n_reg + nb_reg - 1:02d}")
         if nb_tab:
-            msg += (f"\n{nb_tab} tabouret(s) renommé(s) : "
-                    f"{tab_prefix}{n_tab_start:02d} → {tab_prefix}{tab_num - 1:02d}")
+            msg += "\n" + i18n.tr(
+                'ot_renum_tabourets', nb=nb_tab,
+                debut=f"{tab_prefix}{n_tab_start:02d}",
+                fin=f"{tab_prefix}{tab_num - 1:02d}")
         else:
-            msg += "\nAucun tabouret rattaché trouvé."
-        QMessageBox.information(None, "Renumérotation", msg)
+            msg += "\n" + i18n.tr('ot_renum_sans_tabouret')
+        QMessageBox.information(None, i18n.tr('ot_renumerotation'), msg)
 
     # ------------------------------------------------------------------ helpers
 

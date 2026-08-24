@@ -19,6 +19,8 @@ import os
 from datetime import datetime
 
 from qgis.PyQt.QtCore import QDate, QEvent, Qt, QTimer
+
+from ..tools import i18n
 from qgis.PyQt.QtGui import QColor, QFont
 from qgis.PyQt.QtWidgets import (
     QCheckBox, QComboBox, QDateEdit, QDialog, QDialogButtonBox, QFileDialog,
@@ -30,14 +32,14 @@ from qgis.core import QgsSettings
 
 from ..tools import stareau_values as sv
 
-_SETTINGS_PREFIX = "BET_HUMIDE/stareau/"
+_SETTINGS_PREFIX = "CanaPlan/stareau/"
 
 # Valeur affichee dans la combo « contenu EP » pour laisser la colonne vide.
-_EP_VIDE = "— laisser vide —"
+_EP_VIDE = 'se_ep_vide'
 
 # Entree de tete de la combo « materiau des conduites » : le materiau du
 # projet fait foi, et les objets sans materiau sortent en « non renseigne ».
-_MAT_PROJET = "— Identique au projet —"
+_MAT_PROJET = 'se_mat_projet'
 
 # Materiaux proposes en repli, « Non renseigne » exclu : c'est deja le sens
 # de l'entree de tete, l'y laisser ferait deux choix pour un meme resultat.
@@ -51,7 +53,7 @@ class StarEauExportDialog(QDialog):
     def __init__(self, iface, parent=None):
         super().__init__(parent)
         self.iface = iface
-        self.setWindowTitle("Exporter au format StaR-Eau (CNIG / ASTEE V2024)")
+        self.setWindowTitle(i18n.tr('se_titre'))
         self.setMinimumSize(720, 620)
 
         self._issues = []
@@ -59,24 +61,21 @@ class StarEauExportDialog(QDialog):
         layout = QVBoxLayout(self)
 
         intro = QLabel(
-            "StaR-Eau est un modèle de données, pas un format de fichier. "
-            "L'export produit un GeoPackage dont chaque couche reprend le nom "
-            "et les colonnes d'une table du géostandard, directement "
-            "intégrable dans une base StaR-Eau.")
+            i18n.tr('se_intro'))
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._tab_fichier(),  "Fichier")
-        self.tabs.addTab(self._tab_chantier(), "Chantier")
-        self.tabs.addTab(self._tab_reseau(),   "Réseau")
-        self.tabs.addTab(self._tab_ouvrages(), "Ouvrages")
-        self.tabs.addTab(self._tab_controle(), "Contrôle")
+        self.tabs.addTab(self._tab_fichier(),  i18n.tr('se_onglet_fichier'))
+        self.tabs.addTab(self._tab_chantier(), i18n.tr('se_onglet_chantier'))
+        self.tabs.addTab(self._tab_reseau(),   i18n.tr('se_onglet_reseau'))
+        self.tabs.addTab(self._tab_ouvrages(), i18n.tr('se_onglet_ouvrages'))
+        self.tabs.addTab(self._tab_controle(), i18n.tr('se_onglet_controle'))
         layout.addWidget(self.tabs)
 
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.buttons.button(QDialogButtonBox.Ok).setText("Exporter")
+        self.buttons.button(QDialogButtonBox.Ok).setText(i18n.tr('exp_titre'))
         self.buttons.accepted.connect(self._on_accept)
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
@@ -95,34 +94,34 @@ class StarEauExportDialog(QDialog):
 
         self.ed_code = QLineEdit()
         self.ed_code.setMaxLength(10)
-        self.ed_code.setPlaceholderText("code chantier, 10 caractères max")
+        self.ed_code.setPlaceholderText(i18n.tr('se_code_chantier'))
         self.ed_code.textChanged.connect(self._refresh_name)
-        form.addRow("Code chantier :", self.ed_code)
+        form.addRow(i18n.tr('se_lbl_code'), self.ed_code)
 
         self.ed_siren = QLineEdit()
         self.ed_siren.setMaxLength(14)
-        self.ed_siren.setPlaceholderText("SIREN du maître d'ouvrage (9 chiffres)")
+        self.ed_siren.setPlaceholderText(i18n.tr('se_siren'))
         self.ed_siren.textChanged.connect(self._refresh_name)
-        form.addRow("SIREN :", self.ed_siren)
+        form.addRow(i18n.tr('se_lbl_siren'), self.ed_siren)
 
         self.cb_type_fichier = QComboBox()
         self.cb_type_fichier.addItems(["ASS", "EAU"])
         self.cb_type_fichier.currentIndexChanged.connect(self._refresh_name)
-        form.addRow("Type de réseau :", self.cb_type_fichier)
+        form.addRow(i18n.tr('se_lbl_type_fichier'), self.cb_type_fichier)
 
         self.ed_date = QLineEdit(datetime.now().strftime("%Y-%m-%d"))
         self.ed_date.textChanged.connect(self._refresh_name)
-        form.addRow("Date d'export :", self.ed_date)
+        form.addRow(i18n.tr('se_lbl_date_export'), self.ed_date)
 
         layout.addLayout(form)
 
-        out_group = QGroupBox("Fichier de sortie")
+        out_group = QGroupBox(i18n.tr('se_fichier_sortie'))
         out_layout = QVBoxLayout(out_group)
 
         dir_row = QHBoxLayout()
         self.ed_dir = QLineEdit()
-        self.ed_dir.setPlaceholderText("dossier de destination")
-        btn_dir = QPushButton("Parcourir…")
+        self.ed_dir.setPlaceholderText(i18n.tr('se_dossier_dest'))
+        btn_dir = QPushButton(i18n.tr('parcourir'))
         btn_dir.clicked.connect(self._browse_dir)
         dir_row.addWidget(self.ed_dir)
         dir_row.addWidget(btn_dir)
@@ -137,8 +136,7 @@ class StarEauExportDialog(QDialog):
         out_layout.addWidget(self.lbl_name)
 
         hint = QLabel(
-            "Nommage imposé par le géostandard (§ 03.7.5) :\n"
-            "Stareau-fr<code>-<SIREN><type><date>.gpkg")
+            i18n.tr('se_nommage'))
         hint.setWordWrap(True)
         out_layout.addWidget(hint)
 
@@ -153,8 +151,7 @@ class StarEauExportDialog(QDialog):
         layout = QVBoxLayout(page)
 
         note = QLabel(
-            "Champs communs à tous les objets exportés "
-            "(table stareau_principale.champ_commun).")
+            i18n.tr('se_champs_communs'))
         note.setWordWrap(True)
         layout.addWidget(note)
 
@@ -162,32 +159,32 @@ class StarEauExportDialog(QDialog):
 
         self.ed_insee = QLineEdit()
         self.ed_insee.setMaxLength(5)
-        self.ed_insee.setPlaceholderText("code INSEE sur 5 caractères")
-        form.addRow("Commune (INSEE) :", self.ed_insee)
+        self.ed_insee.setPlaceholderText(i18n.tr('se_insee'))
+        form.addRow(i18n.tr('se_lbl_insee'), self.ed_insee)
 
         self.ed_moa = QLineEdit()
-        self.ed_moa.setPlaceholderText("propriétaire du patrimoine")
-        form.addRow("Maître d'ouvrage :", self.ed_moa)
+        self.ed_moa.setPlaceholderText(i18n.tr('se_proprietaire'))
+        form.addRow(i18n.tr('se_lbl_moa'), self.ed_moa)
 
         self.ed_exploitant = QLineEdit()
-        form.addRow("Exploitant :", self.ed_exploitant)
+        form.addRow(i18n.tr('se_lbl_exploitant'), self.ed_exploitant)
 
         self.ed_entreprise = QLineEdit()
-        self.ed_entreprise.setPlaceholderText("facultatif")
-        form.addRow("Entreprise de pose :", self.ed_entreprise)
+        self.ed_entreprise.setPlaceholderText(i18n.tr('se_facultatif'))
+        form.addRow(i18n.tr('se_lbl_entreprise'), self.ed_entreprise)
 
         self.ed_localisation = QLineEdit()
-        self.ed_localisation.setPlaceholderText("rue principale ou lieu-dit (facultatif)")
-        form.addRow("Localisation :", self.ed_localisation)
+        self.ed_localisation.setPlaceholderText(i18n.tr('se_rue'))
+        form.addRow(i18n.tr('se_lbl_localisation'), self.ed_localisation)
 
         self.cb_etat = self._combo(sv.ETAT_SERVICE)
-        form.addRow("État de service :", self.cb_etat)
+        form.addRow(i18n.tr('se_lbl_etat'), self.cb_etat)
 
         self.cb_prec_xy = self._combo(sv.PRECISION)
-        form.addRow("Classe de précision XY :", self.cb_prec_xy)
+        form.addRow(i18n.tr('se_lbl_prec_xy'), self.cb_prec_xy)
 
         self.cb_prec_z = self._combo(sv.PRECISION)
-        form.addRow("Classe de précision Z :", self.cb_prec_z)
+        form.addRow(i18n.tr('se_lbl_prec_z'), self.cb_prec_z)
 
         year = datetime.now().year
         # Le geostandard ne stocke qu'une ANNEE de pose (domaine c_annee).
@@ -197,21 +194,21 @@ class StarEauExportDialog(QDialog):
         self.de_pose.setCalendarPopup(True)
         self.de_pose.setDisplayFormat("dd/MM/yyyy")
         self.de_pose.setDateRange(QDate(1800, 1, 1), QDate(2099, 12, 31))
-        form.addRow("Date de pose :", self.de_pose)
+        form.addRow(i18n.tr('se_lbl_date_pose'), self.de_pose)
 
         self.sp_service = QSpinBox()
         self.sp_service.setRange(1800, 2099)
         self.sp_service.setValue(year)
-        form.addRow("Année de mise en service :", self.sp_service)
+        form.addRow(i18n.tr('se_lbl_annee_service'), self.sp_service)
 
         self.cb_origine = self._combo(sv.ORIGINE)
-        form.addRow("Origine de la donnée :", self.cb_origine)
+        form.addRow(i18n.tr('se_lbl_origine'), self.cb_origine)
 
         layout.addLayout(form)
 
         self.ed_commentaire = QTextEdit()
         self.ed_commentaire.setMaximumHeight(70)
-        layout.addWidget(QLabel("Commentaire :"))
+        layout.addWidget(QLabel(i18n.tr('se_commentaire')))
         layout.addWidget(self.ed_commentaire)
 
         layout.addStretch()
@@ -227,70 +224,62 @@ class StarEauExportDialog(QDialog):
 
         self.cb_type_eu = self._combo(sv.TYPE_RESEAU)
         self.cb_type_eu.setCurrentIndex(sv.index_of(sv.TYPE_RESEAU, "assaeu"))
-        form.addRow("Type de réseau — couches EU :", self.cb_type_eu)
+        form.addRow(i18n.tr('se_lbl_type_eu'), self.cb_type_eu)
 
         self.cb_type_ep = self._combo(sv.TYPE_RESEAU)
         self.cb_type_ep.setCurrentIndex(sv.index_of(sv.TYPE_RESEAU, "assaep"))
-        form.addRow("Type de réseau — couches EP :", self.cb_type_ep)
+        form.addRow(i18n.tr('se_lbl_type_ep'), self.cb_type_ep)
 
         self.cb_mode_circ = self._combo(sv.MODE_CIRCULATION)
-        form.addRow("Mode de circulation :", self.cb_mode_circ)
+        form.addRow(i18n.tr('se_lbl_mode_circ'), self.cb_mode_circ)
 
         self.cb_type_pose = self._combo(sv.TYPE_POSE)
-        form.addRow("Type de pose :", self.cb_type_pose)
+        form.addRow(i18n.tr('se_lbl_type_pose'), self.cb_type_pose)
 
         self.cb_raison_pose = self._combo(sv.RAISON_POSE)
-        form.addRow("Raison de la pose :", self.cb_raison_pose)
+        form.addRow(i18n.tr('se_lbl_raison_pose'), self.cb_raison_pose)
 
         self.cb_revetement = self._combo(sv.REVETEMENT_INTERIEUR)
-        form.addRow("Revêtement intérieur :", self.cb_revetement)
+        form.addRow(i18n.tr('se_lbl_revetement'), self.cb_revetement)
 
         self.cb_fonction_cana = self._combo(sv.FONCTION_CANALISATION)
-        form.addRow("Fonction des conduites :", self.cb_fonction_cana)
+        form.addRow(i18n.tr('se_lbl_fonction_cana'), self.cb_fonction_cana)
 
         self.cb_fonction_brt = self._combo(sv.FONCTION_BRANCHEMENT)
-        form.addRow("Fonction des branchements :", self.cb_fonction_brt)
+        form.addRow(i18n.tr('se_lbl_fonction_brt'), self.cb_fonction_brt)
 
         # Les conduites et branchements portent deja un materiau saisi dans
         # le plugin : ce champ n'est qu'un repli. D'ou l'entree de tete, qui
         # dit explicitement que le projet fait foi — sans elle, « Non
         # renseigne » laisse croire que l'export ecraserait les materiaux.
         self.cb_materiau = QComboBox()
-        self.cb_materiau.addItem(_MAT_PROJET)
+        self.cb_materiau.addItem(i18n.tr(_MAT_PROJET))
         self.cb_materiau.addItems(
             [libelle for _, libelle in _MATERIAUX_REPLI])
-        form.addRow("Matériau des conduites :", self.cb_materiau)
+        form.addRow(i18n.tr('se_lbl_materiau_conduites'), self.cb_materiau)
         hint_mat = QLabel(
-            "Le matériau saisi dans le projet est toujours conservé et "
-            "converti automatiquement (PVC → pvc, Béton armé → ba…). "
-            "Ce choix ne s'applique qu'aux conduites et branchements dont le "
-            "champ Matériau est resté vide.")
+            i18n.tr('se_materiau_aide'))
         hint_mat.setWordWrap(True)
         form.addRow("", hint_mat)
 
-        self.chk_sensible = QCheckBox("Ouvrage sensible au sens DT-DICT")
+        self.chk_sensible = QCheckBox(i18n.tr('se_sensible'))
         form.addRow("", self.chk_sensible)
 
         layout.addLayout(form)
 
-        contenu_group = QGroupBox("Type d'eau transportée (contenu_canalisation)")
+        contenu_group = QGroupBox(i18n.tr('se_type_eau'))
         contenu_layout = QFormLayout(contenu_group)
 
         self.cb_contenu_eu = self._combo(sv.CONTENU_CANALISATION)
-        contenu_layout.addRow("Conduites EU :", self.cb_contenu_eu)
+        contenu_layout.addRow(i18n.tr('se_lbl_contenu_eu'), self.cb_contenu_eu)
 
         self.cb_contenu_ep = QComboBox()
-        self.cb_contenu_ep.addItem(_EP_VIDE)
+        self.cb_contenu_ep.addItem(i18n.tr(_EP_VIDE))
         self.cb_contenu_ep.addItems(sv.labels(sv.CONTENU_CANALISATION))
-        contenu_layout.addRow("Conduites EP :", self.cb_contenu_ep)
+        contenu_layout.addRow(i18n.tr('se_lbl_contenu_ep'), self.cb_contenu_ep)
 
         warn = QLabel(
-            "La liste officielle ass_contenu_canalisation ne comporte aucun "
-            "code pour les eaux pluviales : elle ne décrit que des eaux usées. "
-            "L'information EU/EP est portée par type_reseau (assaep). "
-            "Laisser vide est sémantiquement juste ; choisir un code ne se "
-            "justifie que si le destinataire du fichier impose un import "
-            "PostGIS strict, où la colonne est NOT NULL.")
+            i18n.tr('se_type_eau_aide'))
         warn.setWordWrap(True)
         contenu_layout.addRow(warn)
 
@@ -304,39 +293,38 @@ class StarEauExportDialog(QDialog):
         page = QWidget()
         layout = QVBoxLayout(page)
 
-        regard_group = QGroupBox("Regards  →  ass_regard")
+        regard_group = QGroupBox(i18n.tr('se_regards'))
         regard_form = QFormLayout(regard_group)
         self.cb_type_regard = self._combo(sv.TYPE_REGARD)
-        regard_form.addRow("Type de regard :", self.cb_type_regard)
+        regard_form.addRow(i18n.tr('se_lbl_type_regard'), self.cb_type_regard)
         self.cb_position = self._combo(sv.POSITION_REGARD)
-        regard_form.addRow("Position / canalisation :", self.cb_position)
+        regard_form.addRow(i18n.tr('se_lbl_position'), self.cb_position)
         self.cb_descente = self._combo(sv.TYPE_DESCENTE)
-        regard_form.addRow("Élément de descente :", self.cb_descente)
+        regard_form.addRow(i18n.tr('se_lbl_descente'), self.cb_descente)
         self.cb_mat_regard = self._combo(sv.MATERIAUX_CONDUITE)
         self.cb_mat_regard.setCurrentIndex(
             sv.index_of(sv.MATERIAUX_CONDUITE, "beton"))
-        regard_form.addRow("Matériau :", self.cb_mat_regard)
+        regard_form.addRow(i18n.tr('dt_lbl_materiau'), self.cb_mat_regard)
         layout.addWidget(regard_group)
 
-        tab_group = QGroupBox("Tabourets  →  ass_point_collecte")
+        tab_group = QGroupBox(i18n.tr('se_tabourets'))
         tab_form = QFormLayout(tab_group)
         self.cb_type_collecte = self._combo(sv.TYPE_POINT_COLLECTE)
-        tab_form.addRow("Type de point de collecte :", self.cb_type_collecte)
+        tab_form.addRow(i18n.tr('se_lbl_type_collecte'), self.cb_type_collecte)
         self.cb_usager = self._combo(sv.TYPE_USAGER)
-        tab_form.addRow("Type d'usager raccordé :", self.cb_usager)
+        tab_form.addRow(i18n.tr('se_lbl_usager'), self.cb_usager)
         self.cb_mat_tabouret = self._combo(sv.MATERIAUX_CONDUITE)
         self.cb_mat_tabouret.setCurrentIndex(
             sv.index_of(sv.MATERIAUX_CONDUITE, "pvc"))
-        tab_form.addRow("Matériau :", self.cb_mat_tabouret)
+        tab_form.addRow(i18n.tr('dt_lbl_materiau'), self.cb_mat_tabouret)
         layout.addWidget(tab_group)
 
-        rac_group = QGroupBox("Piquages de branchement  →  ass_raccord")
+        rac_group = QGroupBox(i18n.tr('se_piquages'))
         rac_form = QFormLayout(rac_group)
         self.cb_type_raccord = self._combo(sv.TYPE_RACCORD)
-        rac_form.addRow("Type de raccord :", self.cb_type_raccord)
+        rac_form.addRow(i18n.tr('se_lbl_type_raccord'), self.cb_type_raccord)
         note = QLabel(
-            "Un ass_raccord est créé au point de piquage de chaque "
-            "branchement, relié à la conduite piquée par ref_canalisation.")
+            i18n.tr('se_piquages_aide'))
         note.setWordWrap(True)
         rac_form.addRow(note)
         layout.addWidget(rac_group)
@@ -355,7 +343,7 @@ class StarEauExportDialog(QDialog):
         layout.addWidget(self.lbl_check)
 
         self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Niveau", "Objet", "Anomalie"])
+        self.table.setHorizontalHeaderLabels([i18n.tr('se_niveau'), i18n.tr('se_objet'), i18n.tr('se_anomalie')])
         self.table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -364,15 +352,11 @@ class StarEauExportDialog(QDialog):
         layout.addWidget(self.table)
 
         hint = QLabel(
-            "Double-cliquez sur une ligne pour zoomer sur l'objet dans QGIS. "
-            "Cette fenêtre reste ouverte pendant que vous corrigez : le "
-            "contrôle se relance tout seul dès que vous y revenez.\n"
-            "Les objets bloquants sont ignorés à l'export — leurs colonnes "
-            "NOT NULL ne peuvent pas être déduites du dessin.")
+            i18n.tr('se_controle_aide'))
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
-        btn = QPushButton("Relancer le contrôle")
+        btn = QPushButton(i18n.tr('se_relancer'))
         btn.clicked.connect(self.run_check)
         layout.addWidget(btn)
 
@@ -386,7 +370,7 @@ class StarEauExportDialog(QDialog):
             self._issues = check_conformity()
         except Exception as exc:
             self._issues = []
-            self.lbl_check.setText(f"Le contrôle a échoué : {exc}")
+            self.lbl_check.setText(i18n.tr('se_controle_echec', erreur=exc))
             return
 
         bloquants = [i for i in self._issues if i["niveau"] == "bloquant"]
@@ -408,13 +392,14 @@ class StarEauExportDialog(QDialog):
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
 
         if not self._issues:
-            self.lbl_check.setText("Aucune anomalie : l'export sera conforme.")
+            self.lbl_check.setText(i18n.tr('se_aucune_anomalie'))
         else:
             self.lbl_check.setText(
-                f"{len(bloquants)} objet(s) bloquant(s), "
-                f"{len(avertissements)} avertissement(s).")
-        self.tabs.setTabText(4, f"Contrôle ({len(self._issues)})" if self._issues
-                             else "Contrôle")
+                i18n.tr('se_bilan', bloquants=len(bloquants),
+                        avertissements=len(avertissements)))
+        self.tabs.setTabText(
+            4, i18n.tr('se_onglet_controle_nb', nb=len(self._issues))
+            if self._issues else i18n.tr('se_onglet_controle'))
 
     # ── Reactualisation automatique ─────────────────────────────────────────
 
@@ -511,7 +496,7 @@ class StarEauExportDialog(QDialog):
             except Exception:
                 start = ""
         chosen = QFileDialog.getExistingDirectory(
-            self, "Dossier de destination", start)
+            self, i18n.tr('se_dossier_dest_titre'), start)
         if chosen:
             self.ed_dir.setText(chosen)
             self._refresh_name()
@@ -595,26 +580,25 @@ class StarEauExportDialog(QDialog):
 
         missing = []
         if not self.ed_dir.text().strip():
-            missing.append("le dossier de destination")
+            missing.append(i18n.tr('se_manque_dossier'))
         if not self.ed_insee.text().strip():
-            missing.append("le code INSEE de la commune")
+            missing.append(i18n.tr('se_manque_insee'))
         if not self.ed_moa.text().strip():
-            missing.append("le maître d'ouvrage")
+            missing.append(i18n.tr('se_manque_moa'))
         if not self.ed_exploitant.text().strip():
-            missing.append("l'exploitant")
+            missing.append(i18n.tr('se_manque_exploitant'))
         if missing:
             QMessageBox.warning(
-                self, "Champs obligatoires",
-                "Ces informations sont exigées par le géostandard :\n\n• "
+                self, i18n.tr('se_champs_obligatoires'),
+                i18n.tr('se_manque_intro') + "\n\n• "
                 + "\n• ".join(missing))
             return
 
         bloquants = [i for i in self._issues if i["niveau"] == "bloquant"]
         if bloquants:
             answer = QMessageBox.question(
-                self, "Objets non conformes",
-                f"{len(bloquants)} objet(s) ne peuvent pas être exportés de "
-                "façon conforme et seront ignorés.\n\nPoursuivre l'export ?",
+                self, i18n.tr('se_non_conformes'),
+                i18n.tr('se_poursuivre', nb=len(bloquants)),
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if answer != QMessageBox.Yes:
                 self.tabs.setCurrentIndex(4)

@@ -1,4 +1,4 @@
-# Audit technique — Plugin QGIS BET_HUMIDE
+# Audit technique — Plugin QGIS CanaPlan
 
 **Date :** 06/07/2026
 **Périmètre :** code Python du plugin (hors `libs/` embarquées), packaging, distribution
@@ -267,7 +267,7 @@ def load_wfs_async(self, typename, layer_name, style_cb=None):
 
    L'utilisateur voit la progression dans la barre de tâches QGIS et peut continuer à travailler. Les 4 requêtes de `run_fond_projet` peuvent en plus partir **en parallèle**.
 
-2. **Nettoyage des temporaires** : stocker les chemins créés dans une liste sur le plugin et les supprimer dans `cleanup_plugin_resources()` ; ou mieux, écrire dans un sous-dossier dédié (`%TEMP%/bet_humide/`) purgé au démarrage du plugin.
+2. **Nettoyage des temporaires** : stocker les chemins créés dans une liste sur le plugin et les supprimer dans `cleanup_plugin_resources()` ; ou mieux, écrire dans un sous-dossier dédié (`%TEMP%/canaplan/`) purgé au démarrage du plugin.
 
 3. **Réactiver la vérification TLS** par défaut (voir a).
 
@@ -356,13 +356,13 @@ Le fichier racine est vraisemblablement un shim de réexport pour compatibilité
 
 ### e) Configuration stockée en `QSettings` globales et non dans le projet
 
-Les identifiants de couches sont persistés en **QSettings utilisateur** (`BET_HUMIDE/couche_conduite_eu`, etc. — `main.py:440-448`), donc **partagés entre tous les projets QGIS**. Scénario de bug : l'utilisateur travaille sur le projet A, ouvre le projet B → les clés pointent vers des IDs de couches du projet A ; `_get_couches` ne les trouve pas et **recrée des couches vides** dans B, ou pire, si B contient par hasard un layer de même ID, écrit dedans.
+Les identifiants de couches sont persistés en **QSettings utilisateur** (`CanaPlan/couche_conduite_eu`, etc. — `main.py:440-448`), donc **partagés entre tous les projets QGIS**. Scénario de bug : l'utilisateur travaille sur le projet A, ouvre le projet B → les clés pointent vers des IDs de couches du projet A ; `_get_couches` ne les trouve pas et **recrée des couches vides** dans B, ou pire, si B contient par hasard un layer de même ID, écrit dedans.
 
 **Proposition :** persister ces clés dans le projet :
 
 ```python
-QgsProject.instance().writeEntry("BET_HUMIDE", f"couche_{role}_{reseau}", layer.id())
-value, ok = QgsProject.instance().readEntry("BET_HUMIDE", key)
+QgsProject.instance().writeEntry("CanaPlan", f"couche_{role}_{reseau}", layer.id())
+value, ok = QgsProject.instance().readEntry("CanaPlan", key)
 ```
 
 Les QSettings restent pertinentes pour les préférences *utilisateur* (taille d'étiquettes par défaut, dernier dossier utilisé).
@@ -395,7 +395,7 @@ Bloquants pour une publication sur plugins.qgis.org (ou simplement pour un parta
 1. `author` / `email` sont des placeholders.
 2. Pas de `repository=`, `tracker=`, `homepage=` (obligatoires pour le dépôt officiel).
 3. Pas de `changelog=`.
-4. Incohérence de nommage : dossier `BET_HUMIDE`, `name=Réseau Assainissement`, classe `ReseauAssainissementPlugin`, préfixe QSettings `BET_HUMIDE/` — choisir une identité unique.
+4. Incohérence de nommage : dossier `CanaPlan`, `name=Réseau Assainissement`, classe `ReseauAssainissementPlugin`, préfixe QSettings `CanaPlan/` — choisir une identité unique.
 5. `version=1.0` figée alors que le développement est actif — adopter un versionnage incrémental (le skill `qgis-plugin-publisher` gère le bump automatiquement).
 
 ---

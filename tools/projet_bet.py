@@ -11,6 +11,7 @@ from qgis.core import (QgsProject, QgsVectorLayer, QgsVectorFileWriter,
                        QgsMemoryProviderUtils, QgsFeature, QgsLayerTreeGroup,
                        QgsUnitTypes)
 from qgis.PyQt.QtCore import QSettings, Qt
+from . import i18n
 from qgis.PyQt.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QProgressDialog, QApplication
 
 
@@ -24,7 +25,7 @@ def _copy_to_memory(layer):
     mem.commitChanges()
     return mem
 
-_PREFIX = "BET_HUMIDE/"
+_PREFIX = "CanaPlan/"
 _ROLES  = ('conduite', 'branchement', 'regard', 'tabouret')
 _RESEAUX = ('EU', 'EP')
 
@@ -34,6 +35,61 @@ _RESEAUX = ('EU', 'EP')
 # ─────────────────────────────────────────────────────────────────────────────
 
 _KEY_BET_PATH = _PREFIX + "current_bet_path"
+
+# ── Projets récents ──────────────────────────────────────────────────────────
+_KEY_RECENT = _PREFIX + "recent_projects"
+MAX_RECENT = 4
+
+
+def _norm(path):
+    """Clé de comparaison insensible à la casse et aux ../ (Windows)."""
+    return os.path.normcase(os.path.abspath(path))
+
+
+def recent_projects():
+    """Retourne les .bet récemment ouverts, du plus récent au plus ancien.
+
+    Purge au passage les doublons et les fichiers disparus (projet déplacé
+    ou supprimé depuis), et plafonne à MAX_RECENT.
+    """
+    raw = QSettings().value(_KEY_RECENT, [])
+    # QSettings rend une chaîne nue quand la liste stockée n'a qu'un élément.
+    if isinstance(raw, str):
+        raw = [raw] if raw else []
+    paths, seen = [], set()
+    for path in raw or []:
+        if not path:
+            continue
+        key = _norm(path)
+        if key in seen or not os.path.exists(path):
+            continue
+        seen.add(key)
+        paths.append(path)
+        if len(paths) >= MAX_RECENT:
+            break
+    return paths
+
+
+def _push_recent(bet_path):
+    """Place bet_path en tête de la liste des projets récents."""
+    if not bet_path:
+        return
+    key = _norm(bet_path)
+    kept = [p for p in recent_projects() if _norm(p) != key]
+    QSettings().setValue(_KEY_RECENT, [bet_path] + kept[:MAX_RECENT - 1])
+
+
+def _forget_recent(bet_path):
+    """Retire bet_path des projets récents (fichier introuvable)."""
+    key = _norm(bet_path)
+    QSettings().setValue(
+        _KEY_RECENT, [p for p in recent_projects() if _norm(p) != key])
+
+
+def _set_current(bet_path):
+    """Enregistre le projet courant et l'inscrit dans les récents."""
+    QSettings().setValue(_KEY_BET_PATH, bet_path)
+    _push_recent(bet_path)
 
 
 def _read_label_size(project, s):
@@ -87,11 +143,22 @@ def project_dir():
     return ""
 
 
+def current_bet_name():
+    """Nom du projet CanaPlan courant, sans extension, ou '' si aucun.
+
+    Sert d'identification de chantier en tête des rapports PDF.
+    """
+    bet_path = QSettings().value(_KEY_BET_PATH, "")
+    if bet_path:
+        return os.path.splitext(os.path.basename(bet_path))[0]
+    return ""
+
+
 def _ask_bet_path(iface):
     """Demande dossier + nom et retourne (gpkg_temp_path, bet_path) ou (None, None)."""
     proj_dir = QFileDialog.getExistingDirectory(
         iface.mainWindow(),
-        "Choisir le dossier de sauvegarde du projet",
+        i18n.tr('pb_dossier_sauvegarde'),
         project_dir())
     if not proj_dir:
         return None, None
@@ -99,7 +166,7 @@ def _ask_bet_path(iface):
     default_name = os.path.basename(proj_dir) or "projet"
     proj_name, ok = QInputDialog.getText(
         iface.mainWindow(),
-        "Nom du projet", "Nom :", text=default_name)
+        i18n.tr('pb_nom_projet'), i18n.tr('pb_nom'), text=default_name)
     if not ok or not proj_name.strip():
         return None, None
 
@@ -134,9 +201,9 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
     n_layers    = len(_ROLES) * len(_RESEAUX)
     total_steps = n_layers * 4 + 2   # copie + retrait + écriture + rechargement + zip + extrait
 
-    progress = QProgressDialog("Sauvegarde en cours…", None, 0, total_steps,
+    progress = QProgressDialog(i18n.tr('bet_sauvegarde'), None, 0, total_steps,
                                iface.mainWindow())
-    progress.setWindowTitle("Enregistrer le projet")
+    progress.setWindowTitle(i18n.tr('enregistrer_projet'))
     progress.setWindowModality(Qt.WindowModal)
     progress.setMinimumDuration(0)
     progress.setMinimumWidth(380)
@@ -163,16 +230,17 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
             layer_id = get_layer_id(role, reseau)
             layer    = project.mapLayer(layer_id) if layer_id else None
             if layer is None:
-                step(f"Préparation {role}_{reseau} (ignoré)")
+                step(i18n.tr('bet_preparation',
+                             couche=f"{role}_{reseau}"))
                 continue
-            step(f"Copie mémoire : {role}_{reseau}")
+            step(i18n.tr('bet_copie', couche=f"{role}_{reseau}"))
             to_save.append((reseau, role, layer_id, _copy_to_memory(layer)))
 
     # Capture des préférences d'affichage
     label_size = _read_label_size(project, s)
     if label_size is None:
-        _mode  = s.value("BET_HUMIDE/label_size_mode")
-        _val   = s.value("BET_HUMIDE/label_size_value")
+        _mode  = s.value("CanaPlan/label_size_mode")
+        _val   = s.value("CanaPlan/label_size_value")
         if _mode and _val is not None:
             try:
                 label_size = {'unit': _mode, 'value': float(_val)}
@@ -193,7 +261,7 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
 
     # Phase 2 : retrait des couches du projet
     for reseau, role, layer_id, _ in to_save:
-        step(f"Libération : {role}_{reseau}")
+        step(i18n.tr('bet_liberation', couche=f"{role}_{reseau}"))
         if project.mapLayer(layer_id):
             project.removeMapLayer(layer_id)
 
@@ -212,7 +280,7 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
 
     for reseau, role, layer_id, mem_layer in to_save:
         layer_name = f"{role}_{reseau}"
-        step(f"Écriture GPKG : {layer_name}")
+        step(i18n.tr('bet_ecriture', couche=layer_name))
         opts = QgsVectorFileWriter.SaveVectorOptions()
         opts.driverName = 'GPKG'
         opts.layerName  = layer_name
@@ -236,12 +304,27 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
         grp = project.layerTreeRoot().findGroup(reseau)
         groups_visibility[reseau] = grp.isVisible() if grp else True
 
-    # Phase 4 : création de l'archive .bet (ZIP : metadata.json + data.gpkg)
-    step("Compression de l'archive .bet…")
+    # Phase 4 : création de l'archive .bet
+    # (ZIP : metadata.json + data.gpkg + fonds/)
+    step(i18n.tr('bet_compression'))
+
+    # Fonds de plan : flux WMS par référence, vecteurs copiés dans l'archive.
+    # Les .qml et les exports de couches mémoire transitent par un dossier
+    # jetable, supprimé dès l'archive écrite.
+    from . import fonds_plan
+    fonds_work = tempfile.mkdtemp(prefix='canaplan_fonds_')
+    try:
+        metier_ids = {lid for _r, _ro, lid, _m in to_save}
+        fonds_entries, fonds_files, fonds_errors = fonds_plan.collect(
+            project, metier_ids, fonds_work)
+    except Exception as exc:
+        fonds_entries, fonds_files = [], []
+        fonds_errors = [i18n.tr('bet_err_fonds_enreg', detail=exc)]
+    errors.extend(fonds_errors)
 
     bet_data = {
         "version":             "2.0",
-        "plugin":              "BET_HUMIDE",
+        "plugin":              "CanaPlan",
         "date":                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "crs":                 crs.authid() if crs.isValid() else "EPSG:2154",
         "gpkg":                "data.gpkg",
@@ -252,6 +335,7 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
         "label_size":          label_size,
         "force_all_labels":    force_all_labels,
         "label_display_prefs": label_display_prefs,
+        "fonds":               fonds_entries,
     }
 
     # Rotation des sauvegardes : bak1 → bak2, bet → bak1
@@ -266,9 +350,8 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
         progress.close()
         _remove_temp_gpkg(gpkg_temp)
         QMessageBox.critical(
-            iface.mainWindow(), "Enregistrer le projet",
-            f"Impossible de faire pivoter les sauvegardes :\n{e}\n\n"
-            "Fermez tout logiciel qui pourrait avoir ouvert ces fichiers, puis réessayez.")
+            iface.mainWindow(), i18n.tr('enregistrer_projet'),
+            fi18n.tr('pb_rotation_echec', erreur=e))
         return
 
     try:
@@ -277,20 +360,24 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
                         json.dumps(bet_data, indent=2, ensure_ascii=False))
             if os.path.exists(gpkg_temp):
                 zf.write(gpkg_temp, "data.gpkg")
+            for arcname, src in fonds_files:
+                if os.path.exists(src):
+                    zf.write(src, arcname)
     except Exception as e:
         progress.close()
         _remove_temp_gpkg(gpkg_temp)
         QMessageBox.critical(
-            iface.mainWindow(), "Enregistrer le projet",
-            f"Impossible de créer l'archive .bet :\n{e}")
+            iface.mainWindow(), i18n.tr('enregistrer_projet'),
+            i18n.tr('pb_archive_echec', erreur=e))
         return
 
     _remove_temp_gpkg(gpkg_temp)
+    shutil.rmtree(fonds_work, ignore_errors=True)
 
     # Phase 5 : extraction du GPKG dans un dossier temporaire persistant
-    step("Extraction pour rechargement…")
+    step(i18n.tr('bet_extraction'))
     cleanup_plugin_resources(plugin)
-    tmp_dir = tempfile.mkdtemp(prefix='bet_humide_')
+    tmp_dir = tempfile.mkdtemp(prefix='canaplan_')
     plugin._bet_temp_dir = tmp_dir
     extracted_gpkg = os.path.join(tmp_dir, "data.gpkg")
 
@@ -300,8 +387,8 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
     except Exception as e:
         progress.close()
         QMessageBox.critical(
-            iface.mainWindow(), "Enregistrer le projet",
-            f"Impossible d'extraire le GPKG depuis l'archive :\n{e}")
+            iface.mainWindow(), i18n.tr('enregistrer_projet'),
+            i18n.tr('pb_extraction_gpkg', erreur=e))
         return
 
     # Phase 6 : rechargement depuis le dossier temporaire
@@ -311,9 +398,10 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
 
     for reseau, role, layer_id, _ in to_save:
         layer_name = f"{role}_{reseau}"
-        step(f"Rechargement : {layer_name}")
+        step(i18n.tr('bet_rechargement', couche=layer_name))
         if not layers_meta.get(reseau, {}).get(role):
-            errors.append(f"{role}_{reseau} : couche introuvable, ignorée")
+            errors.append(i18n.tr('bet_err_introuvable',
+                                  couche=f"{role}_{reseau}"))
             continue
         new_layer = QgsVectorLayer(
             f"{extracted_gpkg}|layername={layer_name}", layer_name, "ogr")
@@ -329,7 +417,7 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
                 node.setItemVisibilityChecked(
                     visibility_state.get(layer_name, True))
         else:
-            errors.append(f"{layer_name} : rechargement depuis archive échoué")
+            errors.append(i18n.tr('bet_err_recharge', couche=layer_name))
 
     # Réapplique taille, champs et visibilité sur les couches rechargées
     full_prefs = prefs_from_dict(label_display_prefs) if label_display_prefs else None
@@ -344,18 +432,18 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
     progress.setValue(total_steps)
     progress.close()
 
-    QSettings().setValue(_KEY_BET_PATH, bet_path)
+    _set_current(bet_path)
     iface.mapCanvas().refresh()
 
     if errors:
         QMessageBox.warning(
-            iface.mainWindow(), "Enregistrer le projet",
-            "Projet enregistré avec des avertissements :\n" + "\n".join(errors)
-            + f"\n\nFichier : {bet_path}")
+            iface.mainWindow(), i18n.tr('enregistrer_projet'),
+            i18n.tr('pb_avertissements', details=chr(10).join(errors),
+                    chemin=bet_path))
     else:
         QMessageBox.information(
-            iface.mainWindow(), "Enregistrer le projet",
-            f"Projet enregistré :\n{bet_path}")
+            iface.mainWindow(), i18n.tr('enregistrer_projet'),
+            i18n.tr('pb_enregistre', chemin=bet_path))
 
 
 def _remove_temp_gpkg(gpkg_path):
@@ -395,17 +483,29 @@ def save_projet_sous(plugin, iface):
 #  Charger
 # ─────────────────────────────────────────────────────────────────────────────
 
-def load_projet(plugin, iface):
-    """Charge un projet depuis un fichier .bet (v2 ZIP ou v1 JSON legacy)."""
+def load_projet(plugin, iface, bet_path=None):
+    """Charge un projet depuis un fichier .bet (v2 ZIP ou v1 JSON legacy).
 
-    bet_path, _ = QFileDialog.getOpenFileName(
-        iface.mainWindow(),
-        "Ouvrir un projet BET Humide",
-        project_dir(), "Projet BET Humide (*.bet)")
+    bet_path permet d'ouvrir directement un projet récent sans passer par le
+    sélecteur de fichiers ; laissé à None, le dialogue habituel s'affiche.
+    """
+    if bet_path is None:
+        bet_path, _ = QFileDialog.getOpenFileName(
+            iface.mainWindow(),
+            i18n.tr('ouvrir_projet_titre'),
+            project_dir(), i18n.tr('filtre_projet'))
     if not bet_path:
         return
 
-    QSettings().setValue(_KEY_BET_PATH, bet_path)
+    # Un récent peut pointer sur un fichier déplacé ou supprimé entre-temps.
+    if not os.path.exists(bet_path):
+        _forget_recent(bet_path)
+        QMessageBox.warning(
+            iface.mainWindow(), i18n.tr('ouvrir_projet_titre'),
+            i18n.tr('fichier_introuvable', path=bet_path))
+        return
+
+    _set_current(bet_path)
 
     # Détection du format : v2 = ZIP, v1 = JSON brut
     if zipfile.is_zipfile(bet_path):
@@ -446,14 +546,16 @@ def load_projet(plugin, iface):
             new_layer = QgsVectorLayer(
                 f"{gpkg_path}|layername={layer_name}", layer_name, "ogr")
             if not new_layer.isValid():
-                errors.append(f"{layer_name} : couche invalide dans le GPKG")
+                errors.append(i18n.tr('bet_err_invalide',
+                                      couche=layer_name))
                 continue
 
             plugin._apply_style(new_layer, role, reseau)
             try:
                 apply_etiquettes(new_layer, role, reseau)
             except Exception as e:
-                errors.append(f"{layer_name} : étiquettes non configurées ({e})")
+                errors.append(i18n.tr('bet_err_etiquettes',
+                                      couche=layer_name, detail=e))
             new_layer.setLabelsEnabled(labels_enabled)
             project.addMapLayer(new_layer, False)
             _get_or_create_group(project, reseau).addLayer(new_layer)
@@ -495,7 +597,7 @@ def load_projet(plugin, iface):
             action_force.setChecked(force_all_labels)
             action_force.blockSignals(False)
     except Exception as e:
-        errors.append(f"Restauration des préférences d'étiquettes : {e}")
+        errors.append(i18n.tr('bet_err_prefs_etiquettes', detail=e))
 
     # Centrer la vue sur l'étendue des couches chargées
     canvas     = iface.mapCanvas()
@@ -515,17 +617,29 @@ def load_projet(plugin, iface):
     if not combined.isNull():
         combined.grow(max(combined.width(), combined.height()) * 0.05)
         canvas.setExtent(combined)
+
+    # Fonds de plan : après les couches métier, pour qu'ils se placent sous
+    # les groupes EU / EP dans la légende.
+    fonds_entries = bet_data.get('fonds')
+    if fonds_entries:
+        base_dir = getattr(plugin, '_bet_temp_dir', None) or os.path.dirname(bet_path)
+        try:
+            from . import fonds_plan
+            errors.extend(fonds_plan.restore(project, fonds_entries, base_dir))
+        except Exception as exc:
+            errors.append(i18n.tr('bet_err_fonds_recharge', detail=exc))
+
     canvas.refresh()
 
     if errors:
         QMessageBox.warning(
-            iface.mainWindow(), "Charger le projet",
-            f"{loaded} couche(s) chargée(s).\nAvertissements :\n"
-            + "\n".join(errors))
+            iface.mainWindow(), i18n.tr('pb_charger_titre'),
+            i18n.tr('pb_couches_avertissements', nb=loaded,
+                    details=chr(10).join(errors)))
     else:
         QMessageBox.information(
-            iface.mainWindow(), "Charger le projet",
-            f"{loaded} couche(s) chargée(s) depuis :\n{bet_path}")
+            iface.mainWindow(), i18n.tr('pb_charger_titre'),
+            i18n.tr('pb_couches_chargees', nb=loaded, chemin=bet_path))
 
 
 def _load_v2(plugin, iface, bet_path):
@@ -535,13 +649,13 @@ def _load_v2(plugin, iface, bet_path):
             bet_data = json.loads(zf.read("metadata.json").decode('utf-8'))
     except Exception as e:
         QMessageBox.critical(
-            iface.mainWindow(), "Erreur",
-            f"Impossible de lire l'archive .bet :\n{e}")
+            iface.mainWindow(), i18n.tr('erreur'),
+            i18n.tr('pb_lecture_archive', erreur=e))
         return None, None
 
     # Extraction du GPKG dans un dossier temporaire persistant
     cleanup_plugin_resources(plugin)
-    tmp_dir = tempfile.mkdtemp(prefix='bet_humide_')
+    tmp_dir = tempfile.mkdtemp(prefix='canaplan_')
     plugin._bet_temp_dir = tmp_dir
 
     try:
@@ -549,10 +663,19 @@ def _load_v2(plugin, iface, bet_path):
             zf.extract("data.gpkg", tmp_dir)
     except Exception as e:
         QMessageBox.critical(
-            iface.mainWindow(), "Erreur",
-            f"Impossible d'extraire le GeoPackage depuis l'archive :\n{e}")
+            iface.mainWindow(), i18n.tr('erreur'),
+            i18n.tr('pb_extraction_geopackage', erreur=e))
         cleanup_plugin_resources(plugin)
         return None, None
+
+    # Les fonds de plan vecteur vivent dans le même dossier temporaire que le
+    # GPKG métier : ils doivent survivre aussi longtemps que le projet ouvert.
+    try:
+        from . import fonds_plan
+        with zipfile.ZipFile(bet_path, 'r') as zf:
+            fonds_plan.extract_into(zf, tmp_dir)
+    except Exception:
+        pass                      # fonds absents ou illisibles : non bloquant
 
     gpkg_path = os.path.join(tmp_dir, "data.gpkg")
     return gpkg_path, bet_data
@@ -565,8 +688,8 @@ def _load_v1(iface, bet_path):
             bet_data = json.load(f)
     except Exception as e:
         QMessageBox.critical(
-            iface.mainWindow(), "Erreur",
-            f"Impossible de lire le fichier .bet :\n{e}")
+            iface.mainWindow(), i18n.tr('erreur'),
+            i18n.tr('pb_lecture_bet', erreur=e))
         return None, None
 
     proj_dir  = os.path.dirname(bet_path)
@@ -575,8 +698,8 @@ def _load_v1(iface, bet_path):
 
     if not os.path.exists(gpkg_path):
         QMessageBox.critical(
-            iface.mainWindow(), "Erreur",
-            f"GeoPackage introuvable :\n{gpkg_path}")
+            iface.mainWindow(), i18n.tr('erreur'),
+            i18n.tr('pb_gpkg_introuvable', chemin=gpkg_path))
         return None, None
 
     return gpkg_path, bet_data

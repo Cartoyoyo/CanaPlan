@@ -8,23 +8,25 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtGui import QFont, QRegExpValidator, QKeyEvent
 from qgis.PyQt.QtCore import Qt, QTimer, QEvent, QLocale, QRegExp, pyqtSignal
 
+from ..tools import i18n
+
 import re
 
 _NUM_TOKEN_RE = re.compile(r'[+-]?\d*\.?\d+')
 
 # label, type, (decimals,) ou liste de suggestions
 FIELD_CONFIG = {
-    'nom':        ('Nom',               'str',   None),
-    'tn':         ('TN (m NGF)',         'num',   3),
-    'fe_radier':  ('FE radier (m NGF)', 'num',   3),
-    'fe_entree':  ('FE entrée (m NGF)', 'num',   3),
-    'profondeur': ('Profondeur (m)',     'num',   2),
-    'diametre':   ('Diamètre (mm)',      'num',   0),
-    'materiau':   ('Matériau',           'combo', ['PVC', 'Beton', 'Fonte', 'Gres',
-                                                   'PEHD', 'Amiante-ciment', 'Acier']),
-    'longueur':      ('Longueur (m)',          'num', 2),
-    'pente':         ('Pente (%)',             'num', 3),
-    'cote_piquage':  ('Cote piquage (m NGF)', 'num', 3),
+    'nom':        ('col_nom',         'str',   None),
+    'tn':         ('col_tn',          'num',   3),
+    'fe_radier':  ('col_fe_radier',   'num',   3),
+    'fe_entree':  ('col_fe_entree',   'num',   3),
+    'profondeur': ('col_profondeur',  'num',   2),
+    'diametre':   ('col_diametre',    'num',   0),
+    'materiau':   ('col_materiau',    'combo', ['PVC', 'Beton', 'Fonte', 'Gres',
+                                                'PEHD', 'Amiante-ciment', 'Acier']),
+    'longueur':      ('col_longueur',      'num', 2),
+    'pente':         ('col_pente',         'num', 3),
+    'cote_piquage':  ('col_cote_piquage',  'num', 3),
 }
 
 ROLE_FIELDS = {
@@ -34,11 +36,12 @@ ROLE_FIELDS = {
     'branchement': ['diametre', 'materiau', 'longueur', 'pente', 'cote_piquage'],
 }
 
+# Clés i18n, traduites à l'affichage
 ROLE_LABELS = {
-    'regard':      'Regard',
-    'tabouret':    'Tabouret',
-    'conduite':    'Conduite',
-    'branchement': 'Branchement',
+    'regard':      'col_regard',
+    'tabouret':    'col_tabouret',
+    'conduite':    'col_conduite',
+    'branchement': 'col_branchement',
 }
 
 
@@ -111,7 +114,8 @@ class RenseignementDialog(QDialog):
         self._fe_field = 'fe_radier' if role == 'regard' else 'fe_entree'
 
         self.setWindowTitle(
-            f"Renseignement – {ROLE_LABELS.get(role, role)} {reseau}"
+            i18n.tr('rens_titre',
+                    type=i18n.tr(ROLE_LABELS.get(role, role)), nom=reseau)
         )
         self.setMinimumWidth(380)
         self._build_ui()
@@ -125,7 +129,9 @@ class RenseignementDialog(QDialog):
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(10)
 
-        title = QLabel(f"{ROLE_LABELS.get(self.role, self.role)} – réseau {self.reseau}")
+        title = QLabel(i18n.tr('rens_sous_titre',
+                       type=i18n.tr(ROLE_LABELS.get(self.role, self.role)),
+                       reseau=self.reseau))
         font = QFont()
         font.setBold(True)
         font.setPointSize(10)
@@ -140,7 +146,8 @@ class RenseignementDialog(QDialog):
         for name in ROLE_FIELDS.get(self.role, []):
             if layer_fields.indexFromName(name) < 0:
                 continue
-            label_text, ftype, extra = FIELD_CONFIG[name]
+            cle_label, ftype, extra = FIELD_CONFIG[name]
+            label_text = i18n.tr(cle_label)
             raw_val = self.feat[name]
 
             # Auto-remplissage longueur depuis la géométrie si vide
@@ -158,14 +165,14 @@ class RenseignementDialog(QDialog):
                 row.addWidget(widget)
                 btn = QPushButton("↺")
                 btn.setFixedWidth(30)
-                btn.setToolTip("Recalculer depuis la géométrie")
+                btn.setToolTip(i18n.tr('rens_recalculer'))
                 btn.clicked.connect(self._recalculate_longueur)
                 row.addWidget(btn)
                 form.addRow(label_text, row)
             elif name == 'pente' and self.role in ('conduite', 'branchement'):
                 row = QHBoxLayout()
                 row.addWidget(widget)
-                btn = QPushButton("Calculer")
+                btn = QPushButton(i18n.tr('rens_calculer'))
                 btn.setFixedWidth(70)
                 btn.clicked.connect(self._calculate_pente)
                 row.addWidget(btn)
@@ -238,10 +245,11 @@ class RenseignementDialog(QDialog):
 
         elif null_count == 0 and changed == 'profondeur':
             # Toutes renseignées + P modifié → demander laquelle recalculer
-            fe_label = 'FE radier' if self.role == 'regard' else 'FE entrée'
+            fe_label = i18n.tr('col_fe_radier_court' if self.role == 'regard'
+                               else 'col_fe_entree_court')
             msg = QMessageBox(self)
-            msg.setWindowTitle("P modifié – que recalculer ?")
-            msg.setText("La profondeur a changé.\nQuelle cote doit être recalculée ?")
+            msg.setWindowTitle(i18n.tr('rens_p_modifie'))
+            msg.setText(i18n.tr('rens_p_question'))
             btn_fe = msg.addButton(fe_label, QMessageBox.YesRole)
             btn_tn = msg.addButton('TN',     QMessageBox.NoRole)
             msg.addButton('Aucune',          QMessageBox.RejectRole)
@@ -298,8 +306,8 @@ class RenseignementDialog(QDialog):
     def _calculate_pente(self):
         """Calcule la pente : (FE_amont − FE_aval) / longueur × 100."""
         if self.couches is None:
-            QMessageBox.warning(self, "Calcul pente",
-                                "Les couches ne sont pas disponibles.")
+            QMessageBox.warning(self, i18n.tr('rens_calcul_pente'),
+                                i18n.tr('rens_couches_absentes'))
             return
 
         geom = self.feat.geometry()
@@ -313,9 +321,8 @@ class RenseignementDialog(QDialog):
         fe_end   = self._fe_at(QgsPointXY(line[-1]))
 
         if fe_start is None or fe_end is None:
-            QMessageBox.warning(self, "Calcul pente",
-                                "Impossible de trouver les FE aux deux extrémités.\n"
-                                "Vérifiez que les ouvrages sont bien renseignés.")
+            QMessageBox.warning(self, i18n.tr('rens_calcul_pente'),
+                                i18n.tr('rens_fe_introuvables'))
             return
 
         if self.role == 'branchement':
@@ -326,8 +333,8 @@ class RenseignementDialog(QDialog):
         longueur_w = self.widgets.get('longueur')
         longueur = longueur_w.value() if longueur_w else None
         if not longueur:
-            QMessageBox.warning(self, "Calcul pente",
-                                "La longueur doit être renseignée avant de calculer la pente.")
+            QMessageBox.warning(self, i18n.tr('rens_calcul_pente'),
+                                i18n.tr('rens_longueur_requise'))
             return
 
         pente = (fe_start - fe_end) / longueur * 100

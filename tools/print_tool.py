@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
+
+from . import i18n
 import math
 from qgis.PyQt.QtCore import Qt, QDate, QSize
 from qgis.PyQt.QtGui import QColor, QFont
@@ -16,6 +18,16 @@ from qgis.core import (
 # États de l'outil
 _STATE_MOVE   = 0   # rectangle suit la souris (libre ou domino)
 _STATE_ROTATE = 1   # ancrage fixé, rectangle pivote autour du centre
+
+
+def _aide_pose(settings):
+    """Message de la barre d'état pendant la pose des feuilles."""
+    return i18n.tr(
+        'pt_aide_pose',
+        format=settings["format"],
+        orientation=i18n.tr('pd_portrait' if settings["orientation"] == 'portrait'
+                            else 'pd_paysage'),
+        echelle=f'{settings["echelle"]:,}'.replace(",", " "))
 
 
 class PrintTool(QgsMapTool):
@@ -71,11 +83,8 @@ class PrintTool(QgsMapTool):
     def activate(self):
         super().activate()
         self.canvas().setCursor(Qt.CrossCursor)
-        fmt, ori, ech = self.s["format"], self.s["orientation"], self.s["echelle"]
         self.iface.messageBar().pushMessage(
-            "Impression",
-            f"{fmt} {ori}  ·  1:{ech:,}  —  "
-            "1er clic : ancrer  ·  orienter  ·  2e clic : fixer  |  Clic droit : exporter  |  Échap : changer l'échelle".replace(",", " "),
+            i18n.tr('msg_impression'), _aide_pose(self.s),
             level=0, duration=0,
         )
 
@@ -123,8 +132,8 @@ class PrintTool(QgsMapTool):
                 self._state   = _STATE_ROTATE
                 n = len(self._sheets) + 1
                 self.iface.messageBar().pushMessage(
-                    "Impression",
-                    f"Feuille {n} — orientez avec la souris · 2ᵉ clic pour fixer",
+                    i18n.tr('msg_impression'),
+                    i18n.tr('pt_orienter', n=n),
                     level=0, duration=5,
                 )
 
@@ -153,7 +162,7 @@ class PrintTool(QgsMapTool):
                 self._anchor  = None
                 self._cur_rot = 0.0
                 self.iface.messageBar().pushMessage(
-                    "Impression", "Ancrage annulé",
+                    i18n.tr('msg_impression'), i18n.tr('pt_ancrage_annule'),
                     level=0, duration=3)
             elif self._sheets:
                 # Dépile uniquement la dernière feuille posée
@@ -162,9 +171,8 @@ class PrintTool(QgsMapTool):
                 band.reset()
                 self.canvas().scene().removeItem(band)
                 self.iface.messageBar().pushMessage(
-                    "Impression",
-                    f"Feuille {len(self._sheets) + 1} supprimée — "
-                    "Retour arrière : supprimer la précédente",
+                    i18n.tr('msg_impression'),
+                    i18n.tr('pt_feuille_supprimee', n=len(self._sheets) + 1),
                     level=0, duration=3)
             event.accept()
 
@@ -192,7 +200,9 @@ class PrintTool(QgsMapTool):
         dlg = PrintDialog(self.iface.mainWindow())
         dlg.titre_edit.setText(self.s["titre"])
         dlg.format_combo.setCurrentText(self.s["format"])
-        dlg.orient_combo.setCurrentText(self.s["orientation"])
+        index_ori = dlg.orient_combo.findData(self.s["orientation"])
+        if index_ori >= 0:
+            dlg.orient_combo.setCurrentIndex(index_ori)
         for idx in range(dlg.scale_combo.count()):
             if dlg.scale_combo.itemData(idx) == self.s["echelle"]:
                 dlg.scale_combo.setCurrentIndex(idx)
@@ -215,11 +225,8 @@ class PrintTool(QgsMapTool):
         # Réactiver explicitement l'outil sur le canevas
         self.canvas().setMapTool(self)
 
-        fmt, ori, ech = self.s["format"], self.s["orientation"], self.s["echelle"]
         self.iface.messageBar().pushMessage(
-            "Impression",
-            f"{fmt} {ori}  ·  1:{ech:,}  —  "
-            "1er clic : ancrer  ·  orienter  ·  2e clic : fixer  |  Clic droit : exporter  |  Échap : changer l'échelle".replace(",", " "),
+            i18n.tr('msg_impression'), _aide_pose(self.s),
             level=0, duration=0,
         )
 
@@ -400,8 +407,8 @@ class PrintTool(QgsMapTool):
 
         n = len(self._sheets)
         self.iface.messageBar().pushMessage(
-            "Impression",
-            f"Feuille {n} posée — 1er clic pour la suivante · clic droit pour exporter",
+            i18n.tr('msg_impression'),
+            i18n.tr('pt_feuille_posee', n=n),
             level=0, duration=4,
         )
 
@@ -430,8 +437,8 @@ class PrintTool(QgsMapTool):
                 sheet['rotation_rad']))
         if not all_corners:
             QMessageBox.warning(
-                self.iface.mainWindow(), "Export DXF",
-                "Aucune planche posée — placez au moins une planche avant d'exporter.")
+                self.iface.mainWindow(), i18n.tr('pt_export_dxf'),
+                i18n.tr('pt_aucune_planche'))
             return
         xs = [p.x() for p in all_corners]
         ys = [p.y() for p in all_corners]
@@ -444,17 +451,17 @@ class PrintTool(QgsMapTool):
             cand = os.path.join(out_dir, default_name)
             # Ne jamais écraser silencieusement un fichier existant
             if not os.path.exists(cand) or QMessageBox.question(
-                    self.iface.mainWindow(), "Export DXF",
-                    f"Le fichier existe déjà :\n{cand}\n\nL'écraser ?",
+                    self.iface.mainWindow(), i18n.tr('pt_export_dxf'),
+                    i18n.tr('pt_fichier_existe', chemin=cand),
                     QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
                 dxf_path = cand
         if not dxf_path:
             start_dir   = project_dir() or os.path.expanduser("~")
             dxf_path, _ = QFileDialog.getSaveFileName(
                 self.iface.mainWindow(),
-                "Exporter le plan en DXF 2018",
+                i18n.tr('msg_export_dxf_titre'),
                 os.path.join(start_dir, default_name),
-                "DXF (*.dxf)",
+                i18n.tr('fic_dxf'),
             )
             if not dxf_path:
                 return
@@ -485,17 +492,17 @@ class PrintTool(QgsMapTool):
             cand = os.path.join(out_dir, default_name)
             # Ne jamais écraser silencieusement un fichier existant
             if not os.path.exists(cand) or QMessageBox.question(
-                    self.iface.mainWindow(), "Impression",
-                    f"Le fichier existe déjà :\n{cand}\n\nL'écraser ?",
+                    self.iface.mainWindow(), i18n.tr('msg_impression'),
+                    i18n.tr('pt_fichier_existe', chemin=cand),
                     QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
                 pdf_path = cand
         if not pdf_path:
             start_dir = project_dir() or os.path.expanduser("~")
             pdf_path, _ = QFileDialog.getSaveFileName(
                 self.iface.mainWindow(),
-                "Exporter le plan en PDF",
+                i18n.tr('pt_export_pdf_titre'),
                 os.path.join(start_dir, default_name),
-                "PDF (*.pdf)",
+                i18n.tr('fic_pdf_court'),
             )
             if not pdf_path:
                 return
@@ -506,8 +513,8 @@ class PrintTool(QgsMapTool):
         except Exception as exc:
             QApplication.restoreOverrideCursor()
             QMessageBox.critical(
-                self.iface.mainWindow(), "Impression",
-                f"Erreur lors de la génération du PDF :\n{exc}",
+                self.iface.mainWindow(), i18n.tr('msg_impression'),
+                i18n.tr('pt_erreur_pdf', erreur=exc),
             )
             return
         finally:
@@ -521,8 +528,8 @@ class PrintTool(QgsMapTool):
 
         rep = QMessageBox.question(
             self.iface.mainWindow(),
-            "Plan d'ensemble",
-            "Ajouter un plan d'ensemble en première page ?",
+            i18n.tr('pt_plan_ensemble'),
+            i18n.tr('pt_plan_ensemble_q'),
             QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
         )
         if rep == QMessageBox.Cancel:
@@ -654,8 +661,7 @@ class PrintTool(QgsMapTool):
                     pass
             except OSError:
                 raise RuntimeError(
-                    f"Impossible d'écrire dans : {pdf_path}\n"
-                    "Vérifiez que le fichier n'est pas ouvert dans un autre programme.")
+                    i18n.tr('pt_ecriture_impossible', chemin=pdf_path))
 
         first_page = [True]
 
@@ -836,9 +842,9 @@ class PrintTool(QgsMapTool):
                 cx_c, cy_c, rot, self._w, h_map_m_det, w_px, h_map_px))
 
         progress = QProgressDialog(
-            "Rendu des cartes…", "Annuler", 0, len(jobs),
+            i18n.tr('pt_rendu_cartes'), i18n.tr('annuler'), 0, len(jobs),
             self.iface.mainWindow())
-        progress.setWindowTitle("Impression")
+        progress.setWindowTitle(i18n.tr('msg_impression'))
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(400)
         try:
@@ -849,7 +855,7 @@ class PrintTool(QgsMapTool):
                     for j in jobs:
                         j.cancel()
                     self.iface.messageBar().pushMessage(
-                        "Impression", "Export PDF annulé.",
+                        i18n.tr('msg_impression'), i18n.tr('pt_export_annule'),
                         level=1, duration=5)
                     return
                 if done == len(jobs):
@@ -880,12 +886,12 @@ class PrintTool(QgsMapTool):
                 writer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
                 writer.setPaperSize(QSizeF(w_mm, h_mm), QPrinter.Unit.Millimeter)
         except Exception as e:
-            raise RuntimeError(f"Impossible de créer le fichier PDF : {e}")
+            raise RuntimeError(i18n.tr('pt_pdf_impossible', chemin=e))
 
         painter = QPainter(writer)
         if not painter.isActive():
-            raise RuntimeError(f"Impossible d'écrire dans : {pdf_path}\n"
-                               "Vérifiez que le fichier n'est pas ouvert dans un autre programme.")
+            raise RuntimeError(
+                i18n.tr('pt_ecriture_impossible', chemin=pdf_path))
 
         # ── Plan d'ensemble ───────────────────────────────────────────────
         if overview_settings and img_ov is not None:
@@ -936,12 +942,13 @@ class PrintTool(QgsMapTool):
 
             _draw_north_arrow(0.0)
             _draw_scalebar(ov_ctx['ov_ech'])
-            ov_fmt = (f"{n} feuille{'s' if n > 1 else ''}"
-                      f"  —  1 : {int(ov_ctx['ov_ech']):,}").replace(",", " ")
+            ov_fmt = i18n.tr(
+                'pt_nb_feuilles', nb=n,
+                echelle=f"{int(ov_ctx['ov_ech']):,}".replace(",", " "))
             _draw_cartouche(
-                f"{titre} — Plan d'ensemble",
+                i18n.tr('pt_cartouche_ensemble', titre=titre),
                 ov_fmt,
-                "Ens.")
+                i18n.tr('pt_ens'))
 
         # ── Feuilles de détail ────────────────────────────────────────────
         # Même logique que le plan d'ensemble : image limitée à la zone carte
@@ -957,8 +964,8 @@ class PrintTool(QgsMapTool):
         painter.end()
 
         self.iface.messageBar().pushMessage(
-            "Impression",
-            f"PDF exporté — {n} feuille{'s' if n > 1 else ''} : {pdf_path}",
+            i18n.tr('msg_impression'),
+            i18n.tr('pt_pdf_exporte', nb=n, chemin=pdf_path),
             level=0, duration=8,
         )
         try:

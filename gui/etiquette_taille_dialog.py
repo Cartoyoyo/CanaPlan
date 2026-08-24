@@ -6,6 +6,8 @@ from qgis.PyQt.QtWidgets import (
     QCheckBox,
 )
 from qgis.PyQt.QtCore import Qt
+
+from ..tools import i18n
 from qgis.PyQt.QtGui import QFont
 
 # Taille cible sur papier : 2.5 mm — convertit en unités carte (mètres L93)
@@ -18,7 +20,7 @@ _SCALES = [
     ("1 / 500",   500),
     ("1 / 1 000", 1000),
     ("1 / 2 000", 2000),
-    ("Personnalisée : 1 / …", None),
+    (None, None),   # entrée personnalisée : libellé traduit à l'affichage
 ]
 
 
@@ -27,7 +29,7 @@ class EtiquetteTailleDialog(QDialog):
     def __init__(self, init_mode='map_units', init_value=None,
                  init_min_scale=None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Taille des étiquettes")
+        self.setWindowTitle(i18n.tr('taille_etiquettes'))
         self.setMinimumWidth(360)
         self._init_mode      = init_mode
         self._init_value     = init_value
@@ -38,18 +40,18 @@ class EtiquetteTailleDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        title = QLabel("Choisissez le mode de dimensionnement des étiquettes")
+        title = QLabel(i18n.tr('et_choix_mode'))
         font = QFont()
         font.setBold(True)
         title.setFont(font)
         layout.addWidget(title)
 
         # ── Mode 1 : taille de police fixe ───────────────────────────────
-        grp_pt = QGroupBox("Taille de police fixe (points)")
+        grp_pt = QGroupBox(i18n.tr('et_police_fixe'))
         grp_pt.setCheckable(False)
         form_pt = QFormLayout(grp_pt)
 
-        self.radio_pt = QRadioButton("Taille en points")
+        self.radio_pt = QRadioButton(i18n.tr('et_taille_points'))
         self.spin_pt  = QSpinBox()
         self.spin_pt.setRange(4, 30)
         init_pt = int(self._init_value) if self._init_mode == 'points' and self._init_value else 9
@@ -63,19 +65,19 @@ class EtiquetteTailleDialog(QDialog):
         form_pt.addRow(row_pt)
 
         note_pt = QLabel(
-            "<i>Taille constante à l'écran, indépendante du zoom.</i>")
+            i18n.tr('et_aide_fixe'))
         note_pt.setWordWrap(True)
         form_pt.addRow(note_pt)
         layout.addWidget(grp_pt)
 
         # ── Mode 2 : adapté à l'échelle ───────────────────────────────────
-        grp_sc = QGroupBox("Adapté à l'échelle d'impression")
+        grp_sc = QGroupBox(i18n.tr('et_adapte_echelle'))
         form_sc = QFormLayout(grp_sc)
 
-        self.radio_sc = QRadioButton("Échelle cible")
+        self.radio_sc = QRadioButton(i18n.tr('et_echelle_cible'))
         self.combo_sc = QComboBox()
         for label, _ in _SCALES:
-            self.combo_sc.addItem(label)
+            self.combo_sc.addItem(label or i18n.tr('pd_echelle_perso'))
         self.combo_sc.setCurrentIndex(4)   # 1/1000 par défaut (surchargé ci-dessous si init)
 
         row_sc = QHBoxLayout()
@@ -103,17 +105,16 @@ class EtiquetteTailleDialog(QDialog):
         form_sc.addRow(self.lbl_mu)
 
         note_sc = QLabel(
-            "<i>Taille proportionnelle au zoom — "
-            "optimisée pour l'impression à l'échelle choisie.</i>")
+            i18n.tr('et_aide_echelle'))
         note_sc.setWordWrap(True)
         form_sc.addRow(note_sc)
         layout.addWidget(grp_sc)
 
         # ── Seuil de dézoom ───────────────────────────────────────────────
-        grp_min = QGroupBox("Seuil d'affichage")
+        grp_min = QGroupBox(i18n.tr('et_seuil'))
         form_min = QFormLayout(grp_min)
 
-        self.chk_min = QCheckBox("Masquer les étiquettes au-delà de")
+        self.chk_min = QCheckBox(i18n.tr('et_masquer_au_dela'))
         self.spin_min = QSpinBox()
         self.spin_min.setRange(100, 1000000)
         self.spin_min.setSingleStep(500)
@@ -127,9 +128,7 @@ class EtiquetteTailleDialog(QDialog):
         form_min.addRow(row_min)
 
         note_min = QLabel(
-            "<i>En dézoomant au-delà de ce seuil, le texte est de toute façon "
-            "illisible mais reste calculé par le moteur de placement. Le "
-            "masquer allège l'affichage sur les gros réseaux.</i>")
+            i18n.tr('et_aide_seuil'))
         note_min.setWordWrap(True)
         form_min.addRow(note_min)
         layout.addWidget(grp_min)
@@ -198,8 +197,8 @@ class EtiquetteTailleDialog(QDialog):
     def _update_map_units_label(self):
         mu = self._current_map_units()
         self.lbl_mu.setText(
-            f"→ {mu:.2f} m en unités carte  "
-            f"({_TARGET_MM} mm sur papier)")
+            i18n.tr('et_apercu', taille=i18n.nombre(mu),
+                    mm=_TARGET_MM))
 
     def _current_map_units(self):
         _, scale = _SCALES[self.combo_sc.currentIndex()]

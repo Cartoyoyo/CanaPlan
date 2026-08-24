@@ -6,6 +6,8 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtCore import Qt
 from qgis.core import QgsProject
 
+from ..tools import i18n
+
 FORMATS = {
     "A4": (297, 210),
     "A3": (420, 297),
@@ -17,15 +19,13 @@ FORMATS = {
 # None = entrée personnalisée
 SCALES = [150, 200, 250, 500, 1000, 2000, 5000, 10000, None]
 
-_CUSTOM_LABEL = "Personnalisée : 1 / …"
-
-# (label affiché, dpi ou None, note)
+# (clé du libellé, dpi ou None, clé de la note) — traduits à l'affichage
 _DPI_PRESETS = [
-    ("Légère  –  96 dpi",          96,  "Fichier très léger, qualité réduite"),
-    ("Standard  –  150 dpi",      150,  "Bon compromis taille / qualité (recommandé A1/A0)"),
-    ("Bonne qualité  –  200 dpi",  200,  "Qualité correcte, fichier modéré"),
-    ("Haute qualité  –  300 dpi",  300,  "Fichier lourd – à éviter en A1/A0"),
-    ("Personnalisée…",            None,  "Saisissez la résolution souhaitée"),
+    ('pd_dpi_legere',   96,   'pd_dpi_legere_note'),
+    ('pd_dpi_standard', 150,  'pd_dpi_standard_note'),
+    ('pd_dpi_bonne',    200,  'pd_dpi_bonne_note'),
+    ('pd_dpi_haute',    300,  'pd_dpi_haute_note'),
+    ('pd_dpi_perso',    None, 'pd_dpi_perso_note'),
 ]
 _DPI_DEFAULT_IDX = 1   # 150 dpi par défaut
 
@@ -34,10 +34,10 @@ class PrintDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Paramètres d'impression")
+        self.setWindowTitle(i18n.tr('pd_titre'))
         self.setMinimumWidth(360)
 
-        default_title = QgsProject.instance().title() or "Plan de réseau"
+        default_title = QgsProject.instance().title() or i18n.tr('pd_plan_reseau')
 
         self.titre_edit = QLineEdit(default_title)
 
@@ -46,12 +46,15 @@ class PrintDialog(QDialog):
         self.format_combo.setCurrentText("A3")
 
         self.orient_combo = QComboBox()
-        self.orient_combo.addItems(["Paysage", "Portrait"])
+        # La valeur portée est le code ('paysage'/'portrait') : le texte
+        # affiché suit la langue, le reste du code ne dépend pas de lui.
+        self.orient_combo.addItem(i18n.tr('pd_paysage'), 'paysage')
+        self.orient_combo.addItem(i18n.tr('pd_portrait'), 'portrait')
 
         self.scale_combo = QComboBox()
         for s in SCALES:
             if s is None:
-                self.scale_combo.addItem(_CUSTOM_LABEL, None)
+                self.scale_combo.addItem(i18n.tr('pd_echelle_perso'), None)
             else:
                 self.scale_combo.addItem(f"1 : {s:,}".replace(",", " "), s)
         self.scale_combo.setCurrentIndex(SCALES.index(1000))
@@ -73,8 +76,8 @@ class PrintDialog(QDialog):
 
         # ── Résolution PDF ────────────────────────────────────────────────
         self.dpi_combo = QComboBox()
-        for label, dpi, note in _DPI_PRESETS:
-            self.dpi_combo.addItem(label, dpi)
+        for cle_label, dpi, _cle_note in _DPI_PRESETS:
+            self.dpi_combo.addItem(i18n.tr(cle_label), dpi)
         self.dpi_combo.setCurrentIndex(_DPI_DEFAULT_IDX)
 
         # Champ DPI personnalisé (masqué par défaut)
@@ -100,19 +103,19 @@ class PrintDialog(QDialog):
         self.format_combo.currentIndexChanged.connect(self._suggest_dpi)
 
         form = QFormLayout()
-        form.addRow("Titre du plan :", self.titre_edit)
-        form.addRow("Format :", self.format_combo)
-        form.addRow("Orientation :", self.orient_combo)
-        form.addRow("Échelle :", self.scale_combo)
+        form.addRow(i18n.tr('pd_titre_plan'), self.titre_edit)
+        form.addRow(i18n.tr('pd_format'), self.format_combo)
+        form.addRow(i18n.tr('pd_orientation'), self.orient_combo)
+        form.addRow(i18n.tr('pd_echelle'), self.scale_combo)
         form.addRow("", self._custom_widget)
-        form.addRow("Résolution PDF :", self.dpi_combo)
+        form.addRow(i18n.tr('pd_resolution'), self.dpi_combo)
         form.addRow("", self._dpi_custom_widget)
         form.addRow("", self._dpi_note)
 
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
-        btns.button(QDialogButtonBox.Ok).setText("Placer les feuilles →")
+        btns.button(QDialogButtonBox.Ok).setText(i18n.tr('pd_placer'))
 
         layout = QVBoxLayout(self)
         layout.addLayout(form)
@@ -128,7 +131,7 @@ class PrintDialog(QDialog):
     def _on_dpi_changed(self):
         idx = self.dpi_combo.currentIndex()
         if 0 <= idx < len(_DPI_PRESETS):
-            self._dpi_note.setText(_DPI_PRESETS[idx][2])
+            self._dpi_note.setText(i18n.tr(_DPI_PRESETS[idx][2]))
         is_custom = self.dpi_combo.currentData() is None
         self._dpi_custom_widget.setVisible(is_custom)
         self.adjustSize()
@@ -156,7 +159,7 @@ class PrintDialog(QDialog):
     def get_settings(self):
         fmt = self.format_combo.currentText()
         w_mm, h_mm = FORMATS[fmt]
-        if self.orient_combo.currentText() == "Portrait":
+        if self.orient_combo.currentData() == 'portrait':
             w_mm, h_mm = h_mm, w_mm
 
         scale = self.scale_combo.currentData()
@@ -168,9 +171,10 @@ class PrintDialog(QDialog):
             dpi = self._dpi_custom_spin.value()
 
         return {
-            "titre":       self.titre_edit.text().strip() or "Plan de réseau",
+            "titre":       (self.titre_edit.text().strip()
+                            or i18n.tr('pd_plan_reseau')),
             "format":      fmt,
-            "orientation": self.orient_combo.currentText(),
+            "orientation": self.orient_combo.currentData(),
             "w_mm":        float(w_mm),
             "h_mm":        float(h_mm),
             "echelle":     scale,

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Recherche d'adresses via l'API BAN, pour l'étape 1 de l'assistant de
 création de projet. Calqué sur magic_search/providers/ban_provider.py (pas
-de dépendance à ce plugin — BET_HUMIDE doit fonctionner sans lui)."""
+de dépendance à ce plugin — CanaPlan doit fonctionner sans lui)."""
 
 import json
 import urllib.parse
@@ -11,7 +11,7 @@ from qgis.core import QgsMessageLog, QgsNetworkAccessManager, Qgis
 
 BAN_URL = 'https://api-adresse.data.gouv.fr/search/?q={query}&limit=5'
 DEBOUNCE_MS = 600
-TAG = 'BET_HUMIDE'
+TAG = 'CanaPlan'
 
 
 class BanSearchProvider(QObject):

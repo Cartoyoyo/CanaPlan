@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════
-#  BET Humide — Diagramme structurel (v1.4)
+#  CanaPlan — Diagramme structurel (v1.4)
 #  Source de reference, en remplacement de l ancien uml_structure.puml.
 #
 #  Rendu :   d2 uml_structure.d2 uml_structure.svg
@@ -72,7 +72,7 @@ qgis_api: "QGIS API" {
 # ─────────────────────────────────────────────────────────────────────────
 #  Plugin
 # ─────────────────────────────────────────────────────────────────────────
-bet: "BET_HUMIDE" {
+bet: "CanaPlan" {
   style.fill: "#F0F4FF"
   style.stroke: "#8888AA"
 
@@ -160,7 +160,7 @@ bet: "BET_HUMIDE" {
     "── Configuration ──": ""
     "+show_config_dialog()": ""
 
-    # Note menu : le menu Extensions > BET Humide est construit en
+    # Note menu : le menu Extensions > CanaPlan est construit en
     # sous-menus (menu_groups) reprenant exactement les categories du
     # SidePanel. En tete : toggleViewAction() de la toolbar (etat
     # synchronise par Qt). En pied : l action "A propos" (hors toolbar).
@@ -314,7 +314,7 @@ bet: "BET_HUMIDE" {
       "-_restore_scale_combo(value_m)": ""
       "+get_result()": "(mode, value, min_scale)"
       # Note : init_mode = "map_units" | "points". Lit QSettings
-      # BET_HUMIDE/label_size_mode et label_size_value pour restaurer le
+      # CanaPlan/label_size_mode et label_size_value pour restaurer le
       # dernier reglage a l ouverture.
       # init_min_scale vient des couches (get_label_min_scale) et non de
       # QSettings : c est une propriete du projet ouvert, pas une
@@ -545,7 +545,7 @@ bet: "BET_HUMIDE" {
       # couleurs conventionnelles (EU rouge, EP bleu, AEP cyan). Colonnes
       # de cotes verticales (droite) et sous-cotes horizontales (bas).
       # Valeurs par defaut heritees de ConfigDialog (cubature).
-      # Memorisation QgsSettings : BET_HUMIDE/coupe_tranchee_composee.
+      # Memorisation QgsSettings : CanaPlan/coupe_tranchee_composee.
       # Export PDF / PNG via matplotlib (200 dpi).
       # Necessite matplotlib ; affiche un message si absent.
     }
@@ -708,7 +708,7 @@ bet: "BET_HUMIDE" {
       #
       # ── Note reconstruction ──
       # apply_etiquettes() part de remembered_size() (QSettings
-      #   BET_HUMIDE/label_size_*) et non de LABEL_SIZE_MAP_UNITS :
+      #   CanaPlan/label_size_*) et non de LABEL_SIZE_MAP_UNITS :
       #   reconstruire un etiquetage ne doit pas ramener un plan monte au
       #   1:250 (0.625 m) a la taille par defaut (2 m).
       # sync_labels_after_rename() ne reconstruit QUE si la couche n a
@@ -966,7 +966,7 @@ bet: "BET_HUMIDE" {
         "-_on_finished()": ""
       }
       # Note : calque sur magic_search/providers/ban_provider.py, sans
-      # dependance a ce plugin (BET_HUMIDE doit fonctionner sans lui).
+      # dependance a ce plugin (CanaPlan doit fonctionner sans lui).
       # Debounce 600 ms, QgsNetworkAccessManager (pas de fenetre parasite
       # SSL/proxy).
     }

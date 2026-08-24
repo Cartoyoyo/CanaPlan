@@ -108,6 +108,7 @@ def _calc_remblai_volumes(largeur, l3d, diametre_mm, volume, config):
 
 def _make_result(id_, type_, reseau, nom_debut, nom_fin, l2d, l3d, pente_pct,
                  prof_debut, prof_fin, largeur, volume, materiau='', diametre=None,
+                 tn_debut=None, tn_fin=None,
                  err_debut=False, err_fin=False, vol_lit_pose=None,
                  vol_conduite=None, vol_enrobage=None, vol_chaussee_inf=None,
                  vol_chaussee_sup=None, vol_remblai=None):
@@ -129,6 +130,10 @@ def _make_result(id_, type_, reseau, nom_debut, nom_fin, l2d, l3d, pente_pct,
         'l2d': round(l2d, 2) if l2d else 0.0,
         'l3d': round(l3d, 2) if l3d else 0.0,
         'pente_pct': round(pente_pct, 2) if pente_pct is not None else None,
+        # TN des ouvrages d'extremite : sert au listing de la synthese,
+        # ou la profondeur seule ne suffit pas a situer l'ouvrage.
+        'tn_debut': round(tn_debut, 2) if tn_debut is not None else None,
+        'tn_fin': round(tn_fin, 2) if tn_fin is not None else None,
         'prof_debut': round(prof_debut, 2) if prof_debut is not None else None,
         'prof_fin': round(prof_fin, 2) if prof_fin is not None else None,
         'prof_moy': round(prof_moy, 2) if prof_moy is not None else None,
@@ -180,6 +185,8 @@ def calculer_cubature_troncon(conduite_feat, regard_start, regard_end, config, r
 
     prof_debut = _profondeur_regard(regard_start, config['ep_lit_pose'])
     prof_fin = _profondeur_regard(regard_end, config['ep_lit_pose'])
+    tn_debut = _to_float(regard_start['tn'])
+    tn_fin = _to_float(regard_end['tn'])
 
     err_debut = prof_debut is None
     err_fin = prof_fin is None
@@ -209,7 +216,7 @@ def calculer_cubature_troncon(conduite_feat, regard_start, regard_end, config, r
         _nom_regard(regard_start), _nom_regard(regard_end),
         l2d, l3d, pente_pct, prof_debut, prof_fin, largeur, volume,
         materiau=str(conduite_feat['materiau'] or '') if conduite_feat['materiau'] else '',
-        diametre=diam,
+        diametre=diam, tn_debut=tn_debut, tn_fin=tn_fin,
         err_debut=err_debut, err_fin=err_fin,
         vol_lit_pose=v_lit, vol_conduite=v_cond, vol_enrobage=v_enr,
         vol_chaussee_inf=v_inf, vol_chaussee_sup=v_sup, vol_remblai=v_remb,
@@ -241,9 +248,13 @@ def calculer_cubature_branchement(br_feat, tabouret_feat, config, reseau,
         if tn_proche is not None:
             prof_debut = tn_proche - cote_piquage + config['ep_lit_pose']
 
+    tn_debut = _to_float(regard_proche['tn']) if regard_proche else None
+
     prof_fin = None
+    tn_fin = None
     if tabouret_feat:
         prof_fin = _profondeur_tabouret(tabouret_feat, config['ep_lit_pose'])
+        tn_fin = _to_float(tabouret_feat['tn'])
 
     err_debut = prof_debut is None
     err_fin = prof_fin is None
@@ -280,7 +291,7 @@ def calculer_cubature_branchement(br_feat, tabouret_feat, config, reseau,
         f"C{br_feat['id_conduite'] or ''}", nom_tab,
         l2d, l3d, pente_pct, prof_debut, prof_fin, largeur, volume,
         materiau=str(br_feat['materiau'] or '') if br_feat['materiau'] else '',
-        diametre=diam,
+        diametre=diam, tn_debut=tn_debut, tn_fin=tn_fin,
         err_debut=err_debut, err_fin=err_fin,
         vol_lit_pose=v_lit, vol_conduite=v_cond, vol_enrobage=v_enr,
         vol_chaussee_inf=v_inf, vol_chaussee_sup=v_sup, vol_remblai=v_remb,

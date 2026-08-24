@@ -6,6 +6,8 @@ from qgis.core import QgsPointXY, QgsWkbTypes
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
+
+from . import i18n
 from . import layer_ok as _ok
 from .spatial_utils import nearest_point_feature, nearest_line_feature
 
@@ -49,8 +51,8 @@ class CopyAttributesTool(QgsMapTool):
         self.canvas.setCursor(Qt.CrossCursor)
         from qgis.utils import iface
         iface.messageBar().pushMessage(
-            "Copier les attributs",
-            "1er clic : source (bleu)  ·  Clics suivants : cibles (vert)  ·  Clic droit : appliquer  ·  Échap : annuler",
+            i18n.tr('copy_attributes'),
+            i18n.tr('ot_aide_copy'),
             level=0, duration=0,
         )
 

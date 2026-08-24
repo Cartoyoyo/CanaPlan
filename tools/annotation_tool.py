@@ -12,6 +12,8 @@ from qgis.gui import QgsMapTool
 from qgis.PyQt.QtCore import Qt, QSizeF
 from qgis.PyQt.QtGui import QFont, QColor
 
+from . import i18n
+
 _TOL_PX = 20
 
 
@@ -219,7 +221,7 @@ class AnnotationTool(QgsMapTool):
             self._paste_pending = False
             if self._paste_at(QgsPointXY(click_pt.x(), click_pt.y())):
                 self.iface.messageBar().pushMessage(
-                    "Annotation", "Annotation collée.", level=0, duration=3)
+                    "Annotation", i18n.tr('ot_annotation_collee'), level=0, duration=3)
                 self.canvas().refresh()
             return
 
@@ -276,7 +278,7 @@ class AnnotationTool(QgsMapTool):
                     new_item = _create_item_from_snapshot(vals, original_point)
                 except Exception as exc:
                     self.iface.messageBar().pushMessage(
-                        "Annotation", f"Impossible d'appliquer : {exc}",
+                        "Annotation", i18n.tr('ot_impossible_appliquer', erreur=exc),
                         level=2, duration=6)
                     return
                 ann_layer.removeItem(state['item_id'])
@@ -313,7 +315,7 @@ class AnnotationTool(QgsMapTool):
                         vals, QgsPointXY(click_pt.x(), click_pt.y()))
                 except Exception as exc:
                     self.iface.messageBar().pushMessage(
-                        "Annotation", f"Impossible d'appliquer : {exc}",
+                        "Annotation", i18n.tr('ot_impossible_appliquer', erreur=exc),
                         level=2, duration=6)
                     return
                 if state['item_id'] is not None:
@@ -348,30 +350,30 @@ class AnnotationTool(QgsMapTool):
                 _, item = existing
                 AnnotationTool._clipboard = _snapshot_item(item)
                 self.iface.messageBar().pushMessage(
-                    "Annotation", "Annotation copiée — Ctrl+V puis cliquez pour coller.",
+                    "Annotation", i18n.tr('ot_annotation_copiee'),
                     level=0, duration=4)
             else:
                 self.iface.messageBar().pushMessage(
                     "Annotation",
-                    "Place le curseur sur une annotation avant Ctrl+C.",
+                    i18n.tr('ot_curseur_annotation'),
                     level=1, duration=3)
             event.accept()
             return
         if ctrl and event.key() == Qt.Key_V:
             if AnnotationTool._clipboard is None:
                 self.iface.messageBar().pushMessage(
-                    "Annotation", "Presse-papier vide.", level=1, duration=3)
+                    "Annotation", i18n.tr('ot_presse_papier_vide'), level=1, duration=3)
             else:
                 self._paste_pending = True
                 self.iface.messageBar().pushMessage(
-                    "Annotation", "Cliquez sur la carte pour coller l'annotation.",
+                    "Annotation", i18n.tr('ot_cliquez_coller'),
                     level=0, duration=4)
             event.accept()
             return
         if event.key() == Qt.Key_Escape and self._paste_pending:
             self._paste_pending = False
             self.iface.messageBar().pushMessage(
-                "Annotation", "Coller annulé.", level=0, duration=2)
+                "Annotation", i18n.tr('ot_coller_annule'), level=0, duration=2)
             event.accept()
             return
         super().keyPressEvent(event)

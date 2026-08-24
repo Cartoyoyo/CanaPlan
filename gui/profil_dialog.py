@@ -4,6 +4,8 @@ from qgis.PyQt.QtWidgets import (
     QCheckBox, QLabel, QFrame, QComboBox, QScrollArea,
 )
 from qgis.PyQt.QtCore import Qt
+
+from ..tools import i18n
 from qgis.PyQt.QtWidgets import QApplication
 
 # ── Formats papier paysage (largeur × hauteur en mm) ─────────────────────────
@@ -72,14 +74,14 @@ class ProfilOptionsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Options du profil en long")
+        self.setWindowTitle(i18n.tr('pf_options'))
         self.setFixedWidth(340)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
 
-        lbl = QLabel("Éléments à afficher :")
+        lbl = QLabel(i18n.tr('pf_elements'))
         lbl.setStyleSheet("font-weight: bold;")
         layout.addWidget(lbl)
 
@@ -88,10 +90,10 @@ class ProfilOptionsDialog(QDialog):
         sep.setFrameShadow(QFrame.Sunken)
         layout.addWidget(sep)
 
-        self.cb_cartouche  = QCheckBox("Tableau de valeurs")
-        self.cb_fleches    = QCheckBox("Emplacement des piquages (flèches)")
-        self.cb_noms       = QCheckBox("Noms des piquages")
-        self.cb_distances  = QCheckBox("Distance de piquage")
+        self.cb_cartouche  = QCheckBox(i18n.tr('pf_tableau'))
+        self.cb_fleches    = QCheckBox(i18n.tr('pf_fleches'))
+        self.cb_noms       = QCheckBox(i18n.tr('pf_noms_piquages'))
+        self.cb_distances  = QCheckBox(i18n.tr('pf_distance_piquage'))
 
         for cb in (self.cb_cartouche, self.cb_fleches, self.cb_noms, self.cb_distances):
             cb.setChecked(True)
@@ -106,7 +108,7 @@ class ProfilOptionsDialog(QDialog):
         layout.addWidget(sep2)
 
         fmt_row = QHBoxLayout()
-        fmt_row.addWidget(QLabel("Format papier :"))
+        fmt_row.addWidget(QLabel(i18n.tr('pf_format_papier')))
         self.cb_format = QComboBox()
         for f in PAPER_SIZES:
             self.cb_format.addItem(f)
@@ -122,8 +124,8 @@ class ProfilOptionsDialog(QDialog):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        btn_ok     = QPushButton("Tracer le profil")
-        btn_cancel = QPushButton("Annuler")
+        btn_ok     = QPushButton(i18n.tr('pf_tracer'))
+        btn_cancel = QPushButton(i18n.tr('annuler'))
         btn_ok.setDefault(True)
         btn_ok.clicked.connect(self.accept)
         btn_cancel.clicked.connect(self.reject)
@@ -160,17 +162,18 @@ class ProfilDialog(QDialog):
     Cartouche tabulaire : abscisses, TN, FE, profondeur, Ø, matériau, pente.
     """
 
+    # (clé i18n du libellé, clé de donnée) — le libellé suit la langue
     _ROWS = [
-        ('Regard',          'regard'),
-        ('Abscisse (m)',    'abscisse'),
-        ('TN (m NGF)',      'tn'),
-        ('FE radier (m)',   'fe'),
-        ('Prof. (m)',       'prof'),
-        ('Longueur (m)',    'longueur'),
-        ('Ø (mm)',          'diametre'),
-        ('Matériau',        'materiau'),
-        ('Pente (%)',       'pente'),
-        ('L. cumulée (m)',  'longueur_cum'),
+        ('col_regard',              'regard'),
+        ('col_abscisse',            'abscisse'),
+        ('col_tn',                  'tn'),
+        ('col_fe_rad_court',        'fe'),
+        ('col_prof_court',          'prof'),
+        ('col_longueur',            'longueur'),
+        ('col_diametre_court',      'diametre'),
+        ('col_materiau',            'materiau'),
+        ('col_pente',               'pente'),
+        ('col_long_cumulee_court',  'longueur_cum'),
     ]
     _SEP_AFTER = 4   # ligne épaisse après la ligne index 4 ('prof')
 
@@ -189,15 +192,15 @@ class ProfilDialog(QDialog):
         nom_dep = _sval(data['regards'][0],  'nom')
         nom_arr = _sval(data['regards'][-1], 'nom')
         self.setWindowTitle(
-            f"Profil en long – {data['reseau']}  ·  {nom_dep} → {nom_arr}")
+            i18n.tr('pf_titre', reseau=data['reseau'], debut=nom_dep,
+                    fin=nom_arr))
         self.setMinimumSize(600, 400)
         self.setAttribute(Qt.WA_DeleteOnClose, False)
 
         if not HAS_MPL:
             QMessageBox.critical(
-                self, "matplotlib manquant",
-                "matplotlib est nécessaire pour afficher le profil.\n"
-                "Installez-le via : pip install matplotlib")
+                self, i18n.tr('pf_matplotlib_titre'),
+                i18n.tr('pf_matplotlib_msg'))
             return
 
         self._build_ui()
@@ -236,8 +239,8 @@ class ProfilDialog(QDialog):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        for label, fmt in [("Exporter PNG", "png"), ("Exporter PDF", "pdf")]:
-            btn = QPushButton(label)
+        for cle, fmt in [('ct_export_png', "png"), ('ct_export_pdf', "pdf")]:
+            btn = QPushButton(i18n.tr(cle).rstrip('…'))
             btn.clicked.connect(lambda _checked, f=fmt: self._export(f))
             btn_row.addWidget(btn)
         layout.addLayout(btn_row)
@@ -268,8 +271,8 @@ class ProfilDialog(QDialog):
 
         n_rows = len(self._ROWS)
 
-        titre = (f"Profil en long – Réseau {d['reseau']}"
-                 f"  ·  {noms[0]} → {noms[-1]}")
+        titre = i18n.tr('pf_titre_profil', reseau=d['reseau'],
+                        debut=noms[0], fin=noms[-1])
         self.figure.suptitle(titre, fontsize=9, fontweight='bold', y=0.99,
                              ha='center', va='top')
 
@@ -364,7 +367,7 @@ class ProfilDialog(QDialog):
                       abscisses, piquages,
                       y_min, y_max, total_l, x_margin=0.0):
 
-        ax.set_ylabel("Altitude (m NGF)", fontsize=8)
+        ax.set_ylabel(i18n.tr('pf_altitude'), fontsize=8)
         ax.set_xlim(-x_margin, total_l + x_margin)
         ax.set_ylim(y_min, y_max)
         ax.grid(True, linestyle=':', linewidth=0.4, alpha=0.5, zorder=0)
@@ -400,7 +403,7 @@ class ProfilDialog(QDialog):
         if len(fe_pts) >= 2:
             xs, ys = zip(*fe_pts)
             ax.plot(xs, ys, '-', color=self.color, linewidth=2.0,
-                    label='FE radier', zorder=4)
+                    label=i18n.tr('col_fe_radier_court'), zorder=4)
 
         # Regards (cheminées, sans les noms)
         w      = min(total_l * 0.006, 0.6)   # demi-largeur du fût plafonnée à 0.6 m (regard ≈ 1.2 m)
@@ -478,7 +481,8 @@ class ProfilDialog(QDialog):
 
         # Y-tick labels = noms des lignes
         ax.set_yticks([n_rows - i - 0.5 for i in range(n_rows)])
-        ax.set_yticklabels([row[0] for row in self._ROWS], fontsize=6.5)
+        ax.set_yticklabels([i18n.tr(row[0]) for row in self._ROWS],
+                           fontsize=6.5)
         ax.tick_params(left=False, bottom=False, labelbottom=False, labelsize=6.5)
         for spine in ax.spines.values():
             spine.set_visible(False)
@@ -542,7 +546,7 @@ class ProfilDialog(QDialog):
         # Axe X visible en bas du cartouche
         ax.xaxis.set_visible(True)
         ax.tick_params(bottom=True, labelbottom=True, labelsize=7)
-        ax.set_xlabel("Abscisse (m)", fontsize=8, labelpad=2)
+        ax.set_xlabel(i18n.tr('col_abscisse'), fontsize=8, labelpad=2)
 
     # ------------------------------------------------------------------ export
 
@@ -558,7 +562,7 @@ class ProfilDialog(QDialog):
         start_dir = project_dir() or os.path.expanduser("~")
         path, _ = QFileDialog.getSaveFileName(
             self,
-            f"Exporter le profil en {fmt.upper()}",
+            i18n.tr('pf_exporter_en', format=fmt.upper()),
             os.path.join(start_dir, default_name),
             f"Fichier {fmt.upper()} (*.{fmt})")
         if path:

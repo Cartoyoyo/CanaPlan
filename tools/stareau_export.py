@@ -1,5 +1,5 @@
 # tools/stareau_export.py
-"""Export des couches BET Humide vers un GeoPackage conforme StaR-Eau V2024.
+"""Export des couches CanaPlan vers un GeoPackage conforme StaR-Eau V2024.
 
 StaR-Eau (CNIG / ASTEE) n'est pas un format de fichier mais un modele de
 donnees relationnel, publie sous forme de scripts PostGIS. Le geostandard
@@ -37,6 +37,7 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QDateTime, QVariant
 
+from . import i18n
 from . import layer_ok
 from .layer_keys import get_layer_id
 
@@ -91,7 +92,7 @@ def _txt(feat, name):
 
 
 # Namespace propre au plugin pour la derivation des UUID v5.
-_UUID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, "stareau.bet-humide")
+_UUID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, "stareau.canaplan")
 
 
 def _slug(text):
@@ -465,14 +466,14 @@ def check_conformity(project=None):
                 nom = _txt(feat, "nom") or f"#{feat.id()}"
                 objet = f"{label} {nom} ({reseau})"
                 if feat.geometry() is None or feat.geometry().isEmpty():
-                    add("bloquant", layer, feat, objet, "géométrie absente")
+                    add("bloquant", layer, feat, objet, i18n.tr('sec_geom_absente'))
                     continue
                 if _num(feat, "tn") is None:
                     add("avertissement", layer, feat, objet,
-                        "terrain naturel non renseigné (z_tampon vide)")
+                        i18n.tr('sec_tn_absent'))
                 if _num(feat, fe_field) is None:
                     add("avertissement", layer, feat, objet,
-                        "fil d'eau non renseigné (z_radier vide)")
+                        i18n.tr('sec_fe_absent'))
 
         for role, layer in (("conduite", layers.get(("conduite", reseau))),
                             ("branchement", layers.get(("branchement", reseau)))):
@@ -483,23 +484,22 @@ def check_conformity(project=None):
                 objet = f"{label} #{feat.id()} ({reseau})"
                 p0, p1 = _line_points(feat)
                 if p0 is None:
-                    add("bloquant", layer, feat, objet, "géométrie invalide ou vide")
+                    add("bloquant", layer, feat, objet, i18n.tr('sec_geom_invalide'))
                     continue
                 if _num(feat, "diametre") is None:
                     add("bloquant", layer, feat, objet,
-                        "diamètre absent (diametre_equivalent est obligatoire)")
+                        i18n.tr('sec_diametre_absent'))
                 if not _txt(feat, "materiau"):
                     add("avertissement", layer, feat, objet,
-                        "matériau non renseigné, le défaut du dialogue sera appliqué")
+                        i18n.tr('sec_materiau_absent'))
                 if role == "conduite":
                     if index.find(p0) is None or index.find(p1) is None:
                         add("bloquant", layer, feat, objet,
-                            "extrémité sans regard : noeudinitial/noeudterminal "
-                            "ne peuvent pas être déduits")
+                            i18n.tr('sec_extremite_sans_regard'))
                 else:
                     if index.find(p1) is None and index.find(p0) is None:
                         add("bloquant", layer, feat, objet,
-                            "aucune extrémité raccordée à un ouvrage")
+                            i18n.tr('sec_aucune_extremite'))
 
     return issues
 
@@ -776,9 +776,7 @@ def export_stareau(params, out_path, project=None, progress=None):
 
     total = sum(len(v) for v in features.values())
     if not total:
-        raise RuntimeError(
-            "Aucun objet exportable. Vérifiez que les couches EU/EP sont "
-            "chargées et que les conduites sont raccordées à des regards.")
+        raise RuntimeError(i18n.tr('sec_rien_a_exporter'))
 
     crs = QgsCoordinateReferenceSystem(CRS_STAREAU)
     if os.path.exists(out_path):
@@ -791,7 +789,8 @@ def export_stareau(params, out_path, project=None, progress=None):
         if not feats:
             continue
         if progress:
-            progress(f"Écriture de {name}…", int(100 * i / len(LAYER_ORDER)))
+            progress(i18n.tr('sec_ecriture', couche=name),
+                     int(100 * i / len(LAYER_ORDER)))
 
         builder, wkb_type = LAYER_SCHEMAS[name]
         mem = QgsMemoryProviderUtils.createMemoryLayer(
@@ -815,13 +814,14 @@ def export_stareau(params, out_path, project=None, progress=None):
         code = result[0] if isinstance(result, tuple) else result
         if code != QgsVectorFileWriter.NoError:
             message = result[1] if isinstance(result, tuple) and len(result) > 1 else ""
-            raise RuntimeError(f"Échec de l'écriture de {name} : {message}")
+            raise RuntimeError(i18n.tr('sec_echec_ecriture', couche=name,
+                                       detail=message))
 
         written[name] = len(feats)
         first = False
 
     if progress:
-        progress("Terminé", 100)
+        progress(i18n.tr('sec_termine'), 100)
 
     stats["couches"] = written
     return out_path, stats

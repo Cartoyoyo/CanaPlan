@@ -4,6 +4,8 @@ import sip
 from qgis.core import QgsPointXY, QgsGeometry, QgsWkbTypes
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt
+
+from . import i18n
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QMessageBox
 from ..gui.profil_dialog import ProfilOptionsDialog
@@ -41,9 +43,8 @@ class ProfilGroupeTool(QgsMapTool):
         super().activate()
         self.canvas.setCursor(Qt.CrossCursor)
         self.iface.messageBar().pushMessage(
-            "Profil groupé",
-            "Tracez l'axe de référence : clic gauche = ajouter un point  ·  "
-            "Double-clic ou clic droit = terminer  ·  Échap = annuler",
+            i18n.tr('po_profil_groupe'),
+            i18n.tr('po_aide_axe'),
             level=0, duration=0,
         )
 
@@ -107,7 +108,7 @@ class ProfilGroupeTool(QgsMapTool):
         ref_line = QgsGeometry.fromPolylineXY(pts)
         ref_len  = ref_line.length()
         if ref_len < 0.01:
-            QMessageBox.warning(None, "Profil groupé", "L'axe tracé est trop court.")
+            QMessageBox.warning(None, i18n.tr('po_profil_groupe'), i18n.tr('po_axe_court'))
             return
 
         buffer_geom = ref_line.buffer(BUFFER_DIST, 8)
@@ -187,9 +188,8 @@ class ProfilGroupeTool(QgsMapTool):
 
         if not conduites_data:
             QMessageBox.warning(
-                None, "Profil groupé",
-                f"Aucune conduite EU ou EP trouvée dans le buffer de {BUFFER_DIST} m\n"
-                "autour de l'axe tracé.")
+                None, i18n.tr('po_profil_groupe'),
+                i18n.tr('po_aucune_conduite', rayon=BUFFER_DIST))
             return
 
         # Piquages (branchements) — départ projeté sur l'axe de référence

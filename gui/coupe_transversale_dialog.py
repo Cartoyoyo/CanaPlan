@@ -8,6 +8,8 @@ from matplotlib.figure import Figure
 import matplotlib.patches as mpatches
 
 from qgis.PyQt.QtCore import Qt
+
+from ..tools import i18n
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QComboBox, QLabel, QFileDialog, QSizePolicy,
@@ -45,12 +47,21 @@ RESEAU_EDGE_COLORS = {
 
 # ------------------------------------------------------------------ formats papier (mm, portrait)
 
+# Clé stable (indépendante de la langue) → (largeur, hauteur) en mm.
+# _libelle_format() donne le texte affiché dans la liste déroulante.
 PAPER_SIZES = {
-    'A4 paysage':   (297, 210),
-    'A3 paysage':   (420, 297),
-    'A4 portrait':  (210, 297),
-    'A3 portrait':  (297, 420),
+    'a4_paysage':   (297, 210),
+    'a3_paysage':   (420, 297),
+    'a4_portrait':  (210, 297),
+    'a3_portrait':  (297, 420),
 }
+
+
+def _libelle_format(cle):
+    """« A4 paysage » dans la langue courante, depuis la clé de PAPER_SIZES."""
+    format_court, orientation = cle.split('_')
+    return i18n.tr('ct_format_paysage' if orientation == 'paysage'
+                   else 'ct_format_portrait', format=format_court.upper())
 
 _MARGIN_MM    = 10
 _CARTOUCHE_MM = 18
@@ -112,17 +123,20 @@ def _layer_stack(config, fe, diam_m, tn):
     if ch_inf: y_fill_top -= ep_inf
 
     layers = [
-        (y_bot,    fe,        "Lit de pose", ep_lit,           mat_lit),
-        (fe,       y_enr_top, "Enrobage",   diam_m + ep_enr,   mat_enr),
+        (y_bot,    fe,        i18n.tr('ct_couche_lit_pose'), ep_lit,         mat_lit),
+        (fe,       y_enr_top, i18n.tr('ct_couche_enrobage'), diam_m + ep_enr, mat_enr),
     ]
     rem_h = y_fill_top - y_enr_top
     if rem_h > 0.005:
-        layers.append((y_enr_top, y_fill_top, "Remblai", rem_h, mat_rem))
+        layers.append((y_enr_top, y_fill_top, i18n.tr('ct_couche_remblai'),
+                       rem_h, mat_rem))
     if ch_inf:
         y_ci = tn - (ep_sup if ch_sup else 0) - ep_inf
-        layers.append((y_ci, y_ci + ep_inf, "Chaussée inf.", ep_inf, mat_ci))
+        layers.append((y_ci, y_ci + ep_inf, i18n.tr('ct_couche_chaussee_inf'),
+                       ep_inf, mat_ci))
     if ch_sup:
-        layers.append((tn - ep_sup, tn, "Chaussée sup.", ep_sup, mat_cs))
+        layers.append((tn - ep_sup, tn, i18n.tr('ct_couche_chaussee_sup'),
+                       ep_sup, mat_cs))
     return layers
 
 
@@ -218,7 +232,7 @@ def _draw_depth_annotation_right(ax, c, x_right, config):
                 arrowprops=dict(arrowstyle='<->', color='#555555',
                                 lw=0.8, mutation_scale=7), zorder=6)
     ax.text(x_text, (y_bot + c['tn']) / 2,
-            f"Prof.\ntotale\n{total:.2f} m",
+            i18n.tr('ct_prof_totale', valeur=f"{total:.2f}"),
             ha='left', va='center', fontsize=4.8,
             color='#444444', linespacing=1.3, zorder=12, clip_on=False)
 
@@ -250,7 +264,7 @@ def _draw_depth_annotation(ax, c, x_left, config, shifted=False):
                 arrowprops=dict(arrowstyle='<->', color='#555555',
                                 lw=0.8, mutation_scale=7), zorder=6)
     ax.text(x_text, (y_bot + c['tn']) / 2,
-            f"Prof.\ntotale\n{total:.2f} m",
+            i18n.tr('ct_prof_totale', valeur=f"{total:.2f}"),
             ha='right', va='center', fontsize=4.8,
             color='#444444', linespacing=1.3, zorder=12, clip_on=False)
 
@@ -268,7 +282,8 @@ def _ordered_regard_names(crossings):
 
 
 def _build_title(crossings):
-    return "  ·  ".join(_ordered_regard_names(crossings)) or "Coupe transversale"
+    return ("  ·  ".join(_ordered_regard_names(crossings))
+            or i18n.tr('ct_coupe_defaut'))
 
 
 def _build_filename(crossings, ext="pdf"):
@@ -288,7 +303,7 @@ class CoupeTransversaleDialog(QDialog):
         self._scale         = None
         self._cut_line_pts  = cut_line_pts or []
 
-        self.setWindowTitle("Plan de coupe transversale")
+        self.setWindowTitle(i18n.tr('ct_titre'))
         self.setMinimumSize(900, 580)
         self.resize(1100, 680)
         self.setAttribute(Qt.WA_DeleteOnClose, False)
@@ -296,20 +311,20 @@ class CoupeTransversaleDialog(QDialog):
         layout = QVBoxLayout(self)
 
         ctrl = QHBoxLayout()
-        ctrl.addWidget(QLabel("Format :"))
+        ctrl.addWidget(QLabel(i18n.tr('ct_format')))
         self.fmt_combo = QComboBox()
-        for name in PAPER_SIZES:
-            self.fmt_combo.addItem(name)
+        for cle in PAPER_SIZES:
+            self.fmt_combo.addItem(_libelle_format(cle), cle)
         self.fmt_combo.currentIndexChanged.connect(self._refresh)
         ctrl.addWidget(self.fmt_combo)
         ctrl.addSpacing(20)
-        self.lbl_scale = QLabel("Échelle : —")
+        self.lbl_scale = QLabel(i18n.tr('ct_echelle_vide'))
         ctrl.addWidget(self.lbl_scale)
         ctrl.addStretch()
-        btn_pdf = QPushButton("Exporter PDF…")
+        btn_pdf = QPushButton(i18n.tr('ct_export_pdf'))
         btn_pdf.clicked.connect(self._export_pdf)
         ctrl.addWidget(btn_pdf)
-        btn_png = QPushButton("Exporter PNG…")
+        btn_png = QPushButton(i18n.tr('ct_export_png'))
         btn_png.clicked.connect(self._export_png)
         ctrl.addWidget(btn_png)
         layout.addLayout(ctrl)
@@ -335,7 +350,7 @@ class CoupeTransversaleDialog(QDialog):
 
         pts = self._cut_line_pts
         if not pts:
-            ax_sit.text(0.5, 0.5, "Trait de coupe non disponible",
+            ax_sit.text(0.5, 0.5, i18n.tr('ct_pas_de_trait'),
                         ha='center', va='center', transform=ax_sit.transAxes,
                         fontsize=7, color='#888888')
             ax_sit.set_axis_off()
@@ -363,7 +378,7 @@ class CoupeTransversaleDialog(QDialog):
                 visible_layers.append(layer)
 
         if not visible_layers:
-            ax_sit.text(0.5, 0.5, "Aucune couche visible",
+            ax_sit.text(0.5, 0.5, i18n.tr('ct_aucune_couche'),
                         ha='center', va='center', transform=ax_sit.transAxes,
                         fontsize=7, color='#888888')
             ax_sit.set_axis_off()
@@ -417,8 +432,7 @@ class CoupeTransversaleDialog(QDialog):
     # ------------------------------------------------------------------ dessin
 
     def _refresh(self):
-        fmt_name   = self.fmt_combo.currentText()
-        w_mm, h_mm = PAPER_SIZES[fmt_name]
+        w_mm, h_mm = PAPER_SIZES[self.fmt_combo.currentData()]
         draw_w_mm  = w_mm - 2 * _MARGIN_MM
         draw_h_mm  = h_mm - 2 * _MARGIN_MM - _CARTOUCHE_MM
 
@@ -455,15 +469,15 @@ class CoupeTransversaleDialog(QDialog):
                         (y_max - y_min) / (draw_h_mm / 1000.0))
         scale = _nice_scale(raw_scale)
         self._scale = scale
-        self.lbl_scale.setText(f"Échelle : 1:{scale}")
+        self.lbl_scale.setText(i18n.tr('ct_echelle', valeur=scale))
 
         self.figure.clear()
 
         # ── Profil de coupe (moitié droite) ──────────────────────────────
         ax = self.figure.add_axes([0.52, 0.16, 0.45, 0.66])
         ax.set_aspect('equal')
-        ax.set_xlabel("Largeur de tranchée (m)", fontsize=7)
-        ax.set_ylabel("Altitude NGF (m)", fontsize=7)
+        ax.set_xlabel(i18n.tr('ct_axe_largeur'), fontsize=7)
+        ax.set_ylabel(i18n.tr('ct_axe_altitude'), fontsize=7)
         ax.tick_params(labelsize=6)
         ax.grid(True, linestyle=':', alpha=0.4, linewidth=0.4)
 
@@ -536,7 +550,8 @@ class CoupeTransversaleDialog(QDialog):
             facecolor='#f5f5f5', edgecolor='#555555', linewidth=0.8, zorder=0))
         ax_cart.text(
             0.5, 0.5,
-            f"Projet : {project_name}     Échelle : 1:{scale}     Date : {date_str}",
+            i18n.tr('ct_cartouche', projet=project_name,
+                    echelle=scale, date=date_str),
             ha='center', va='center', fontsize=6.5, color='#333333',
             transform=ax_cart.transAxes)
 
@@ -544,7 +559,7 @@ class CoupeTransversaleDialog(QDialog):
         title_txt = _build_title(self.crossings)
         self.figure.text(
             0.5, 0.965,
-            f"PLAN DE COUPE  —  {title_txt}",
+            i18n.tr('ct_titre_plan', titre=title_txt),
             ha='center', va='center', fontsize=9,
             fontweight='bold', color='black')
 
@@ -560,13 +575,12 @@ class CoupeTransversaleDialog(QDialog):
     def _export_pdf(self):
         default_name = _build_filename(self.crossings)
         path, _ = QFileDialog.getSaveFileName(
-            self, "Enregistrer le plan de coupe en PDF",
-            default_name, "PDF (*.pdf)")
+            self, i18n.tr('ct_enregistrer_pdf'),
+            default_name, i18n.tr('fic_pdf_court'))
         if not path:
             return
 
-        fmt_name   = self.fmt_combo.currentText()
-        w_mm, h_mm = PAPER_SIZES[fmt_name]
+        w_mm, h_mm = PAPER_SIZES[self.fmt_combo.currentData()]
 
         old_size = self.figure.get_size_inches()
         self.figure.set_size_inches(w_mm / 25.4, h_mm / 25.4)
@@ -576,21 +590,20 @@ class CoupeTransversaleDialog(QDialog):
 
         from qgis.PyQt.QtWidgets import QMessageBox
         QMessageBox.information(
-            self, "Export PDF",
-            f"Plan de coupe exporté :\n{path}")
+            self, i18n.tr('ct_export_pdf_titre'),
+            i18n.tr('ct_exporte', chemin=path))
 
     # ------------------------------------------------------------------ export PNG
 
     def _export_png(self):
         default_name = _build_filename(self.crossings, ext="png")
         path, _ = QFileDialog.getSaveFileName(
-            self, "Enregistrer le plan de coupe en PNG",
-            default_name, "PNG (*.png)")
+            self, i18n.tr('ct_enregistrer_png'),
+            default_name, i18n.tr('fic_png_court'))
         if not path:
             return
 
-        fmt_name   = self.fmt_combo.currentText()
-        w_mm, h_mm = PAPER_SIZES[fmt_name]
+        w_mm, h_mm = PAPER_SIZES[self.fmt_combo.currentData()]
 
         old_size = self.figure.get_size_inches()
         self.figure.set_size_inches(w_mm / 25.4, h_mm / 25.4)
@@ -600,5 +613,5 @@ class CoupeTransversaleDialog(QDialog):
 
         from qgis.PyQt.QtWidgets import QMessageBox
         QMessageBox.information(
-            self, "Export PNG",
-            f"Plan de coupe exporté :\n{path}")
+            self, i18n.tr('ct_export_png_titre'),
+            i18n.tr('ct_exporte', chemin=path))

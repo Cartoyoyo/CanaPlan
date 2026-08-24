@@ -8,7 +8,7 @@ bloquant → GeoJSON temporaire → QgsVectorLayer » de main.py :
   progression visible dans la barre de tâches, annulable ;
 - TLS vérifié par défaut, avec repli explicite (signalé) en cas de
   certificat invalide (proxy d'entreprise) ;
-- GeoJSON écrits dans %TEMP%/bet_humide/, purgé au chargement du plugin.
+- GeoJSON écrits dans %TEMP%/canaplan/, purgé au chargement du plugin.
 """
 import json
 import os
@@ -23,7 +23,7 @@ from qgis.core import (
 )
 
 DEFAULT_WFS_URL = "https://data.geopf.fr/wfs/ows"
-_TEMP_SUBDIR = "bet_humide"
+_TEMP_SUBDIR = "canaplan"
 
 # Références fortes sur les tâches en cours (sinon Python les ramasse
 # avant la fin et le callback n'est jamais appelé).
@@ -54,7 +54,7 @@ def purge_temp_dir():
 
 
 def write_geojson(features, prefix):
-    """Écrit une FeatureCollection L93 dans %TEMP%/bet_humide/ et
+    """Écrit une FeatureCollection L93 dans %TEMP%/canaplan/ et
     retourne le chemin."""
     fd, path = tempfile.mkstemp(suffix='.geojson', prefix=prefix,
                                 dir=temp_dir())

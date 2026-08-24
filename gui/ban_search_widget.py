@@ -13,6 +13,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QListWidget, QListWidgetItem,
 )
 
+from ..tools import i18n
 from ..tools.ban_search import BanSearchProvider
 
 
@@ -29,7 +30,7 @@ class BanSearchWidget(QWidget):
         layout.setSpacing(2)
 
         self._edit = QLineEdit()
-        self._edit.setPlaceholderText("Rechercher une adresse...")
+        self._edit.setPlaceholderText(i18n.tr('ban_rechercher'))
         self._edit.setClearButtonEnabled(True)
         layout.addWidget(self._edit)
 

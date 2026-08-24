@@ -2,6 +2,8 @@ from qgis.PyQt.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QFram
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QFont
 
+from ..tools import i18n
+
 
 class WelcomeDialog(QDialog):
     NEW    = 1
@@ -10,7 +12,7 @@ class WelcomeDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("BET_HUMIDE – Réseau Assainissement")
+        self.setWindowTitle(i18n.tr('acc_titre'))
         self.setModal(True)
         self.setMinimumWidth(380)
         self._chosen = self.CANCEL
@@ -20,7 +22,7 @@ class WelcomeDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        title = QLabel("BET_HUMIDE")
+        title = QLabel("CanaPlan")
         font = QFont()
         font.setPointSize(14)
         font.setBold(True)
@@ -28,7 +30,7 @@ class WelcomeDialog(QDialog):
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
-        sub = QLabel("Aucun projet n'est chargé.\nQue souhaitez-vous faire ?")
+        sub = QLabel(i18n.tr('acc_question'))
         sub.setAlignment(Qt.AlignCenter)
         layout.addWidget(sub)
 
@@ -37,18 +39,18 @@ class WelcomeDialog(QDialog):
         sep.setFrameShadow(QFrame.Sunken)
         layout.addWidget(sep)
 
-        btn_new = QPushButton("Débuter avec l'assistant")
+        btn_new = QPushButton(i18n.tr('acc_assistant'))
         btn_new.setMinimumHeight(38)
         btn_new.setDefault(True)
         btn_new.clicked.connect(lambda: self._pick(self.NEW))
         layout.addWidget(btn_new)
 
-        btn_open = QPushButton("Ouvrir un projet existant")
+        btn_open = QPushButton(i18n.tr('acc_ouvrir'))
         btn_open.setMinimumHeight(38)
         btn_open.clicked.connect(lambda: self._pick(self.OPEN))
         layout.addWidget(btn_open)
 
-        btn_cont = QPushButton("Continuer sans projet")
+        btn_cont = QPushButton(i18n.tr('acc_continuer'))
         btn_cont.clicked.connect(self.reject)
         layout.addWidget(btn_cont)
 

@@ -37,6 +37,8 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QVariant
 from qgis.PyQt.QtGui import QColor
 
+from . import i18n
+
 NS = {
     "star-dt": "http://cnig.gouv.fr/star-dt/core",
     "gml": "http://www.opengis.net/gml/3.2",
@@ -372,10 +374,8 @@ def import_star_dt(gml_paths, gpkg_path, selected_types=None,
         try:
             os.remove(gpkg_path)
         except OSError as exc:
-            raise RuntimeError(
-                f"Le GeoPackage de sortie est verrouille et ne peut pas etre "
-                f"remplace :\n{gpkg_path}\n\nFermez-le (QGIS, Explorateur, autre "
-                f"logiciel) ou choisissez un autre nom de sortie.\n({exc})")
+            raise RuntimeError(i18n.tr('sdt_gpkg_verrouille',
+                                       chemin=gpkg_path, detail=exc))
 
     # Phase 1 : ecrire toutes les couches dans le GPKG.
     # Aucune couche n'est chargee ici : garder le GeoPackage ouvert pendant
@@ -450,8 +450,8 @@ def import_star_dt(gml_paths, gpkg_path, selected_types=None,
             mem_layer, gpkg_path, ctx, opts)
 
         if err != QgsVectorFileWriter.NoError:
-            raise RuntimeError(
-                f"Erreur ecriture couche {out_type} (code={err}) : {msg}")
+            raise RuntimeError(i18n.tr('sdt_err_ecriture', couche=out_type,
+                                       code=err, detail=msg))
 
         # Liberer la couche memoire
         del mem_layer
@@ -463,9 +463,8 @@ def import_star_dt(gml_paths, gpkg_path, selected_types=None,
         layer_uri = f"{gpkg_uri_base}|layername={out_type}"
         layer = QgsVectorLayer(layer_uri, out_type, "ogr")
         if not layer.isValid():
-            raise RuntimeError(
-                f"Impossible de charger {out_type} ({feat_count} entites ecrites)"
-                f" — URI: {layer_uri}")
+            raise RuntimeError(i18n.tr('sdt_err_chargement', couche=out_type,
+                                       nb=feat_count, uri=layer_uri))
 
         # Symbologie
         _apply_style(layer, out_type, is_cable)

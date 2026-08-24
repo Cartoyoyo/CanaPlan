@@ -6,6 +6,8 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.core import QgsProject, QgsWkbTypes
 
+from ..tools import i18n
+
 from .quick_config_widgets import (  # noqa: F401
     SKETCHES_PREFIX,
     SETTINGS_KEY,
@@ -29,11 +31,12 @@ ROLES = {
     'tabouret':    QgsWkbTypes.PointGeometry,
 }
 
+# Clés i18n, pas des libellés : traduire avec i18n.tr au moment de l'affichage.
 LABELS = {
-    'conduite':    "Conduites",
-    'branchement': "Branchements",
-    'regard':      "Regards",
-    'tabouret':    "Tabourets",
+    'conduite':    'qc_conduites',
+    'branchement': 'qc_branchements',
+    'regard':      'qc_regards',
+    'tabouret':    'qc_tabourets',
 }
 
 
@@ -41,7 +44,7 @@ class ConfigDialog(QDialog):
     def __init__(self, iface, parent=None):
         super().__init__(parent or iface.mainWindow())
         self.iface = iface
-        self.setWindowTitle("Configuration rapide")
+        self.setWindowTitle(i18n.tr('panel_config'))
         self.setMinimumWidth(450)
 
         self.combos = {}
@@ -55,35 +58,36 @@ class ConfigDialog(QDialog):
 
         # ── Onglet 1 : Réseau par défaut ────────────────────────────────
         self._reseau_widget = ReseauDefautWidget()
-        tabs.addTab(self._reseau_widget, "Réseau par défaut")
+        tabs.addTab(self._reseau_widget, i18n.tr('wz_reseau_defaut'))
 
         # ── Onglet 2 : Couches ──────────────────────────────────────────
         tab_couches = QWidget()
         couches_layout = QVBoxLayout(tab_couches)
 
         for reseau in ("EU", "EP"):
-            group = QGroupBox(f"Réseau {reseau}")
+            group = QGroupBox(i18n.tr('qc_reseau', code=reseau))
             form = QFormLayout()
             for role, geom_type in ROLES.items():
                 combo = QComboBox()
-                combo.addItem("-- non configuré --", None)
+                combo.addItem(i18n.tr('qc_non_configure'), None)
                 self._populate_combo(combo, geom_type)
                 key = f"{role}_{reseau.lower()}"
                 self.combos[key] = combo
-                form.addRow(f"{LABELS[role]} :", combo)
+                form.addRow(i18n.tr('qc_couche_role',
+                                    role=i18n.tr(LABELS[role])), combo)
             group.setLayout(form)
             couches_layout.addWidget(group)
 
         couches_layout.addStretch()
-        tabs.addTab(tab_couches, "Couches")
+        tabs.addTab(tab_couches, i18n.tr('qc_couches'))
 
         # ── Onglet 3 : Cubature ──────────────────────────────────────────
         self._cubature_widget = CubatureConfigWidget()
-        tabs.addTab(self._cubature_widget, "Cubature")
+        tabs.addTab(self._cubature_widget, i18n.tr('wz_cubature'))
 
         # ── Onglet 4 : Remblai ──────────────────────────────────────────
         self._remblai_widget = RemblaiConfigWidget()
-        tabs.addTab(self._remblai_widget, "Remblai")
+        tabs.addTab(self._remblai_widget, i18n.tr('wz_remblai'))
 
         # Épaisseur de lit de pose partagée entre l'onglet Cubature et le
         # schéma de l'onglet Remblai.

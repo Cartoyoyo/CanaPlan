@@ -2,6 +2,8 @@ import sip
 from qgis.core import QgsPointXY, QgsWkbTypes
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt
+
+from . import i18n
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QMessageBox
 
@@ -34,8 +36,8 @@ class ProfilTool(QgsMapTool):
         super().activate()
         self.canvas.setCursor(Qt.CrossCursor)
         self.iface.messageBar().pushMessage(
-            f"Profil en long {self.reseau}",
-            "1er clic : regard départ (vert)  ·  2e clic : regard arrivée → tracé du profil  ·  Échap : annuler",
+            i18n.tr('ot_titre_profil', reseau=self.reseau),
+            i18n.tr('po_aide_profil'),
             level=0, duration=0,
         )
 
@@ -105,9 +107,8 @@ class ProfilTool(QgsMapTool):
 
         if r_ids is None:
             QMessageBox.warning(
-                None, "Profil en long",
-                "Aucun chemin trouvé entre les deux regards sélectionnés.\n"
-                "Vérifiez que le réseau est correctement connecté.")
+                None, i18n.tr('profil_eu').rsplit(' ', 1)[0],
+                i18n.tr('po_aucun_chemin'))
             return
         regards      = [regard_layer.getFeature(rid) for rid in r_ids]
 

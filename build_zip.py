@@ -1,11 +1,12 @@
 # build_zip.py
-"""Construit le ZIP de distribution du plugin BET_HUMIDE.
+"""Construit le ZIP de distribution du plugin CanaPlan.
 
 Usage :  python build_zip.py [dossier_sortie]
 
 Exclut du paquet : .git, __pycache__, *.dist-info, libs/bin, libs/share,
-fichiers de travail (audit.md, amelioration.txt, uml_structure.mmd / .d2 / .puml,
-.gitignore, build_zip.py lui-même) et fichiers temporaires (*.pyc, *.tmp).
+fichiers de travail (audit.md, amelioration.txt, uml_structure.mmd / .d2 /
+.puml, icon/fichedemarque.md, .gitignore, build_zip.py lui-même)
+et fichiers temporaires (*.pyc, *.tmp).
 
 NB : libs/numpy est CONSERVÉ — certaines installations QGIS (ex. 3.40.x)
 n'embarquent pas numpy, dont ezdxf a besoin.
@@ -14,7 +15,7 @@ import os
 import sys
 import zipfile
 
-PLUGIN_NAME = "BET_HUMIDE"
+PLUGIN_NAME = "CanaPlan"
 
 EXCLUDE_DIRS = {
     ".git", "__pycache__",
@@ -25,6 +26,7 @@ EXCLUDE_FILES = {
     "audit.md", "amelioration.txt",
     "uml_structure.puml", "uml_structure.mmd", "uml_structure.d2",
     ".gitignore", "build_zip.py",
+    os.path.join("icon", "fichedemarque.md"),
 }
 EXCLUDE_SUFFIXES = (".pyc", ".pyo", ".tmp", ".log")
 

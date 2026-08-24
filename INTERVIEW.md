@@ -1,14 +1,14 @@
 <div align="center">
 
-<img src="icon/logo-full.svg" width="360" alt="BET Humide">
+<img src="icon/logo-full.svg" width="360" alt="CanaPlan">
 
 # « Je ne savais pas programmer. »
 
 ### Comment un technicien de bureau d'études a construit seul son propre outil QGIS
 
-[![Plugin](https://img.shields.io/badge/plugin-BET%20Humide-blue?logo=qgis&logoColor=white)](README.md)
+[![Plugin](https://img.shields.io/badge/plugin-CanaPlan-blue?logo=qgis&logoColor=white)](README.md)
 [![Version](https://img.shields.io/badge/version-1.4-blue)](README.md#-changelog)
-[![Prix](https://img.shields.io/badge/gratuit-open%20source-brightgreen)](https://github.com/Cartoyoyo/BET_humide)
+[![Prix](https://img.shields.io/badge/gratuit-open%20source-brightgreen)](https://github.com/Cartoyoyo/CanaPlan)
 
 </div>
 
@@ -70,7 +70,7 @@ d'une IA plutôt que de partir de zéro sur des bases qu'il n'avait pas.
 > « Ça m'a libéré sur ce point-là. J'ai pu grimper des montagnes que j'aurais
 > été incapable de faire » seul.
 
-Le résultat, **BET Humide**, n'est pas un prototype limité :
+Le résultat, **CanaPlan**, n'est pas un prototype limité :
 
 - ✏️ dessin topologique de réseaux EU / EP ;
 - 📈 profils en long ;
@@ -122,9 +122,9 @@ Qui, en quatre versions, est déjà bien complet.
 
 <div align="center">
 
-### **BET Humide** est disponible gratuitement sur GitHub
+### **CanaPlan** est disponible gratuitement sur GitHub
 
-[![GitHub](https://img.shields.io/badge/GitHub-Cartoyoyo%2FBET__humide-black?logo=github)](https://github.com/Cartoyoyo/BET_humide)
+[![GitHub](https://img.shields.io/badge/GitHub-Cartoyoyo%2FCanaPlan-black?logo=github)](https://github.com/Cartoyoyo/CanaPlan)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-ylaloux-blue?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/ylaloux/)
 
 [← Retour au README](README.md)

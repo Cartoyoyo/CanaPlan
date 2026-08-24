@@ -8,6 +8,8 @@ from qgis.core import (
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor
+
+from . import i18n
 from . import layer_ok as _ok
 from .spatial_utils import (
     rect_request, nearest_point_feature,
@@ -92,8 +94,8 @@ class MoveTool(QgsMapTool):
         self.canvas.setCursor(Qt.CrossCursor)
         from qgis.utils import iface
         iface.messageBar().pushMessage(
-            "Déplacer",
-            "Clic gauche sur un ouvrage, un piquage de branchement ou une étiquette  ·  2e clic : poser  ·  Échap : annuler",
+            i18n.tr('move'),
+            i18n.tr('ot_aide_move'),
             level=0, duration=0,
         )
 
@@ -787,8 +789,8 @@ class MoveTool(QgsMapTool):
 
         from qgis.utils import iface
         iface.messageBar().pushMessage(
-            f"Déplacer piquage {reseau}",
-            "Déplacer vers la conduite ou un regard  ·  Clic : confirmer  ·  Échap : annuler",
+            i18n.tr('ot_titre_move_piquage', reseau=reseau),
+            i18n.tr('ot_aide_move_cible'),
             level=0, duration=0,
         )
 

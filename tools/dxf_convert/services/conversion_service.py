@@ -160,7 +160,7 @@ def _build_lt_reseau_map(doc) -> Dict[str, str]:
 
 
 def _read_bet_xdata(xdata_tags) -> dict:
-    """Relit les XDATA BET_HUMIDE d'un INSERT en dict d'attributs.
+    """Relit les XDATA CanaPlan d'un INSERT en dict d'attributs.
     Structure attendue : paires (1000, nom_champ), (code_valeur, valeur).
     """
     attrs = {}
@@ -668,11 +668,11 @@ def _precise_convert_ezdxf(
 
                     meta = _extract_block_meta(e)
 
-                    # Lecture XDATA BET_HUMIDE sur les INSERT BET_REGARD/TABOURET
+                    # Lecture XDATA CanaPlan sur les INSERT BET_REGARD/TABOURET
                     bname = meta.get('block_name', '') or ''
-                    if bname.startswith('BET_') and e.has_xdata('BET_HUMIDE'):
+                    if bname.startswith('BET_') and e.has_xdata('CANAPLAN'):
                         try:
-                            xattrs = _read_bet_xdata(e.get_xdata('BET_HUMIDE'))
+                            xattrs = _read_bet_xdata(e.get_xdata('CANAPLAN'))
                             meta.update({f"BET_{k}": v for k, v in xattrs.items()})
                         except Exception:
                             pass

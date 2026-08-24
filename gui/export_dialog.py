@@ -9,6 +9,8 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.PyQt.QtCore import Qt
 
+from ..tools import i18n
+
 _FORMATS = ['A4', 'A3', 'A2', 'A1', 'A0']
 
 
@@ -17,7 +19,7 @@ class ExportDialog(QDialog):
 
     def __init__(self, parent=None, default_dir=None):
         super().__init__(parent)
-        self.setWindowTitle("Exporter")
+        self.setWindowTitle(i18n.tr('exp_titre'))
         self.setMinimumWidth(460)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
@@ -25,38 +27,40 @@ class ExportDialog(QDialog):
         layout.setSpacing(8)
 
         # ── Plan cartographique ───────────────────────────────────────────
-        lbl_plan = QLabel("Plan cartographique :")
+        lbl_plan = QLabel(i18n.tr('exp_plan_carto'))
         lbl_plan.setStyleSheet("font-weight: bold;")
         layout.addWidget(lbl_plan)
 
-        self.cb_pdf = QCheckBox("Plan PDF")
+        self.cb_pdf = QCheckBox(i18n.tr('exp_plan_pdf'))
         self.cb_pdf.setChecked(True)
-        self.cb_dxf = QCheckBox("Plan DXF 2018")
+        self.cb_dxf = QCheckBox(i18n.tr('exp_plan_dxf'))
         layout.addWidget(self.cb_pdf)
         layout.addWidget(self.cb_dxf)
 
         layout.addWidget(_hsep())
 
         # ── Profils en long ───────────────────────────────────────────────
-        lbl_profils = QLabel("Profils en long :")
+        lbl_profils = QLabel(i18n.tr('exp_profils'))
         lbl_profils.setStyleSheet("font-weight: bold;")
         layout.addWidget(lbl_profils)
 
-        self.cb_eu,  self.fmt_eu  = self._profil_row(layout, "Profils EU  (PDF)")
-        self.cb_ep,  self.fmt_ep  = self._profil_row(layout, "Profils EP  (PDF)")
+        self.cb_eu,  self.fmt_eu  = self._profil_row(
+            layout, i18n.tr('exp_profils_reseau', code="EU"))
+        self.cb_ep,  self.fmt_ep  = self._profil_row(
+            layout, i18n.tr('exp_profils_reseau', code="EP"))
         self.cb_grp, self.fmt_grp, self.ref_grp = self._profil_groupe_row(layout)
 
         layout.addWidget(_hsep())
 
         # ── Dossier d'export ──────────────────────────────────────────────
-        lbl_dir = QLabel("Dossier d'export :")
+        lbl_dir = QLabel(i18n.tr('exp_dossier'))
         lbl_dir.setStyleSheet("font-weight: bold;")
         layout.addWidget(lbl_dir)
 
         dir_row = QHBoxLayout()
         self.dir_edit = QLineEdit(default_dir or os.path.expanduser("~"))
         self.dir_edit.setReadOnly(False)
-        btn_browse = QPushButton("Parcourir…")
+        btn_browse = QPushButton(i18n.tr('parcourir'))
         btn_browse.clicked.connect(self._browse_dir)
         dir_row.addWidget(self.dir_edit, 1)
         dir_row.addWidget(btn_browse)
@@ -65,7 +69,7 @@ class ExportDialog(QDialog):
         layout.addWidget(_hsep())
 
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.button(QDialogButtonBox.Ok).setText("Exporter →")
+        btns.button(QDialogButtonBox.Ok).setText(i18n.tr('exp_bouton'))
         btns.accepted.connect(self._on_accept)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
@@ -75,7 +79,7 @@ class ExportDialog(QDialog):
         if not os.path.isdir(start):
             start = os.path.expanduser("~")
         path = QFileDialog.getExistingDirectory(
-            self, "Dossier d'export", start)
+            self, i18n.tr('exp_dossier_titre'), start)
         if path:
             self.dir_edit.setText(path)
 
@@ -83,8 +87,8 @@ class ExportDialog(QDialog):
         path = self.dir_edit.text().strip()
         if not path or not os.path.isdir(path):
             QMessageBox.warning(
-                self, "Dossier invalide",
-                "Le dossier d'export n'existe pas. Choisissez un dossier valide.")
+                self, i18n.tr('exp_dossier_invalide'),
+                i18n.tr('exp_dossier_absent'))
             return
         self.accept()
 
@@ -104,9 +108,9 @@ class ExportDialog(QDialog):
 
     def _profil_groupe_row(self, layout):
         row = QHBoxLayout()
-        cb = QCheckBox("Profils groupés EU+EP  (PDF)")
+        cb = QCheckBox(i18n.tr('exp_profils_groupes'))
 
-        ref_lbl = QLabel("Réf :")
+        ref_lbl = QLabel(i18n.tr('exp_ref'))
         ref_lbl.setEnabled(False)
         ref_combo = QComboBox()
         ref_combo.addItems(['EU', 'EP'])

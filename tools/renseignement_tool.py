@@ -6,6 +6,8 @@ from qgis.core import QgsPointXY, QgsWkbTypes, QgsRectangle, QgsProject, QgsGeom
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor
+
+from . import i18n
 from . import layer_ok as _ok
 from .spatial_utils import nearest_point_feature, nearest_line_feature
 
@@ -32,7 +34,7 @@ class RenseignementTool(QgsMapTool):
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             "Renseigner",
-            "Survoler un élément pour le mettre en évidence  ·  Clic gauche : ouvrir le formulaire d'attributs",
+            i18n.tr('ot_aide_renseignement'),
             level=0, duration=0,
         )
 

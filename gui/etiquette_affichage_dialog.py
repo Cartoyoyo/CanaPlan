@@ -8,42 +8,45 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtGui import QFont, QColor
 from qgis.PyQt.QtCore import Qt
 
+from ..tools import i18n
+
 _ROLES   = ('regard', 'tabouret', 'conduite', 'branchement')
 _RESEAUX = ('EU', 'EP')
 
+# Clés i18n, traduites à l'affichage
 _ROLE_LABELS = {
-    'regard':      'Regards',
-    'tabouret':    'Tabourets',
-    'conduite':    'Conduites',
-    'branchement': 'Branchements',
+    'regard':      'qc_regards',
+    'tabouret':    'qc_tabourets',
+    'conduite':    'qc_conduites',
+    'branchement': 'qc_branchements',
 }
 
 # Champs disponibles par rôle : (clé, libellé affiché)
 ROLE_FIELDS_AVAIL = {
     'regard': [
-        ('nom',        'Nom'),
-        ('tn',         'TN (m NGF)'),
-        ('fe_radier',  'FE radier (m NGF)'),
-        ('profondeur', 'Profondeur (m)'),
+        ('nom',        'col_nom'),
+        ('tn',         'col_tn'),
+        ('fe_radier',  'col_fe_radier'),
+        ('profondeur', 'col_profondeur'),
     ],
     'tabouret': [
-        ('nom',        'Nom'),
-        ('tn',         'TN (m NGF)'),
-        ('fe_entree',  'FE entrée (m NGF)'),
-        ('profondeur', 'Profondeur (m)'),
+        ('nom',        'col_nom'),
+        ('tn',         'col_tn'),
+        ('fe_entree',  'col_fe_entree'),
+        ('profondeur', 'col_profondeur'),
     ],
     'conduite': [
-        ('materiau',  'Matériau'),
-        ('diametre',  'Diamètre (mm)'),
-        ('longueur',  'Longueur (m)'),
-        ('pente',     'Pente (%)'),
+        ('materiau',  'col_materiau'),
+        ('diametre',  'col_diametre'),
+        ('longueur',  'col_longueur'),
+        ('pente',     'col_pente'),
     ],
     'branchement': [
-        ('materiau',    'Matériau'),
-        ('diametre',    'Diamètre (mm)'),
-        ('longueur',    'Longueur (m)'),
-        ('pente',       'Pente (%)'),
-        ('cote_piquage','Cote piquage (m NGF)'),
+        ('materiau',    'col_materiau'),
+        ('diametre',    'col_diametre'),
+        ('longueur',    'col_longueur'),
+        ('pente',       'col_pente'),
+        ('cote_piquage','col_cote_piquage'),
     ],
 }
 
@@ -102,7 +105,7 @@ class EtiquetteAffichageDialog(QDialog):
 
     def __init__(self, prefs=None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Gestion de l'affichage des étiquettes")
+        self.setWindowTitle(i18n.tr('ea_titre'))
         self.setMinimumWidth(480)
         self._prefs = prefs_from_dict(prefs)
         self._vis_checks  = {}   # (reseau, role) → QCheckBox
@@ -116,19 +119,19 @@ class EtiquetteAffichageDialog(QDialog):
         layout.setSpacing(10)
 
         # ── Titre ────────────────────────────────────────────────────────
-        title = QLabel("Visibilité et contenu des étiquettes")
+        title = QLabel(i18n.tr('ea_visibilite_contenu'))
         f = QFont(); f.setBold(True); f.setPointSize(10)
         title.setFont(f)
         layout.addWidget(title)
 
         # ── Section 1 : Visibilité ────────────────────────────────────────
-        grp_vis = QGroupBox("Visibilité par réseau et par type")
+        grp_vis = QGroupBox(i18n.tr('ea_visibilite_reseau'))
         grid = QGridLayout(grp_vis)
         grid.setSpacing(6)
 
         # En-têtes colonnes
         for col, role in enumerate(_ROLES):
-            lbl = QLabel(_ROLE_LABELS[role])
+            lbl = QLabel(i18n.tr(_ROLE_LABELS[role]))
             lbl.setAlignment(Qt.AlignCenter)
             f2 = QFont(); f2.setBold(True)
             lbl.setFont(f2)
@@ -142,14 +145,16 @@ class EtiquetteAffichageDialog(QDialog):
             for col, role in enumerate(_ROLES):
                 cb = QCheckBox()
                 cb.setChecked(self._prefs['visibility'][reseau][role])
-                cb.setToolTip(f"Étiquettes {_ROLE_LABELS[role]} – {reseau}")
+                cb.setToolTip(i18n.tr('ea_etiquettes_role', role=i18n.tr(_ROLE_LABELS[role]),
+                                       reseau=reseau))
                 self._vis_checks[(reseau, role)] = cb
                 grid.addWidget(cb, row + 1, col + 1, alignment=Qt.AlignCenter)
 
         # Boutons rapides visibilité
         btn_row = QHBoxLayout()
-        for label, state in [("Tout afficher", True), ("Tout masquer", False)]:
-            btn = QPushButton(label)
+        for cle, state in [('ea_tout_afficher', True),
+                           ('ea_tout_masquer', False)]:
+            btn = QPushButton(i18n.tr(cle))
             btn.clicked.connect(lambda _, s=state: self._set_all_vis(s))
             btn_row.addWidget(btn)
         btn_row.addStretch()
@@ -159,7 +164,7 @@ class EtiquetteAffichageDialog(QDialog):
         layout.addLayout(vis_col)
 
         # ── Section 2 : Contenu des étiquettes ───────────────────────────
-        grp_fields = QGroupBox("Informations affichées dans les étiquettes")
+        grp_fields = QGroupBox(i18n.tr('ea_infos_affichees'))
         tab_layout = QVBoxLayout(grp_fields)
 
         tabs = QTabWidget()
@@ -168,8 +173,8 @@ class EtiquetteAffichageDialog(QDialog):
             vbox = QVBoxLayout(tab)
             vbox.setSpacing(4)
             avail = ROLE_FIELDS_AVAIL[role]
-            for field, label in avail:
-                cb = QCheckBox(label)
+            for field, cle_label in avail:
+                cb = QCheckBox(i18n.tr(cle_label))
                 cb.setChecked(self._prefs['fields'][role].get(field, True))
                 self._field_checks[(role, field)] = cb
                 vbox.addWidget(cb)
@@ -177,15 +182,15 @@ class EtiquetteAffichageDialog(QDialog):
 
             # Boutons rapides par onglet
             row2 = QHBoxLayout()
-            for lbl2, st2 in [("Tout", True), ("Aucun", False)]:
-                b = QPushButton(lbl2)
+            for cle2, st2 in [('ea_tout', True), ('ea_aucun', False)]:
+                b = QPushButton(i18n.tr(cle2))
                 b.setFixedWidth(55)
                 b.clicked.connect(lambda _, r=role, s=st2: self._set_role_fields(r, s))
                 row2.addWidget(b)
             row2.addStretch()
             vbox.addLayout(row2)
 
-            tabs.addTab(tab, _ROLE_LABELS[role])
+            tabs.addTab(tab, i18n.tr(_ROLE_LABELS[role]))
 
         tab_layout.addWidget(tabs)
         layout.addWidget(grp_fields)

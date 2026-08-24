@@ -1,22 +1,37 @@
 [general]
-name=BET Humide – Réseau Assainissement
+name=CanaPlan – Réseau Assainissement
 description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE).
 icon=icon/icon.png
-version=1.4
+version=1.5
 qgisMinimumVersion=3.28
 author=Yoan Laloux
 email=yoan.laloux@laposte.net
 linkedin=https://www.linkedin.com/in/ylaloux/
-repository=https://github.com/Cartoyoyo/BET_humide
-tracker=https://github.com/Cartoyoyo/BET_humide/issues
-homepage=https://github.com/Cartoyoyo/BET_humide
+repository=https://github.com/Cartoyoyo/CanaPlan
+tracker=https://github.com/Cartoyoyo/CanaPlan/issues
+homepage=https://github.com/Cartoyoyo/CanaPlan
 tags=assainissement,réseau,EU,EP,profil en long,cubature,DXF,BET,StaR-Eau,GeoPackage,CNIG,ASTEE,Star-DT,DT-DICT
 experimental=False
 deprecated=False
 
-about=BET Humide est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement EU (Eaux Usées) et EP (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement. La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle. Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE).
+about=CanaPlan est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement EU (Eaux Usées) et EP (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement. La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle. Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE).
 
 changelog=
+    1.5  Interface entièrement multilingue (français, anglais, espagnol,
+         portugais, allemand) : toutes les fenêtres suivent désormais la langue
+         choisie dans le panneau CanaPlan ou le menu Langue. Sont traduits les
+         en-têtes et rapports de cubature/remblai (écran, CSV, PDF, XLSX), le
+         plan de coupe transversale (couches, cotes, cartouche, titre), la
+         coupe de tranchée composée, l'assistant de création de projet et la
+         configuration rapide partagée, le dialogue d'impression et la pose des
+         feuilles, les profils en long et le profil groupé, le tableau de saisie
+         (modes de calcul verrouillés, recherche de chaîne), le dialogue de
+         renseignement, la gestion des étiquettes, l'export StaR-Eau et son
+         contrôle de conformité, l'import Star-DT, l'export DXF et les messages
+         d'enregistrement des projets .bet. Les valeurs normatives StaR-Eau, les
+         matériaux et les noms de couches restent en français : ce sont des
+         données, pas de l'interface. L'entrée « À propos » passe en dernière
+         position du menu CanaPlan, après le sous-menu Langue.
     1.4  Nouvel assistant de création de projet (4 étapes navigables librement) :
          recherche d'adresse BAN avec suggestions et mini-carte OSM pour
          situer le projet, choix des fonds de plan à charger, configuration
@@ -59,7 +74,7 @@ changelog=
          Tableau de saisie et export StaR-Eau, et séparée des matériaux de
          remblai. Menu QGIS réorganisé par catégories (mêmes groupes que le
          panneau latéral), bascule d'affichage de la barre d'outils, dialogue
-         « À propos », renommage en « BET Humide », suppression du doublon
+         « À propos », renommage en « CanaPlan », suppression du doublon
          « Mise en place fond de projet » dans le panneau latéral.
     1.2  Fusion des outils Cubature et Remblai de tranchées en une seule fenêtre
          de résultats, avec case à cocher pour afficher/masquer à la volée les

@@ -5,6 +5,8 @@ from qgis.PyQt.QtWidgets import (QDialog, QFileDialog, QVBoxLayout, QHBoxLayout,
     QComboBox, QDoubleSpinBox, QSpinBox, QCheckBox, QWidget, QTextBrowser, QGridLayout, QListWidget, QListWidgetItem)
 from qgis.PyQt.QtCore import Qt, QCoreApplication
 from qgis.core import QgsVectorLayer, QgsProject
+
+from ...tools import i18n
 from .services.dwg_support import dwg_to_temp_dxf_auto, check_dwg_converter_available, get_converter_help
 
 # OGR fallback imports
@@ -124,35 +126,35 @@ class CadToGisDialog(QDialog):
             self.iface = _global_iface
         super().__init__(parent)
 
-        self.setWindowTitle("CAD to GIS Converter")
+        self.setWindowTitle(i18n.tr('dx_titre'))
         self.setMinimumWidth(860)
 
         grid = QGridLayout()
 
         # Row 0: Input + buttons
-        grid.addWidget(QLabel("Input CAD (DXF/DWG)"), 0, 0)
+        grid.addWidget(QLabel(i18n.tr('dx_entree')), 0, 0)
         self.in_edit = QLineEdit()
         self.in_edit.editingFinished.connect(lambda: (
             self._auto_suggest_output(self.in_edit.text().strip()),
             self._apply_detected_dxf_version(self.in_edit.text().strip()),
         ))
-        btn_in = QPushButton("Browse"); btn_in.clicked.connect(self.browse_input)
-        btn_scan = QPushButton("Scan Layers"); btn_scan.clicked.connect(self.scan_layers)
+        btn_in = QPushButton(i18n.tr('dx_parcourir')); btn_in.clicked.connect(self.browse_input)
+        btn_scan = QPushButton(i18n.tr('dx_scanner')); btn_scan.clicked.connect(self.scan_layers)
         wrap = QWidget(); hb = QHBoxLayout(wrap); hb.setContentsMargins(0,0,0,0)
         hb.addWidget(self.in_edit); hb.addWidget(btn_in); hb.addWidget(btn_scan)
         grid.addWidget(wrap, 0, 1, 1, 2)
 
         # Row 1: Layers CSV + control buttons
-        grid.addWidget(QLabel("Layer names (CSV, auto-filled from preview)"), 1, 0)
+        grid.addWidget(QLabel(i18n.tr('dx_noms_calques')), 1, 0)
         self.layers_edit = QLineEdit()
-        btn_select_all = QPushButton("Select All"); btn_select_all.clicked.connect(self.select_all_layers)
-        btn_clear = QPushButton("Clear"); btn_clear.clicked.connect(self.clear_layers_selection)
+        btn_select_all = QPushButton(i18n.tr('dx_tout_selectionner')); btn_select_all.clicked.connect(self.select_all_layers)
+        btn_clear = QPushButton(i18n.tr('dx_effacer')); btn_clear.clicked.connect(self.clear_layers_selection)
         wrap2 = QWidget(); hb2 = QHBoxLayout(wrap2); hb2.setContentsMargins(0,0,0,0)
         hb2.addWidget(self.layers_edit); hb2.addWidget(btn_select_all); hb2.addWidget(btn_clear)
         grid.addWidget(wrap2, 1, 1, 1, 2)
 
         # Row 2: Layer preview list
-        grid.addWidget(QLabel("Layer Preview"), 2, 0, Qt.AlignTop)
+        grid.addWidget(QLabel(i18n.tr('dx_apercu_calques')), 2, 0, Qt.AlignTop)
         self.layer_list = QListWidget()
         self.layer_list.setSelectionMode(self.layer_list.MultiSelection)
         self.layer_list.itemSelectionChanged.connect(self.sync_layers_csv_from_preview)
@@ -160,54 +162,54 @@ class CadToGisDialog(QDialog):
         grid.addWidget(self.layer_list, 2, 1, 1, 2)
 
         # Row 3: Source EPSG
-        grid.addWidget(QLabel("Source EPSG"), 3, 0)
+        grid.addWidget(QLabel(i18n.tr('dx_epsg_source')), 3, 0)
         self.src_epsg = QComboBox(); self.src_epsg.setEditable(True)
         self._fill_epsg_combo(self.src_epsg)
         self.src_epsg.setCurrentIndex(-1); self.src_epsg.setEditText("")
         grid.addWidget(self.src_epsg, 3, 1, 1, 2)
 
         # Row 4: Target EPSG
-        grid.addWidget(QLabel("Target EPSG (optional)"), 4, 0)
+        grid.addWidget(QLabel(i18n.tr('dx_epsg_cible')), 4, 0)
         self.tgt_epsg = QComboBox(); self.tgt_epsg.setEditable(True)
         self._fill_epsg_combo(self.tgt_epsg)
         self.tgt_epsg.setCurrentIndex(-1); self.tgt_epsg.setEditText("")
         grid.addWidget(self.tgt_epsg, 4, 1, 1, 2)
 
         # Row 5: Block mode
-        grid.addWidget(QLabel("Block handling"), 5, 0)
+        grid.addWidget(QLabel(i18n.tr('dx_blocs')), 5, 0)
         self.block_mode = QComboBox(); self.block_mode.addItems(["keep-merge", "explode"])
         grid.addWidget(self.block_mode, 5, 1, 1, 2)
 
         # Row 6: Merge tolerance (default 0.0)
-        grid.addWidget(QLabel("Line-merge tolerance"), 6, 0)
+        grid.addWidget(QLabel(i18n.tr('dx_tol_fusion')), 6, 0)
         self.merge_tol = QDoubleSpinBox(); self.merge_tol.setDecimals(6); self.merge_tol.setRange(0.0, 1e9); self.merge_tol.setValue(0.0)
         grid.addWidget(self.merge_tol, 6, 1, 1, 2)
 
         # Row 7: Spline tolerance
-        grid.addWidget(QLabel("Spline tolerance"), 7, 0)
+        grid.addWidget(QLabel(i18n.tr('dx_tol_spline')), 7, 0)
         self.spline_tol = QDoubleSpinBox(); self.spline_tol.setDecimals(6); self.spline_tol.setRange(0.0, 1e6); self.spline_tol.setValue(0.2)
         grid.addWidget(self.spline_tol, 7, 1, 1, 2)
 
         # Row 8: Driver
-        grid.addWidget(QLabel("Output driver"), 8, 0)
+        grid.addWidget(QLabel(i18n.tr('dx_pilote')), 8, 0)
         self.driver = QComboBox(); self.driver.addItems(["GPKG","ESRI Shapefile"])
         grid.addWidget(self.driver, 8, 1, 1, 2)
 
         # Row 9: Output path
-        self.out_label = QLabel("Output GeoPackage (GPKG)")
+        self.out_label = QLabel(i18n.tr('dx_gpkg_sortie'))
         grid.addWidget(self.out_label, 9, 0)
         self.out_edit = QLineEdit()
-        self.btn_out = QPushButton("Browse"); self.btn_out.clicked.connect(self.browse_output)
+        self.btn_out = QPushButton(i18n.tr('dx_parcourir')); self.btn_out.clicked.connect(self.browse_output)
         wrap3 = QWidget(); hb3 = QHBoxLayout(wrap3); hb3.setContentsMargins(0,0,0,0)
         hb3.addWidget(self.out_edit); hb3.addWidget(self.btn_out)
         grid.addWidget(wrap3, 9, 1, 1, 2)
 
         # Row 10: DWG options
-        grid.addWidget(QLabel("DWG converter preference"), 10, 0)
+        grid.addWidget(QLabel(i18n.tr('dx_convertisseur_dwg')), 10, 0)
         self.dwg_pref = QComboBox(); self.dwg_pref.addItems(["auto","oda","libredwg"])
         grid.addWidget(self.dwg_pref, 10, 1, 1, 2)
 
-        grid.addWidget(QLabel("DXF version for DWG conversion"), 11, 0)
+        grid.addWidget(QLabel(i18n.tr('dx_version_dxf')), 11, 0)
         self.dxf_version = QComboBox(); self.dxf_version.setEditable(True)
         # (label affiché, valeur passée à ODA/libredwg, code AutoCAD interne)
         self._DXF_VERSIONS = [
@@ -224,12 +226,12 @@ class CadToGisDialog(QDialog):
         grid.addWidget(self.dxf_version, 11, 1, 1, 2)
 
         # Row 12: Options
-        grid.addWidget(QLabel("Options"), 12, 0, Qt.AlignTop)
+        grid.addWidget(QLabel(i18n.tr('dx_options')), 12, 0, Qt.AlignTop)
         options_wrap = QWidget(); fl = QVBoxLayout(options_wrap); fl.setContentsMargins(0,0,0,0)
-        self.chk_overwrite = QCheckBox("Overwrite existing"); self.chk_overwrite.setChecked(False)
-        self.chk_text_attrs = QCheckBox("Format text labels (size / font / underline from DXF)"); self.chk_text_attrs.setChecked(True)
-        self.chk_colors = QCheckBox("Apply DXF entity colors (lines, polygons, points)"); self.chk_colors.setChecked(True)
-        self.chk_3d = QCheckBox("Include 3D geometry (Z coordinate)"); self.chk_3d.setChecked(False)
+        self.chk_overwrite = QCheckBox(i18n.tr('dx_ecraser')); self.chk_overwrite.setChecked(False)
+        self.chk_text_attrs = QCheckBox(i18n.tr('dx_format_texte')); self.chk_text_attrs.setChecked(True)
+        self.chk_colors = QCheckBox(i18n.tr('dx_couleurs')); self.chk_colors.setChecked(True)
+        self.chk_3d = QCheckBox(i18n.tr('dx_3d')); self.chk_3d.setChecked(False)
         fl.addWidget(self.chk_overwrite)
         fl.addWidget(self.chk_text_attrs)
         fl.addWidget(self.chk_colors)
@@ -237,12 +239,12 @@ class CadToGisDialog(QDialog):
 
         # Text scale + charset on the same line
         scale_row = QWidget(); hbs = QHBoxLayout(scale_row); hbs.setContentsMargins(0,0,0,0)
-        hbs.addWidget(QLabel("Text scale:"))
+        hbs.addWidget(QLabel(i18n.tr('dx_echelle_texte')))
         self.txt_scale = QDoubleSpinBox(); self.txt_scale.setDecimals(2); self.txt_scale.setRange(0.01, 100.0); self.txt_scale.setValue(1.0)
         self.txt_scale.setFixedWidth(80)
         hbs.addWidget(self.txt_scale)
         hbs.addSpacing(20)
-        hbs.addWidget(QLabel("Charset:"))
+        hbs.addWidget(QLabel(i18n.tr('dx_jeu_caracteres')))
         self.charset = QComboBox()
         self.charset.addItems(["utf-8", "cp1252", "latin-1", "cp850", "ascii", "System"])
         hbs.addWidget(self.charset)
@@ -253,7 +255,7 @@ class CadToGisDialog(QDialog):
 
         # Row 13: Run
         run_bar = QWidget(); hb4 = QHBoxLayout(run_bar); hb4.setContentsMargins(0,0,0,0)
-        self.btn_run = QPushButton("Run"); self.btn_run.clicked.connect(self.run_convert)
+        self.btn_run = QPushButton(i18n.tr('dx_lancer')); self.btn_run.clicked.connect(self.run_convert)
         hb4.addStretch(1); hb4.addWidget(self.btn_run)
         grid.addWidget(run_bar, 13, 0, 1, 3)
 
@@ -319,7 +321,7 @@ class CadToGisDialog(QDialog):
             self.log(f"<i>DXF version found ({code}) but not in dropdown — keeping current selection.</i>")
 
     def browse_input(self):
-        p, _ = QFileDialog.getOpenFileName(self, "Select CAD file", "", "CAD (*.dxf *.dwg);;DXF (*.dxf);;DWG (*.dwg)")
+        p, _ = QFileDialog.getOpenFileName(self, i18n.tr('dx_choisir_fichier'), "", "CAD (*.dxf *.dwg);;DXF (*.dxf);;DWG (*.dwg)")
         if p:
             self.in_edit.setText(p)
             self._auto_suggest_output(p)
@@ -397,22 +399,22 @@ class CadToGisDialog(QDialog):
 
     def browse_output(self):
         if self.driver.currentText() == "GPKG":
-            p, _ = QFileDialog.getSaveFileName(self, "Output GeoPackage", "", "GeoPackage (*.gpkg)")
+            p, _ = QFileDialog.getSaveFileName(self, i18n.tr('dx_gpkg_sortie_titre'), "", "GeoPackage (*.gpkg)")
         else:
-            p = QFileDialog.getExistingDirectory(self, "Output folder for Shapefiles")
+            p = QFileDialog.getExistingDirectory(self, i18n.tr('dx_dossier_shp'))
         if p: self.out_edit.setText(p)
 
     def on_driver_changed(self):
         if self.driver.currentText() == "GPKG":
-            self.out_label.setText("Output GeoPackage (GPKG)")
-            self.btn_out.setText("Browse")
+            self.out_label.setText(i18n.tr('dx_gpkg_sortie'))
+            self.btn_out.setText(i18n.tr('dx_parcourir'))
             # Update auto-suggested path extension if it was auto-filled
             cur = self.out_edit.text().strip()
             if cur and cur.lower().endswith(".shp"):
                 self.out_edit.setText(os.path.splitext(cur)[0] + ".gpkg")
         else:
-            self.out_label.setText("Output folder (SHP)")
-            self.btn_out.setText("Select Folder")
+            self.out_label.setText(i18n.tr('dx_dossier_shp_label'))
+            self.btn_out.setText(i18n.tr('dx_choisir_dossier'))
             cur = self.out_edit.text().strip()
             if cur and cur.lower().endswith(".gpkg"):
                 self.out_edit.setText(os.path.dirname(cur))

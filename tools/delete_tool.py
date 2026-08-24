@@ -10,6 +10,8 @@ from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QMessageBox
+
+from . import i18n
 from . import layer_ok as _ok
 from .spatial_utils import nearest_point_feature, nearest_line_feature
 
@@ -57,7 +59,7 @@ class DeleteTool(QgsMapTool):
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             "Effacer",
-            "Clic : supprimer l'élément survolé  ·  Glisser : lasso multi-sélection + clic droit pour confirmer  ·  Clic droit sur étiquette : effacer l'étiquette",
+            i18n.tr('ot_aide_effacer'),
             level=0, duration=0,
         )
 
@@ -279,8 +281,8 @@ class DeleteTool(QgsMapTool):
         feat, layer = self._hover_label
         nom = feat['nom'] if feat.fields().indexFromName('nom') >= 0 else str(feat.id())
         if QMessageBox.question(
-                None, "Effacer l'étiquette",
-                f"Supprimer l'étiquette de « {nom} » ?",
+                None, i18n.tr('ot_effacer_etiquette'),
+                i18n.tr('ot_supprimer_etiquette_q', nom=nom),
                 QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
             return
         from ..gui.etiquettes import LBL_X, LBL_Y, LBL_VISIBLE, LBL_ROT
@@ -341,14 +343,14 @@ class DeleteTool(QgsMapTool):
                     _add(tab_layer, tab)
 
         total = sum(len(fids) for _, fids in to_delete.values())
-        noms = {'regard': 'regard', 'tabouret': 'tabouret',
-                'conduite': 'conduite', 'branchement': 'branchement'}
-        msg = f"Supprimer ce {noms.get(role, role)}"
-        if total > 1:
-            msg += f" et {total - 1} élément(s) associé(s) (cascade)"
-        msg += " ?"
+        cles = {'regard': 'col_regard', 'tabouret': 'col_tabouret',
+                'conduite': 'col_conduite', 'branchement': 'col_branchement'}
+        cle = cles.get(role)
+        type_txt = i18n.tr(cle).lower() if cle else role
+        msg = (i18n.tr('ot_suppr_cascade', type=type_txt, nb=total - 1)
+               if total > 1 else i18n.tr('ot_suppr_simple', type=type_txt))
 
-        if QMessageBox.question(None, "Confirmer la suppression", msg,
+        if QMessageBox.question(None, i18n.tr('ot_confirmer_suppression'), msg,
                                 QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
             return
 
@@ -431,8 +433,8 @@ class DeleteTool(QgsMapTool):
 
         total = sum(len(fids) for _, fids in to_delete.values())
         if QMessageBox.question(
-                None, "Confirmer la suppression",
-                f"Supprimer {total} élément(s) sélectionné(s) (cascade incluse) ?",
+                None, i18n.tr('ot_confirmer_suppression'),
+                i18n.tr('ot_supprimer_selection_q', nb=total),
                 QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
             return
 
@@ -459,8 +461,8 @@ class DeleteTool(QgsMapTool):
         item_id, item = self._hover_annotation
         preview = item.text()[:40] + ('…' if len(item.text()) > 40 else '')
         if QMessageBox.question(
-                None, "Effacer l'annotation",
-                f"Supprimer l'annotation « {preview} » ?",
+                None, i18n.tr('ot_effacer_annotation'),
+                i18n.tr('ot_supprimer_annotation_q', nom=preview),
                 QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
             return
         ann_layer = QgsProject.instance().mainAnnotationLayer()

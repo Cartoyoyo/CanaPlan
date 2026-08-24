@@ -10,6 +10,8 @@ from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import QMessageBox
 from qgis.PyQt.QtGui import QColor
 
+from . import i18n
+
 
 class InsertRegardTool(QgsMapToolEmitPoint):
     """
@@ -43,8 +45,8 @@ class InsertRegardTool(QgsMapToolEmitPoint):
         self.canvas.setCursor(Qt.CrossCursor)
         from qgis.utils import iface
         iface.messageBar().pushMessage(
-            "Insérer un regard",
-            "Survoler une conduite (vert) puis cliquer pour insérer un regard et couper la conduite",
+            i18n.tr('insert_regard'),
+            i18n.tr('ot_aide_insert_regard'),
             level=0, duration=0,
         )
 

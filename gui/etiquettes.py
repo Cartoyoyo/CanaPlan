@@ -28,6 +28,8 @@ except ImportError:
 from qgis.PyQt.QtGui import QFont, QColor
 from qgis.PyQt.QtCore import QSizeF, QVariant, QSettings
 
+from ..tools import i18n
+
 try:
     from qgis.PyQt.QtCore import QMetaType
     _DOUBLE = QMetaType.Type.Double
@@ -130,7 +132,7 @@ _LINE_ROLES  = ('conduite', 'branchement')
 # du moteur, qui forçait aussi les étiquettes des fonds BAN / noms de rue /
 # PCI — ce que personne n'a jamais demandé en cochant « Forcer toutes les
 # étiquettes visibles » dans un plugin de réseau d'assainissement.
-_FORCE_SCOPE = 'BET_HUMIDE'
+_FORCE_SCOPE = 'CanaPlan'
 _FORCE_KEY   = 'force_all_labels'
 
 
@@ -188,9 +190,10 @@ def _reset_label_visibility(layer):
 
 _TEXT_COLORS = {'EU': QColor(180, 0, 0), 'EP': QColor(0, 0, 180)}
 
+# Clés i18n, traduites au moment de nommer les règles
 _ROLE_LABELS = {
-    'regard': 'Regard', 'tabouret': 'Tabouret',
-    'conduite': 'Conduite', 'branchement': 'Branchement',
+    'regard': 'col_regard', 'tabouret': 'col_tabouret',
+    'conduite': 'col_conduite', 'branchement': 'col_branchement',
 }
 
 
@@ -303,7 +306,8 @@ def _make_line_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
     """
     fmt  = _line_text_format(reseau, role, size, unit)
     show = QgsProperty.fromExpression(f'coalesce("{LBL_VISIBLE}", 1)')
-    nom  = _ROLE_LABELS.get(role, role.capitalize())
+    cle_nom = _ROLE_LABELS.get(role)
+    nom  = i18n.tr(cle_nom) if cle_nom else role.capitalize()
 
     def _base():
         pal = QgsPalLayerSettings()
@@ -324,7 +328,7 @@ def _make_line_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
     pal_auto.setDataDefinedProperties(pc1)
     rule_auto = QgsRuleBasedLabeling.Rule(pal_auto)
     rule_auto.setFilterExpression(f'"{LBL_X}" IS NULL')
-    rule_auto.setDescription(f'{nom} – auto')
+    rule_auto.setDescription(i18n.tr('et_regle_auto', role=nom))
 
     # ── Règle 2 : épinglée, orientation conservée ────────────────────────
     pal_pin = _base()
@@ -349,7 +353,7 @@ def _make_line_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
         pass
     rule_pin = QgsRuleBasedLabeling.Rule(pal_pin)
     rule_pin.setFilterExpression(f'"{LBL_X}" IS NOT NULL')
-    rule_pin.setDescription(f'{nom} – épinglée')
+    rule_pin.setDescription(i18n.tr('et_regle_epinglee', role=nom))
 
     root = QgsRuleBasedLabeling.Rule(None)
     root.appendChild(rule_auto)
@@ -470,8 +474,8 @@ def remembered_size():
     réglage d'un plan monté au 1:200 ou au 1:250.
     """
     s = QSettings()
-    mode = s.value("BET_HUMIDE/label_size_mode", "map_units")
-    raw  = s.value("BET_HUMIDE/label_size_value", None)
+    mode = s.value("CanaPlan/label_size_mode", "map_units")
+    raw  = s.value("CanaPlan/label_size_value", None)
     unit = (QgsUnitTypes.RenderPoints if mode == 'points'
             else QgsUnitTypes.RenderMapUnits)
     try:

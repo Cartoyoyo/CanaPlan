@@ -18,6 +18,8 @@ from qgis.core import (
     QgsProject, QgsVectorLayer, QgsDxfExport, QgsMapSettings,
 )
 
+from . import i18n
+
 
 # Préfixe des couches mémoire générées par le plugin (à exclure de l'export)
 _INTERNAL_LAYER_PREFIX = '_bet_'
@@ -78,7 +80,7 @@ def export_dxf(iface, dxf_path, extent, scale, *,
 
     vis_layers = collect_visible_vector_layers()
     if not vis_layers:
-        raise RuntimeError("Aucune couche vectorielle visible dans la légende.")
+        raise RuntimeError(i18n.tr('dxf_aucune_couche'))
 
     # Ordre Z : top de la légende = dessiné en dernier. findLayers() renvoie
     # top→bottom ; on inverse pour bottom→top (ordre d'écriture DXF).
@@ -125,7 +127,7 @@ def export_dxf(iface, dxf_path, extent, scale, *,
 
     f = QFile(dxf_path)
     if not f.open(QIODevice.WriteOnly | QIODevice.Truncate):
-        raise RuntimeError(f"Impossible d'ouvrir {dxf_path} en écriture")
+        raise RuntimeError(i18n.tr('dxf_ouverture_impossible', chemin=dxf_path))
     try:
         result = export.writeToFile(f, encoding)
     finally:
@@ -133,7 +135,7 @@ def export_dxf(iface, dxf_path, extent, scale, *,
 
     result_int = int(result) if not isinstance(result, int) else result
     if result_int != 0:
-        raise RuntimeError(f"QgsDxfExport a retourné le code {result_int}")
+        raise RuntimeError(i18n.tr('dxf_code_retour', code=result_int))
 
     return len(vis_layers)
 
@@ -172,8 +174,8 @@ def run_export_dxf_with_ui(iface, dxf_path, extent, scale, *,
     except Exception as exc:
         QApplication.restoreOverrideCursor()
         QMessageBox.critical(
-            iface.mainWindow(), "Export DXF",
-            f"Erreur lors de l'export DXF :\n{exc}")
+            iface.mainWindow(), i18n.tr('pt_export_dxf'),
+            i18n.tr('ot_erreur_dxf', erreur=exc))
         return False
 
     n_symbols = 0
@@ -185,8 +187,8 @@ def run_export_dxf_with_ui(iface, dxf_path, extent, scale, *,
             n_symbols = add_point_symbols(dxf_path)
         except Exception as exc:
             iface.messageBar().pushMessage(
-                "Export DXF",
-                f"DXF écrit, mais symboles ponctuels échoués : {exc}",
+                i18n.tr('pt_export_dxf'),
+                i18n.tr('ot_dxf_symboles', erreur=exc),
                 level=1, duration=6,
             )
         try:
@@ -194,8 +196,8 @@ def run_export_dxf_with_ui(iface, dxf_path, extent, scale, *,
             apply_ltscale(dxf_path, scale)
         except Exception as exc:
             iface.messageBar().pushMessage(
-                "Export DXF",
-                f"DXF écrit, mais ltscale EU/EP échoué : {exc}",
+                i18n.tr('pt_export_dxf'),
+                i18n.tr('ot_dxf_ltscale', erreur=exc),
                 level=1, duration=6,
             )
         try:
@@ -204,16 +206,17 @@ def run_export_dxf_with_ui(iface, dxf_path, extent, scale, *,
         except Exception as exc:
             # Le DXF est déjà écrit ; on ne bloque pas l'export pour autant
             iface.messageBar().pushMessage(
-                "Export DXF",
-                f"DXF écrit, mais décoration des étiquettes échouée : {exc}",
+                i18n.tr('pt_export_dxf'),
+                i18n.tr('ot_dxf_etiquettes', erreur=exc),
                 level=1, duration=6,
             )
     QApplication.restoreOverrideCursor()
 
-    suffix = f" — {n_decorated} étiquette(s) décorée(s)" if n_decorated else ""
+    suffix = (i18n.tr('dxf_etiquettes_decorees', nb=n_decorated)
+              if n_decorated else "")
     iface.messageBar().pushMessage(
-        "Export DXF",
-        f"DXF 2018 exporté — {n_layers} couche(s){suffix} : {dxf_path}",
+        i18n.tr('pt_export_dxf'),
+        i18n.tr('ot_dxf_exporte', nb=str(n_layers) + suffix, chemin=dxf_path),
         level=0, duration=8,
     )
     if open_after:

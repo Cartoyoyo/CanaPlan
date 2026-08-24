@@ -4,6 +4,8 @@ from qgis.PyQt.QtWidgets import QWidget, QSizePolicy
 from qgis.PyQt.QtGui import QPainter, QPen, QColor, QFontMetrics
 from qgis.PyQt.QtCore import Qt, QPointF
 
+from ..tools import i18n
+
 _COLOR_TERRAIN = QColor(150, 100, 50)
 _COLOR_PIPE = QColor(30, 90, 170)
 _COLOR_NODE = QColor(90, 90, 90)
@@ -44,7 +46,7 @@ class ChainProfileWidget(QWidget):
             painter.setPen(QColor(150, 150, 150))
             painter.drawText(
                 self.rect(), Qt.AlignCenter,
-                "Aucune chaîne sélectionnée — utilisez « Rechercher la chaîne » ci-dessus.")
+                i18n.tr('cp_aucune_chaine'))
             painter.end()
             return
 

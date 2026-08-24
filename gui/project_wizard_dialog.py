@@ -16,6 +16,7 @@ from qgis.core import (
 )
 from qgis.gui import QgsMapCanvas, QgsMapToolPan, QgsVertexMarker
 
+from ..tools import i18n
 from .ban_search_widget import BanSearchWidget
 from .quick_config_widgets import (
     ReseauDefautWidget, CubatureConfigWidget, RemblaiConfigWidget,
@@ -23,10 +24,10 @@ from .quick_config_widgets import (
     network_group_stylesheet,
 )
 
-# Libellés des largeurs de tranchée affichées en aperçu au récapitulatif.
-_CUBATURE_WIDTH_LABELS = {
-    'larg_cond_eu': "Conduite EU", 'larg_cond_ep': "Conduite EP",
-    'larg_branch_eu': "Branch. EU", 'larg_branch_ep': "Branch. EP",
+# Clés i18n des largeurs de tranchée affichées en aperçu au récapitulatif.
+_CUBATURE_WIDTH_KEYS = {
+    'larg_cond_eu': 'qc_conduite_eu', 'larg_cond_ep': 'qc_conduite_ep',
+    'larg_branch_eu': 'qc_branch_court_eu', 'larg_branch_ep': 'qc_branch_court_ep',
 }
 
 CANVAS_CRS = QgsCoordinateReferenceSystem("EPSG:2154")
@@ -38,12 +39,8 @@ DEFAULT_LON, DEFAULT_LAT = 3.4265, 46.1278
 DEFAULT_HALF_EXTENT_M = 1500   # vue large ~3 km, ville entière
 PICKED_HALF_EXTENT_M = 200     # vue rapprochée ~400 m, échelle de rue
 
-STEP_TITLES = [
-    "1. Localiser le projet",
-    "2. Fonds de plan",
-    "3. Configuration rapide",
-    "4. Récapitulatif",
-]
+# Titres des étapes : traduits à l'affichage, pas au chargement du module.
+STEP_TITLE_KEYS = ['wz_etape1', 'wz_etape2', 'wz_etape3', 'wz_etape4']
 
 
 class _AddressPage(QWidget):
@@ -55,8 +52,7 @@ class _AddressPage(QWidget):
         layout = QVBoxLayout(self)
 
         layout.addWidget(QLabel(
-            "Entrez l'adresse du projet, puis ajustez la position en "
-            "déplaçant/zoomant la carte si besoin."))
+            i18n.tr('wz_adresse_aide')))
 
         self._search = BanSearchWidget()
         self._search.address_picked.connect(self._on_address_picked)
@@ -121,21 +117,21 @@ class _BasemapsPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Fonds de plan à charger dans le nouveau projet :"))
+        layout.addWidget(QLabel(i18n.tr('wz_fonds_aide')))
 
-        group = QGroupBox("Fonds de plan")
+        group = QGroupBox(i18n.tr('wz_fonds_titre'))
         group_layout = QVBoxLayout()
 
         self._checks = {}
-        for key, text, checked in [
-            ('osm', "Fond OSM désaturé", True),
-            ('ortho', "Orthophoto IGN", True),
-            ('ban', "Adresses BAN", False),
-            ('noms_voie', "Noms de voie (BD TOPO)", False),
-            ('pci_parcelles', "PCI Vecteur Parcelles", False),
-            ('pci_bati', "PCI Vecteur Bâti", False),
+        for key, cle, checked in [
+            ('osm', 'wz_fond_osm', True),
+            ('ortho', 'wz_fond_ortho', True),
+            ('ban', 'wz_fond_ban', False),
+            ('noms_voie', 'wz_fond_noms_voie', False),
+            ('pci_parcelles', 'wz_fond_parcelles', False),
+            ('pci_bati', 'wz_fond_bati', False),
         ]:
-            cb = QCheckBox(text)
+            cb = QCheckBox(i18n.tr(cle))
             cb.setChecked(checked)
             self._checks[key] = cb
             group_layout.addWidget(cb)
@@ -155,19 +151,18 @@ class _QuickConfigPage(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(
-            "Configuration rapide du projet (modifiable plus tard depuis "
-            "le menu Configuration) :"))
+            i18n.tr('wz_config_aide')))
 
         box = QToolBox()
 
         self.reseau_widget = ReseauDefautWidget()
-        box.addItem(self.reseau_widget, "Réseau par défaut")
+        box.addItem(self.reseau_widget, i18n.tr('wz_reseau_defaut'))
 
         self.cubature_widget = CubatureConfigWidget()
-        box.addItem(self.cubature_widget, "Cubature")
+        box.addItem(self.cubature_widget, i18n.tr('wz_cubature'))
 
         self.remblai_widget = RemblaiConfigWidget()
-        box.addItem(self.remblai_widget, "Remblai")
+        box.addItem(self.remblai_widget, i18n.tr('wz_remblai'))
 
         ep_lit_spin = self.cubature_widget._cub_widgets['ep_lit_pose']
         ep_lit_spin.valueChanged.connect(self.remblai_widget.set_ep_lit_pose)
@@ -181,11 +176,11 @@ class _QuickConfigPage(QWidget):
         self.remblai_widget.save_settings()
 
     def summary(self):
-        return (
-            f"Réseau : {self.reseau_widget.summary()}\n\n"
-            f"Cubature : {self.cubature_widget.summary()}\n\n"
-            f"Remblai : {self.remblai_widget.summary()}"
-        )
+        return "\n\n".join((
+            i18n.tr('wz_recap_reseau', texte=self.reseau_widget.summary()),
+            i18n.tr('wz_recap_cubature', texte=self.cubature_widget.summary()),
+            i18n.tr('wz_recap_remblai', texte=self.remblai_widget.summary()),
+        ))
 
 
 class _RecapPage(QWidget):
@@ -195,26 +190,25 @@ class _RecapPage(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(
-            "Vérifiez les informations ci-dessous, ou revenez en arrière "
-            "pour les modifier, puis cliquez sur « Créer »."))
+            i18n.tr('wz_recap_aide')))
 
-        save_group = QGroupBox("Enregistrement du projet")
+        save_group = QGroupBox(i18n.tr('wz_enregistrement'))
         save_layout = QVBoxLayout()
 
         name_layout = QHBoxLayout()
-        name_layout.addWidget(QLabel("Nom du projet :"))
+        name_layout.addWidget(QLabel(i18n.tr('wz_nom_label')))
         self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("Nom du projet")
+        self._name_edit.setPlaceholderText(i18n.tr('wz_nom_ph'))
         name_layout.addWidget(self._name_edit)
         save_layout.addLayout(name_layout)
 
         folder_layout = QHBoxLayout()
-        folder_layout.addWidget(QLabel("Dossier :"))
+        folder_layout.addWidget(QLabel(i18n.tr('wz_dossier_label')))
         self._folder_edit = QLineEdit()
         self._folder_edit.setReadOnly(True)
-        self._folder_edit.setPlaceholderText("Choisir un dossier…")
+        self._folder_edit.setPlaceholderText(i18n.tr('wz_choisir_dossier'))
         folder_layout.addWidget(self._folder_edit)
-        btn_browse = QPushButton("Parcourir…")
+        btn_browse = QPushButton(i18n.tr('wz_parcourir'))
         btn_browse.clicked.connect(self._browse_folder)
         folder_layout.addWidget(btn_browse)
         save_layout.addLayout(folder_layout)
@@ -234,7 +228,7 @@ class _RecapPage(QWidget):
 
         # Aperçus schématiques (réseau, largeurs de tranchée, remblai),
         # compacts pour ne pas surcharger le récapitulatif.
-        reseau_group = QGroupBox("Réseau")
+        reseau_group = QGroupBox(i18n.tr('col_reseau'))
         reseau_layout = QHBoxLayout()
         self._network_eu = NetworkSchemaWidget()
         self._network_eu.setMinimumHeight(95)
@@ -250,7 +244,7 @@ class _RecapPage(QWidget):
         reseau_group.setLayout(reseau_layout)
         layout.addWidget(reseau_group)
 
-        cubature_group = QGroupBox("Cubature — largeurs de tranchée")
+        cubature_group = QGroupBox(i18n.tr('wz_cubature_largeurs'))
         cubature_layout = QHBoxLayout()
         self._cubature_widgets = {}
         for key in ('larg_cond_eu', 'larg_branch_eu', 'larg_cond_ep', 'larg_branch_ep'):
@@ -258,7 +252,7 @@ class _RecapPage(QWidget):
             w.setMinimumHeight(95)
             w.setMinimumWidth(110)
             self._cubature_widgets[key] = w
-            sub_box = QGroupBox(_CUBATURE_WIDTH_LABELS[key])
+            sub_box = QGroupBox(i18n.tr(_CUBATURE_WIDTH_KEYS[key]))
             sub_reseau = "EU" if key.endswith("_eu") else "EP"
             sub_box.setStyleSheet(network_group_stylesheet(sub_reseau))
             sub_layout = QVBoxLayout()
@@ -268,7 +262,7 @@ class _RecapPage(QWidget):
         cubature_group.setLayout(cubature_layout)
         layout.addWidget(cubature_group)
 
-        remblai_group = QGroupBox("Remblai")
+        remblai_group = QGroupBox(i18n.tr('wz_remblai'))
         remblai_layout = QVBoxLayout()
         self._remblai_schema = TrenchSchemaWidget()
         self._remblai_schema.setMinimumHeight(150)
@@ -278,7 +272,7 @@ class _RecapPage(QWidget):
 
     def _browse_folder(self):
         folder = QFileDialog.getExistingDirectory(
-            self, "Choisir le dossier de sauvegarde du projet",
+            self, i18n.tr('wz_dossier_titre'),
             self._folder_edit.text())
         if folder:
             self._folder_edit.setText(folder)
@@ -294,18 +288,18 @@ class _RecapPage(QWidget):
             self._name_edit.setText(name)
 
     def refresh(self, address_label, basemap_options, config_page):
-        basemap_labels = {
-            'osm': "OSM désaturé", 'ortho': "Orthophoto IGN",
-            'ban': "Adresses BAN", 'noms_voie': "Noms de voie",
-            'pci_parcelles': "PCI Vecteur Parcelles", 'pci_bati': "PCI Vecteur Bâti",
+        basemap_keys = {
+            'osm': 'wz_fond_osm_court', 'ortho': 'wz_fond_ortho',
+            'ban': 'wz_fond_ban', 'noms_voie': 'wz_fond_noms_voie_court',
+            'pci_parcelles': 'wz_fond_parcelles', 'pci_bati': 'wz_fond_bati',
         }
-        chosen = [basemap_labels[k] for k, v in basemap_options.items() if v]
+        chosen = [i18n.tr(basemap_keys[k]) for k, v in basemap_options.items() if v]
         lines = [
-            "Adresse du projet :",
-            f"  {address_label or '(non renseignée — position de la mini-carte utilisée)'}",
+            i18n.tr('wz_recap_adresse'),
+            f"  {address_label or i18n.tr('wz_recap_sans_adresse')}",
             "",
-            "Fonds de plan :",
-            f"  {', '.join(chosen) if chosen else '(aucun)'}",
+            i18n.tr('wz_recap_fonds'),
+            f"  {', '.join(chosen) if chosen else i18n.tr('wz_recap_aucun')}",
         ]
         self._text.setPlainText("\n".join(lines))
 
@@ -314,7 +308,7 @@ class _RecapPage(QWidget):
 
         for key, widget in self._cubature_widgets.items():
             width = config_page.cubature_widget.get_width(key)
-            widget.update_schema(width, _CUBATURE_WIDTH_LABELS[key])
+            widget.update_schema(width, i18n.tr(_CUBATURE_WIDTH_KEYS[key]))
 
         self._remblai_schema.update_schema(config_page.remblai_widget.get_schema_data())
 
@@ -328,7 +322,7 @@ class ProjectWizardDialog(QDialog):
         self._iface = iface
         self._created = False
 
-        self.setWindowTitle("Créer un projet avec l'assistant")
+        self.setWindowTitle(i18n.tr('nouveau_projet_assistant'))
         self.setMinimumSize(560, 520)
 
         layout = QVBoxLayout(self)
@@ -356,14 +350,14 @@ class ProjectWizardDialog(QDialog):
         layout.addWidget(self._stack)
 
         nav_layout = QHBoxLayout()
-        self._btn_prev = QPushButton("< Précédent")
+        self._btn_prev = QPushButton(i18n.tr('wz_precedent'))
         self._btn_prev.clicked.connect(self._go_prev)
         nav_layout.addWidget(self._btn_prev)
         nav_layout.addStretch()
-        self._btn_cancel = QPushButton("Annuler")
+        self._btn_cancel = QPushButton(i18n.tr('annuler'))
         self._btn_cancel.clicked.connect(self.reject)
         nav_layout.addWidget(self._btn_cancel)
-        self._btn_next = QPushButton("Suivant >")
+        self._btn_next = QPushButton(i18n.tr('wz_suivant'))
         self._btn_next.setDefault(True)
         self._btn_next.clicked.connect(self._go_next)
         nav_layout.addWidget(self._btn_next)
@@ -376,10 +370,11 @@ class ProjectWizardDialog(QDialog):
 
     def _update_nav(self):
         idx = self._current_index()
-        self._title_label.setText(STEP_TITLES[idx])
+        self._title_label.setText(i18n.tr(STEP_TITLE_KEYS[idx]))
         self._btn_prev.setEnabled(idx > 0)
         last = idx == self._stack.count() - 1
-        self._btn_next.setText("Créer" if last else "Suivant >")
+        self._btn_next.setText(
+            i18n.tr('wz_creer') if last else i18n.tr('wz_suivant'))
         if last:
             address_label = self._address_page.address_label()
             self._recap_page.refresh(
@@ -388,7 +383,8 @@ class ProjectWizardDialog(QDialog):
                 self._config_page,
             )
             if address_label:
-                self._recap_page.set_default_name(f"Projet {address_label}")
+                self._recap_page.set_default_name(
+                    i18n.tr('wz_projet_nomme', nom=address_label))
 
     def _go_prev(self):
         self._stack.setCurrentIndex(self._current_index() - 1)
@@ -409,17 +405,15 @@ class ProjectWizardDialog(QDialog):
         proj_folder = self._recap_page.project_folder()
         if not proj_name or not proj_folder:
             QMessageBox.warning(
-                self, "Créer un projet avec l'assistant",
-                "Merci de renseigner le nom du projet et le dossier "
-                "d'enregistrement avant de cliquer sur « Créer ».")
+                self, i18n.tr('nouveau_projet_assistant'),
+                i18n.tr('wz_err_champs'))
             return
 
         bet_path = os.path.join(proj_folder, f"{proj_name}.bet")
         if os.path.exists(bet_path):
             reply = QMessageBox.question(
-                self, "Créer un projet avec l'assistant",
-                f"Le fichier « {proj_name}.bet » existe déjà dans ce "
-                "dossier. Voulez-vous l'écraser ?",
+                self, i18n.tr('nouveau_projet_assistant'),
+                i18n.tr('wz_ecraser', nom=proj_name),
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if reply != QMessageBox.Yes:
                 return

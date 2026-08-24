@@ -10,6 +10,8 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtGui import QColor, QFont, QTextCursor, QTextCharFormat
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 
+from ..tools import i18n
+
 from .etiquette_taille_dialog import _TARGET_MM, _SCALES
 
 _UNIT_PT  = QgsUnitTypes.RenderPoints
@@ -31,7 +33,7 @@ class AnnotationDialog(QDialog):
                  frame_fill_color=None, frame_border_color=None,
                  opacity=1.0):
         super().__init__(parent)
-        self.setWindowTitle("Annotation")
+        self.setWindowTitle(i18n.tr('an_titre'))
         self.setMinimumWidth(560)
         self._color = QColor(color) if color else QColor(0, 0, 0)
         self._frame_fill_color = QColor(frame_fill_color) if frame_fill_color else QColor(255, 255, 255)
@@ -41,16 +43,16 @@ class AnnotationDialog(QDialog):
         layout.setSpacing(8)
 
         # ── Mise en forme (gras/italique/souligné + alignement) ─────────
-        grp_toolbar = QGroupBox("Mise en forme")
+        grp_toolbar = QGroupBox(i18n.tr('an_mise_en_forme'))
         toolbar = QHBoxLayout(grp_toolbar)
         toolbar.setSpacing(3)
 
         self.btn_bold = self._fmt_btn(
-            "B", "Gras", bold, "font-weight:bold; font-size:13px;")
+            "B", i18n.tr('an_gras'), bold, "font-weight:bold; font-size:13px;")
         self.btn_italic = self._fmt_btn(
-            "I", "Italique", italic, "font-style:italic; font-size:13px;")
+            "I", i18n.tr('an_italique'), italic, "font-style:italic; font-size:13px;")
         self.btn_underline = self._fmt_btn(
-            "S", "Souligné", underline, "text-decoration:underline; font-size:13px;")
+            "S", i18n.tr('an_souligne'), underline, "text-decoration:underline; font-size:13px;")
 
         toolbar.addWidget(self.btn_bold)
         toolbar.addWidget(self.btn_italic)
@@ -72,9 +74,12 @@ class AnnotationDialog(QDialog):
             Qt.AlignRight:   2,
         }.get(int(alignment), 0)
 
-        self.btn_al = self._fmt_btn("G", "Aligner à gauche", _align_id == 0)
-        self.btn_ac = self._fmt_btn("C", "Centrer",          _align_id == 1)
-        self.btn_ar = self._fmt_btn("D", "Aligner à droite", _align_id == 2)
+        self.btn_al = self._fmt_btn("G", i18n.tr('an_aligner_gauche'),
+                                    _align_id == 0)
+        self.btn_ac = self._fmt_btn("C", i18n.tr('an_centrer'),
+                                    _align_id == 1)
+        self.btn_ar = self._fmt_btn("D", i18n.tr('an_aligner_droite'),
+                                    _align_id == 2)
 
         self._align_group.addButton(self.btn_al, 0)
         self._align_group.addButton(self.btn_ac, 1)
@@ -87,11 +92,11 @@ class AnnotationDialog(QDialog):
         layout.addWidget(grp_toolbar)
 
         # ── Zone de texte (sert aussi d'aperçu de la mise en forme) ─────
-        layout.addWidget(QLabel("Texte :"))
+        layout.addWidget(QLabel(i18n.tr('an_texte')))
         self.text_edit = QTextEdit()
         self.text_edit.setPlainText(text)
         self.text_edit.setMinimumHeight(90)
-        self.text_edit.setPlaceholderText("Tapez votre texte…")
+        self.text_edit.setPlaceholderText(i18n.tr('an_texte_ph'))
         layout.addWidget(self.text_edit)
 
         # ── Deux colonnes : Police/Taille  |  Couleur/Transparence/Cadre ──
@@ -99,18 +104,18 @@ class AnnotationDialog(QDialog):
         cols.setSpacing(10)
 
         # -- Colonne gauche : Police et taille
-        grp_font = QGroupBox("Police et taille")
+        grp_font = QGroupBox(i18n.tr('an_police_taille'))
         v_font = QVBoxLayout(grp_font)
 
         row_font = QHBoxLayout()
-        row_font.addWidget(QLabel("Police :"))
+        row_font.addWidget(QLabel(i18n.tr('an_police')))
         self.font_combo = QFontComboBox()
         self.font_combo.setCurrentFont(QFont(font_name))
         row_font.addWidget(self.font_combo, 1)
         v_font.addLayout(row_font)
 
         row_size = QHBoxLayout()
-        row_size.addWidget(QLabel("Taille (m) :"))
+        row_size.addWidget(QLabel(i18n.tr('an_taille_m')))
         self.size_spin = QDoubleSpinBox()
         self.size_spin.setRange(0.1, 500.0)
         self.size_spin.setSingleStep(0.5)
@@ -122,9 +127,9 @@ class AnnotationDialog(QDialog):
         v_font.addLayout(row_size)
 
         row_scale = QHBoxLayout()
-        row_scale.addWidget(QLabel("Échelle :"))
+        row_scale.addWidget(QLabel(i18n.tr('an_echelle')))
         self.scale_combo = QComboBox()
-        self.scale_combo.addItem("Taille libre")
+        self.scale_combo.addItem(i18n.tr('an_taille_libre'))
         for label, _scale in _SCALES:
             self.scale_combo.addItem(label)
         row_scale.addWidget(self.scale_combo, 1)
@@ -140,8 +145,7 @@ class AnnotationDialog(QDialog):
         v_font.addWidget(self.custom_scale_spin)
 
         note_scale = QLabel(
-            "<i>Une échelle calcule la taille (m) avec la même formule "
-            "que « Taille des étiquettes ».</i>")
+            i18n.tr('an_aide_echelle'))
         note_scale.setWordWrap(True)
         v_font.addWidget(note_scale)
         v_font.addStretch()
@@ -155,11 +159,11 @@ class AnnotationDialog(QDialog):
         col_right = QVBoxLayout()
         col_right.setSpacing(8)
 
-        grp_color = QGroupBox("Couleur et transparence")
+        grp_color = QGroupBox(i18n.tr('an_couleur_transparence'))
         v_color = QVBoxLayout(grp_color)
 
         row_color = QHBoxLayout()
-        row_color.addWidget(QLabel("Couleur texte :"))
+        row_color.addWidget(QLabel(i18n.tr('an_couleur_texte')))
         self.color_btn = QPushButton()
         self.color_btn.setFixedWidth(100)
         self._refresh_color_btn()
@@ -169,7 +173,7 @@ class AnnotationDialog(QDialog):
         v_color.addLayout(row_color)
 
         row_opacity = QHBoxLayout()
-        row_opacity.addWidget(QLabel("Transparence (%) :"))
+        row_opacity.addWidget(QLabel(i18n.tr('an_transparence')))
         self.opacity_spin = QSpinBox()
         self.opacity_spin.setRange(0, 100)
         self.opacity_spin.setValue(int(round((1.0 - opacity) * 100)))
@@ -181,28 +185,28 @@ class AnnotationDialog(QDialog):
 
         col_right.addWidget(grp_color)
 
-        grp_frame = QGroupBox("Cadre")
+        grp_frame = QGroupBox(i18n.tr('an_cadre'))
         v_frame = QVBoxLayout(grp_frame)
 
         row_frame1 = QHBoxLayout()
-        self.chk_frame = QCheckBox("Afficher un cadre")
+        self.chk_frame = QCheckBox(i18n.tr('an_afficher_cadre'))
         self.chk_frame.setChecked(frame)
         row_frame1.addWidget(self.chk_frame)
-        self.chk_frame_filled = QCheckBox("Fond rempli")
+        self.chk_frame_filled = QCheckBox(i18n.tr('an_fond_rempli'))
         self.chk_frame_filled.setChecked(frame_filled)
         row_frame1.addWidget(self.chk_frame_filled)
         row_frame1.addStretch()
         v_frame.addLayout(row_frame1)
 
         row_frame2 = QHBoxLayout()
-        row_frame2.addWidget(QLabel("Fond :"))
+        row_frame2.addWidget(QLabel(i18n.tr('an_fond')))
         self.frame_fill_btn = QPushButton()
         self.frame_fill_btn.setFixedWidth(80)
         self.frame_fill_btn.clicked.connect(self._pick_frame_fill_color)
         row_frame2.addWidget(self.frame_fill_btn)
 
         row_frame2.addSpacing(8)
-        row_frame2.addWidget(QLabel("Bordure :"))
+        row_frame2.addWidget(QLabel(i18n.tr('an_bordure')))
         self.frame_border_btn = QPushButton()
         self.frame_border_btn.setFixedWidth(80)
         self.frame_border_btn.clicked.connect(self._pick_frame_border_color)
@@ -263,7 +267,7 @@ class AnnotationDialog(QDialog):
     # ── Couleur ────────────────────────────────────────────────────────
 
     def _pick_color(self):
-        c = QColorDialog.getColor(self._color, self, "Couleur du texte")
+        c = QColorDialog.getColor(self._color, self, i18n.tr('an_dlg_couleur_texte'))
         if c.isValid():
             self._color = c
             self._refresh_color_btn()
@@ -279,14 +283,16 @@ class AnnotationDialog(QDialog):
     # ── Cadre ──────────────────────────────────────────────────────────
 
     def _pick_frame_fill_color(self):
-        c = QColorDialog.getColor(self._frame_fill_color, self, "Couleur du fond")
+        c = QColorDialog.getColor(self._frame_fill_color, self,
+                                 i18n.tr('an_couleur_fond'))
         if c.isValid():
             self._frame_fill_color = c
             self._refresh_frame_buttons()
             self._update_preview()
 
     def _pick_frame_border_color(self):
-        c = QColorDialog.getColor(self._frame_border_color, self, "Couleur de la bordure")
+        c = QColorDialog.getColor(self._frame_border_color, self,
+                                 i18n.tr('an_couleur_bordure'))
         if c.isValid():
             self._frame_border_color = c
             self._refresh_frame_buttons()

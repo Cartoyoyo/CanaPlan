@@ -1,4 +1,4 @@
-● Voici mes propositions, classées par priorité pour le projet BET_HUMIDE :
+● Voici mes propositions, classées par priorité pour le projet CanaPlan :
 
 https://ezdxf.readthedocs.io/en/stable/addons/index.html
                                                                                                                           ---
@@ -8,7 +8,7 @@ https://ezdxf.readthedocs.io/en/stable/addons/index.html
   ---                                                                                                                     2. acadctb — Fichier de tracé CTB ★★★                                                                                 
   Génère un fichier .ctb (styles d'impression couleur → épaisseur crayon) livré avec le DXF exporté. Actuellement
   AutoCAD Map charge un CTB par défaut qui peut mal interpréter les couleurs EU (rouge) / EP (bleu). On pourrait livrer
-  automatiquement un BET_HUMIDE.ctb calibré (EU = 0.35mm, EP = 0.35mm, étiquettes = 0.18mm, etc.).
+  automatiquement un CanaPlan.ctb calibré (EU = 0.35mm, EP = 0.35mm, étiquettes = 0.18mm, etc.).
 
   ---
   3. MTextExplode — Compatibilité DXF 2013 ★★

@@ -11,6 +11,8 @@ from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import QMessageBox, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QToolTip
 from qgis.PyQt.QtGui import QColor
 
+from . import i18n
+
 from .spatial_utils import nearest_point_feature, nearest_line_feature
 
 
@@ -70,7 +72,7 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             f"Branchement {self.reseau}",
-            "Cliquer sur une conduite pour piquer, puis tracer jusqu'à un ouvrage  ·  Clic droit : terminer  ·  Échap : annuler",
+            i18n.tr('ot_aide_branchement'),
             level=0, duration=0,
         )
 
@@ -264,8 +266,8 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
             # Priorité regard, sinon piquage sur conduite
             result = self._snap_to_regard(point) or self._snap_to_conduite(point)
             if not result:
-                QMessageBox.warning(None, "Erreur",
-                    f"Le premier point doit être sur une conduite ou un regard {self.reseau}.")
+                QMessageBox.warning(None, i18n.tr('erreur'),
+                    i18n.tr('ot_premier_point', reseau=self.reseau))
                 return
             snapped_point, id_conduite, pk = result
             self.snapped_points.append(snapped_point)
@@ -410,14 +412,14 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
     def _create_regard(self, point):
         """Crée un regard au point donné (avec formulaire simplifié)."""
         dlg = QDialog()
-        dlg.setWindowTitle("Créer un regard")
+        dlg.setWindowTitle(i18n.tr('ot_creer_regard'))
         layout = QFormLayout(dlg)
         tn_edit = QLineEdit()
         fe_edit = QLineEdit()
         diam_edit = QLineEdit()
-        layout.addRow("TN (m)", tn_edit)
-        layout.addRow("FE radier (m)", fe_edit)
-        layout.addRow("Diamètre (mm)", diam_edit)
+        layout.addRow(i18n.tr('ot_lbl_tn'), tn_edit)
+        layout.addRow(i18n.tr('ot_lbl_fe_radier'), fe_edit)
+        layout.addRow(i18n.tr('ot_lbl_diametre'), diam_edit)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(dlg.accept)
         buttons.rejected.connect(dlg.reject)
@@ -428,7 +430,7 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
                 tn = float(tn_edit.text())
                 fe = float(fe_edit.text())
             except:
-                QMessageBox.warning(None, "Erreur", "Valeurs numériques invalides.")
+                QMessageBox.warning(None, i18n.tr('erreur'), i18n.tr('ot_valeurs_invalides'))
                 return
             feat = QgsFeature(self.regard_layer.fields())
             feat.setGeometry(QgsGeometry.fromPointXY(point))
@@ -448,8 +450,8 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         # On va projeter à nouveau et vérifier la distance
         (sq_d, proj, av, lo) = self.conduite_layer.getFeature(self.id_conduite).geometry().closestSegmentWithContext(first)
         if first.distance(proj) > tolerance:
-            QMessageBox.warning(None, "Validation",
-                "Le premier point du branchement n'est pas situé sur la conduite principale.")
+            QMessageBox.warning(None, i18n.tr('ot_validation'),
+                i18n.tr('ot_branch_debut'))
             return False
 
         # Dernier point
@@ -462,8 +464,8 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
                 found = True
                 break
         if not found:
-            QMessageBox.warning(None, "Validation",
-                "Le dernier point du branchement doit coïncider avec un regard ou un tabouret existant.")
+            QMessageBox.warning(None, i18n.tr('ot_validation'),
+                i18n.tr('ot_branch_fin'))
             return False
         return True
 

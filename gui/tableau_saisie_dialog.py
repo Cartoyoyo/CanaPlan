@@ -13,6 +13,7 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor, QKeySequence
 
+from ..tools import i18n
 from ..tools.spatial_utils import nearest_point_feature
 from ..tools.stareau_values import materiaux_labels as _materiaux_labels
 from .chain_profile_widget import ChainProfileWidget
@@ -70,18 +71,18 @@ def _sval(val, default='—'):
 # ── Définition des colonnes par rôle ────────────────────────────────────────
 # (nom_champ, libellé, decimales_ou_None)  ; nom_champ commençant par '__' = colonne calculée/non liée
 REGARD_COLS = [
-    ('nom',        'Nom',                None),
-    ('tn',         'TN (m NGF)',         3),
-    ('profondeur', 'Profondeur (m)',     2),
-    ('fe_radier',  'FE radier (m NGF)',  3),
-    ('diametre',   'Diamètre (mm)',      0),
+    ('nom',        i18n.tr('col_nom'),        None),
+    ('tn',         i18n.tr('col_tn'),         3),
+    ('profondeur', i18n.tr('col_profondeur'),     2),
+    ('fe_radier',  i18n.tr('col_fe_radier'),  3),
+    ('diametre',   i18n.tr('col_diametre'),      0),
 ]
 TABOURET_COLS = [
-    ('nom',        'Nom',                None),
-    ('tn',         'TN (m NGF)',         3),
-    ('profondeur', 'Profondeur (m)',     2),
-    ('fe_entree',  'FE entrée (m NGF)',  3),
-    ('diametre',   'Diamètre (mm)',      0),
+    ('nom',        i18n.tr('col_nom'),        None),
+    ('tn',         i18n.tr('col_tn'),         3),
+    ('profondeur', i18n.tr('col_profondeur'),     2),
+    ('fe_entree',  i18n.tr('col_fe_entree'),  3),
+    ('diametre',   i18n.tr('col_diametre'),      0),
 ]
 _FE_FIELD = {'regard': 'fe_radier', 'tabouret': 'fe_entree'}
 
@@ -93,9 +94,10 @@ class TableauSaisieDialog(QDialog):
     cellule par cellule. Onglets par type d'ouvrage.
     """
 
+    # Clés i18n, traduites à l'affichage
     ROLE_LABELS = {
-        'regard': 'Regards', 'tabouret': 'Tabourets',
-        'conduite': 'Conduites', 'branchement': 'Branchements',
+        'regard': 'qc_regards', 'tabouret': 'qc_tabourets',
+        'conduite': 'qc_conduites', 'branchement': 'qc_branchements',
     }
 
     def __init__(self, couches_eu, couches_ep, iface=None, parent=None):
@@ -120,7 +122,7 @@ class TableauSaisieDialog(QDialog):
         self._chain_segments = []     # longueurs des tronçons entre noeuds consécutifs
         self._chain_conduites = []    # fid de la conduite de chaque tronçon
 
-        self.setWindowTitle("Tableau de saisie - pente")
+        self.setWindowTitle(i18n.tr('ts_titre'))
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         self.setWindowFlags(self.windowFlags()
                              | Qt.WindowMaximizeButtonHint
@@ -142,7 +144,7 @@ class TableauSaisieDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
 
         top = QHBoxLayout()
-        top.addWidget(QLabel("Réseau :"))
+        top.addWidget(QLabel(i18n.tr('ts_reseau_label')))
         self.btn_eu = QPushButton("EU")
         self.btn_ep = QPushButton("EP")
         for btn, r in ((self.btn_eu, 'EU'), (self.btn_ep, 'EP')):
@@ -153,13 +155,13 @@ class TableauSaisieDialog(QDialog):
         top.addStretch()
 
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Filtrer par nom…")
+        self.search.setPlaceholderText(i18n.tr('ts_filtrer'))
         self.search.setFixedWidth(180)
         self.search.textChanged.connect(self._apply_filter)
         top.addWidget(self.search)
 
-        btn_next_missing = QPushButton("⏭ Valeur manquante suivante")
-        btn_next_missing.setToolTip("Sélectionne la prochaine cellule en rouge (valeur manquante).")
+        btn_next_missing = QPushButton(i18n.tr('ts_next_missing'))
+        btn_next_missing.setToolTip(i18n.tr('ts_next_missing_tip'))
         btn_next_missing.clicked.connect(self._goto_next_missing)
         top.addWidget(btn_next_missing)
         layout.addLayout(top)
@@ -190,7 +192,7 @@ class TableauSaisieDialog(QDialog):
             header.sectionClicked.connect(
                 lambda col, r=role: self._sort_by_column(r, col))
             self.tables[role] = table
-            self.tabs.addTab(table, self.ROLE_LABELS[role])
+            self.tabs.addTab(table, i18n.tr(self.ROLE_LABELS[role]))
 
         self._build_chain_tab()
         layout.addWidget(self.tabs)
@@ -202,11 +204,11 @@ class TableauSaisieDialog(QDialog):
         self.batch_label = QLabel()
         self.batch_input = QLineEdit()
         self.batch_input.setFixedWidth(120)
-        self.batch_input.setPlaceholderText("valeur…")
+        self.batch_input.setPlaceholderText(i18n.tr('ts_valeur_ph'))
         self.batch_input.returnPressed.connect(self._apply_batch)
-        btn_apply = QPushButton("Appliquer à toutes")
+        btn_apply = QPushButton(i18n.tr('ts_appliquer_toutes'))
         btn_apply.clicked.connect(self._apply_batch)
-        btn_cancel = QPushButton("Annuler")
+        btn_cancel = QPushButton(i18n.tr('annuler'))
         btn_cancel.clicked.connect(self._clear_selection)
         bl.addWidget(self.batch_label)
         bl.addWidget(self.batch_input)
@@ -220,10 +222,10 @@ class TableauSaisieDialog(QDialog):
         self.lbl_status = QLabel()
         bottom.addWidget(self.lbl_status)
         bottom.addStretch()
-        btn_undo = QPushButton("↶ Annuler la saisie (Ctrl+Z)")
+        btn_undo = QPushButton(i18n.tr('ts_undo'))
         btn_undo.clicked.connect(self._undo)
         bottom.addWidget(btn_undo)
-        btn_close = QPushButton("Fermer")
+        btn_close = QPushButton(i18n.tr('fermer'))
         btn_close.clicked.connect(self.accept)
         bottom.addWidget(btn_close)
         layout.addLayout(bottom)
@@ -233,7 +235,7 @@ class TableauSaisieDialog(QDialog):
         right_widget = QWidget()
         right = QVBoxLayout(right_widget)
         right.setContentsMargins(0, 0, 0, 0)
-        right.addWidget(QLabel("Aperçu carte"))
+        right.addWidget(QLabel(i18n.tr('ts_apercu')))
         self.mini_canvas = QgsMapCanvas()
         self.mini_canvas.setCanvasColor(QColor(255, 255, 255))
         self.mini_canvas.setMinimumWidth(150)
@@ -251,7 +253,7 @@ class TableauSaisieDialog(QDialog):
         self.reseau = reseau
         self.btn_eu.setChecked(reseau == 'EU')
         self.btn_ep.setChecked(reseau == 'EP')
-        self.setWindowTitle(f"Tableau de saisie - pente — Réseau {reseau}")
+        self.setWindowTitle(i18n.tr('ts_titre_reseau', reseau=reseau))
         self._clear_selection()
         self._chain_nodes = None
         self._chain_segments = []
@@ -262,7 +264,7 @@ class TableauSaisieDialog(QDialog):
             self.chain_profile.set_data([])
         if hasattr(self, 'chain_status'):
             self._chain_set_status(
-                "Sélectionnez 2 regards puis cliquez sur « Rechercher la chaîne ».", 'info')
+                i18n.tr('ts_selectionnez_2'), 'info')
             self._chain_set_actions_enabled(False)
         self._set_mini_map_layers()
         self._reload_all()
@@ -323,8 +325,8 @@ class TableauSaisieDialog(QDialog):
         tabouret_layer = self.couches[self.reseau]['tabouret']
         table = self.tables['conduite']
 
-        headers = ['Tronçon', 'Longueur (m)', 'Diamètre (mm)', 'Matériau',
-                   'FE amont (m NGF)', 'Pente (%)', 'FE aval (m NGF)', 'Sens calcul']
+        headers = [i18n.tr('col_troncon'), i18n.tr('col_longueur'), i18n.tr('col_diametre'), i18n.tr('col_materiau'),
+                   i18n.tr('col_fe_amont'), i18n.tr('col_pente'), i18n.tr('col_fe_aval'), i18n.tr('col_sens_calcul')]
 
         table.blockSignals(True)
         table.clear()
@@ -367,7 +369,7 @@ class TableauSaisieDialog(QDialog):
             it_long = self._make_item(longueur, 2, fid, 'longueur')
             it_long.setFlags(it_long.flags() & ~Qt.ItemIsEditable)
             it_long.setForeground(_COLOR_DERIVED)
-            it_long.setToolTip("Longueur définie par le tracé — non modifiable ici.")
+            it_long.setToolTip(i18n.tr('ts_longueur_tip'))
             table.setItem(row, 1, it_long)
             self._item_registry[('conduite', fid, 'longueur')] = it_long
 
@@ -438,9 +440,9 @@ class TableauSaisieDialog(QDialog):
 
         # Colonnes : Branchement | Longueur | Diamètre | Matériau |
         # Cote piquage | Pente | FE tabouret | Sens calcul
-        headers = ['Branchement', 'Longueur (m)', 'Diamètre (mm)', 'Matériau',
-                   'Cote piquage (m NGF)', 'Pente (%)', 'FE tabouret (m NGF)',
-                   'Sens calcul']
+        headers = [i18n.tr('col_branchement'), i18n.tr('col_longueur'), i18n.tr('col_diametre'), i18n.tr('col_materiau'),
+                   i18n.tr('col_cote_piquage'), i18n.tr('col_pente'), i18n.tr('col_fe_tabouret'),
+                   i18n.tr('col_sens_calcul')]
 
         table.blockSignals(True)
         table.clear()
@@ -506,7 +508,7 @@ class TableauSaisieDialog(QDialog):
             it_long = self._make_item(longueur, 2, fid, 'longueur')
             it_long.setFlags(it_long.flags() & ~Qt.ItemIsEditable)
             it_long.setForeground(_COLOR_DERIVED)
-            it_long.setToolTip("Longueur définie par le tracé — non modifiable ici.")
+            it_long.setToolTip(i18n.tr('ts_longueur_tip'))
             table.setItem(row, 1, it_long)
             self._item_registry[('branchement', fid, 'longueur')] = it_long
 
@@ -537,8 +539,7 @@ class TableauSaisieDialog(QDialog):
             if cond_len:
                 it_cote.setForeground(_COLOR_DERIVED)
                 it_cote.setToolTip(
-                    "Interpolée sur la conduite mère au PK du piquage — "
-                    "recalculée dès que les FE de la conduite changent.")
+                    i18n.tr('ts_piquage_tip'))
             table.setItem(row, 4, it_cote)
             self._item_registry[('branchement', fid, 'cote_piquage')] = it_cote
 
@@ -776,16 +777,14 @@ class TableauSaisieDialog(QDialog):
 
     _COND_MODES = ('fe', 'pente_aval', 'pente_amont')
     _COND_MODE_LABELS = {
-        'fe':          "🔒 FE amont + aval",
-        'pente_aval':  "🔒 Pente → FE aval",
-        'pente_amont': "🔒 Pente → FE amont",
+        'fe':          i18n.tr('ts_mode_fe'),
+        'pente_aval':  i18n.tr('ts_mode_pente_aval'),
+        'pente_amont': i18n.tr('ts_mode_pente_amont'),
     }
     _COND_MODE_TOOLTIPS = {
-        'fe':          "FE amont et FE aval connus → la pente est calculée.",
-        'pente_aval':  "FE amont + pente connus → FE aval est calculé et "
-                       "appliqué au regard/tabouret aval.",
-        'pente_amont': "FE aval + pente connus → FE amont est calculé et "
-                       "appliqué au regard/tabouret amont.",
+        'fe':          i18n.tr('ts_mode_fe_aide'),
+        'pente_aval':  i18n.tr('ts_mode_pente_aval_aide'),
+        'pente_amont': i18n.tr('ts_mode_pente_amont_aide'),
     }
 
     def _apply_cond_mode_style(self, fid):
@@ -974,18 +973,14 @@ class TableauSaisieDialog(QDialog):
 
     _BRANCH_MODES = ('fe', 'pente_fe', 'pente_cote')
     _BRANCH_MODE_LABELS = {
-        'fe':         "🔒 Cote piquage + FE tabouret",
-        'pente_fe':   "🔒 Pente → FE tabouret",
-        'pente_cote': "🔒 Pente → cote piquage",
+        'fe':         i18n.tr('ts_bmode_fe'),
+        'pente_fe':   i18n.tr('ts_bmode_pente_fe'),
+        'pente_cote': i18n.tr('ts_bmode_pente_cote'),
     }
     _BRANCH_MODE_TOOLTIPS = {
-        'fe':         "Cote piquage et FE tabouret connus → la pente est calculée.\n"
-                      "La cote de piquage suit automatiquement les FE de la conduite mère.",
-        'pente_fe':   "Cote piquage + pente connus → FE tabouret est calculé et "
-                      "appliqué au tabouret/regard.\n"
-                      "La cote de piquage suit automatiquement les FE de la conduite mère.",
-        'pente_cote': "FE tabouret + pente connus → la cote de piquage est calculée.\n"
-                      "⚠ Dans ce mode la cote de piquage ne suit plus la conduite mère.",
+        'fe':         i18n.tr('ts_bmode_fe_aide'),
+        'pente_fe':   i18n.tr('ts_bmode_pente_fe_aide'),
+        'pente_cote': i18n.tr('ts_bmode_pente_cote_aide'),
     }
 
     def _apply_branch_mode_style(self, fid):
@@ -1158,7 +1153,7 @@ class TableauSaisieDialog(QDialog):
         if len(items) > 1:
             self._batch_items = items
             self._batch_table = table
-            self.batch_label.setText(f"{len(items)} cellules sélectionnées :")
+            self.batch_label.setText(i18n.tr('ts_cellules_sel', n=len(items)))
             self.batch_bar.setVisible(True)
         else:
             self.batch_bar.setVisible(False)
@@ -1225,9 +1220,11 @@ class TableauSaisieDialog(QDialog):
                     if it is not None and it.foreground().color() == _COLOR_MISSING:
                         n_missing += 1
         self.lbl_status.setText(
-            f"{counts['regard']} regards · {counts['tabouret']} tabourets · "
-            f"{counts['conduite']} conduites · {counts['branchement']} branchements "
-            f"— réseau {self.reseau} — {n_missing} valeur(s) manquante(s)")
+            i18n.tr('ts_resume',
+                    regards=counts['regard'], tabourets=counts['tabouret'],
+                    conduites=counts['conduite'],
+                    branchements=counts['branchement'],
+                    reseau=self.reseau, manquantes=n_missing))
 
     # ------------------------------------------------------------------ lien carte
 
@@ -1479,35 +1476,34 @@ class TableauSaisieDialog(QDialog):
         v = QVBoxLayout(tab)
 
         sel_row = QHBoxLayout()
-        sel_row.addWidget(QLabel("Regard de départ :"))
+        sel_row.addWidget(QLabel(i18n.tr('ts_regard_depart')))
         self.combo_regard1 = QComboBox()
-        self.combo_regard1.setToolTip("Le regard à partir duquel la chaîne est parcourue.")
+        self.combo_regard1.setToolTip(i18n.tr('ts_regard_depart_tip'))
         self.combo_regard1.setMinimumWidth(140)
         sel_row.addWidget(self.combo_regard1)
 
         btn_swap = QPushButton("⇄")
-        btn_swap.setToolTip("Inverser le regard de départ et le regard d'arrivée.")
+        btn_swap.setToolTip(i18n.tr('ts_swap_tip'))
         btn_swap.setFixedWidth(32)
         btn_swap.clicked.connect(self._chain_swap_regards)
         sel_row.addWidget(btn_swap)
 
-        sel_row.addWidget(QLabel("Regard d'arrivée :"))
+        sel_row.addWidget(QLabel(i18n.tr('ts_regard_arrivee')))
         self.combo_regard2 = QComboBox()
-        self.combo_regard2.setToolTip("Le regard où la chaîne doit s'arrêter.")
+        self.combo_regard2.setToolTip(i18n.tr('ts_regard_arrivee_tip'))
         self.combo_regard2.setMinimumWidth(140)
         sel_row.addWidget(self.combo_regard2)
 
-        btn_detect = QPushButton("🔍 Rechercher la chaîne")
+        btn_detect = QPushButton(i18n.tr('ts_rechercher'))
         btn_detect.setToolTip(
-            "Retrouve automatiquement tous les regards, tabourets et conduites "
-            "entre les deux regards choisis.")
+            i18n.tr('ts_rechercher_tip'))
         btn_detect.clicked.connect(self._detect_chain)
         sel_row.addWidget(btn_detect)
         sel_row.addStretch()
         v.addLayout(sel_row)
 
         self.chain_status = QLabel(
-            "Sélectionnez 2 regards puis cliquez sur « Rechercher la chaîne ».")
+            i18n.tr('ts_selectionnez_2'))
         self.chain_status.setWordWrap(True)
         self._chain_set_status(self.chain_status.text(), 'info')
         v.addWidget(self.chain_status)
@@ -1518,14 +1514,11 @@ class TableauSaisieDialog(QDialog):
         self.chain_table = QTableWidget()
         self.chain_table.setColumnCount(7)
         self.chain_table.setHorizontalHeaderLabels([
-            'Ouvrage', 'Type', 'TN (m NGF)', 'Profondeur (m)',
-            'FE (m NGF)', 'Longueur cumulée (m)', 'Pente vers suivant (%)'])
+            i18n.tr('col_ouvrage'), i18n.tr('col_type'),
+            i18n.tr('col_tn'), i18n.tr('col_profondeur'),
+            i18n.tr('col_fe'), i18n.tr('col_long_cumulee'), i18n.tr('col_pente_suivant')])
         self.chain_table.setToolTip(
-            "Double-cliquez une cellule pour la modifier. Les valeurs se "
-            "recalculent automatiquement le long de la chaîne, puis sont "
-            "reportées sur les onglets Regards, Tabourets, Conduites (pente) "
-            "et Branchements (cote de piquage + pente).\n"
-            "Double-clic sur une ligne : zoom sur l'ouvrage dans QGIS.")
+            i18n.tr('ts_aide_tableau'))
         self.chain_table.setAlternatingRowColors(True)
         self.chain_table.setSelectionBehavior(QAbstractItemView.SelectItems)
         self.chain_table.setEditTriggers(QAbstractItemView.DoubleClicked
@@ -1539,46 +1532,40 @@ class TableauSaisieDialog(QDialog):
 
         actions_row = QHBoxLayout()
 
-        grp1 = QGroupBox("① Pente constante")
+        grp1 = QGroupBox(i18n.tr('ts_grp1'))
         grp1.setToolTip(
-            "Choisissez une pente à la main : elle sera appliquée sur toute la "
-            "chaîne en partant du regard de départ, en recalculant chaque FE "
-            "(et profondeur) en cascade, puis la pente des conduites et la cote "
-            "de piquage des branchements concernés.")
+            i18n.tr('ts_grp1_aide'))
         l1 = QHBoxLayout(grp1)
         self.chain_pente_input = QLineEdit()
-        self.chain_pente_input.setPlaceholderText("ex : 0.5")
+        self.chain_pente_input.setPlaceholderText(i18n.tr('ts_ex_pente'))
         self.chain_pente_input.setFixedWidth(70)
         self.chain_pente_input.returnPressed.connect(self._chain_apply_pente_imposee)
         l1.addWidget(self.chain_pente_input)
         l1.addWidget(QLabel("%"))
-        self.btn_chain_action1 = QPushButton("Appliquer")
+        self.btn_chain_action1 = QPushButton(i18n.tr('appliquer'))
         self.btn_chain_action1.clicked.connect(self._chain_apply_pente_imposee)
         l1.addWidget(self.btn_chain_action1)
         actions_row.addWidget(grp1)
 
-        grp2 = QGroupBox("② Pente calculée")
+        grp2 = QGroupBox(i18n.tr('ts_grp2'))
         grp2.setToolTip(
-            "Calcule automatiquement la pente moyenne à partir des altitudes (FE) "
-            "connues du regard de départ et du regard d'arrivée, puis l'applique "
-            "sur toute la chaîne — utile quand seuls ces 2 points sont connus.")
+            i18n.tr('ts_grp2_aide'))
         l2 = QHBoxLayout(grp2)
-        self.btn_chain_action2 = QPushButton("Calculer et appliquer")
+        self.btn_chain_action2 = QPushButton(i18n.tr('ts_calculer_appliquer'))
         self.btn_chain_action2.clicked.connect(self._chain_apply_pente_calculee)
         l2.addWidget(self.btn_chain_action2)
         actions_row.addWidget(grp2)
 
-        grp3 = QGroupBox("③ Profondeur fixe")
+        grp3 = QGroupBox(i18n.tr('ts_grp3'))
         grp3.setToolTip(
-            "Applique la même profondeur (ex : 1,00 m) à tous les regards/tabourets "
-            "de la chaîne. Le FE est recalculé automatiquement si le TN est connu.")
+            i18n.tr('ts_grp3_aide'))
         l3 = QHBoxLayout(grp3)
         self.chain_prof_input = QLineEdit("1.00")
         self.chain_prof_input.setFixedWidth(70)
         self.chain_prof_input.returnPressed.connect(self._chain_apply_profondeur_fixe)
         l3.addWidget(self.chain_prof_input)
         l3.addWidget(QLabel("m"))
-        self.btn_chain_action3 = QPushButton("Appliquer")
+        self.btn_chain_action3 = QPushButton(i18n.tr('appliquer'))
         self.btn_chain_action3.clicked.connect(self._chain_apply_profondeur_fixe)
         l3.addWidget(self.btn_chain_action3)
         actions_row.addWidget(grp3)
@@ -1587,7 +1574,7 @@ class TableauSaisieDialog(QDialog):
 
         self._chain_set_actions_enabled(False)
 
-        self.tabs.addTab(tab, "Chaîne regards PENTE")
+        self.tabs.addTab(tab, i18n.tr('ts_onglet_chaine'))
 
     def _chain_set_actions_enabled(self, enabled):
         for btn in (self.btn_chain_action1, self.btn_chain_action2, self.btn_chain_action3):
@@ -1683,13 +1670,13 @@ class TableauSaisieDialog(QDialog):
         nom1 = self.combo_regard1.currentText()
         nom2 = self.combo_regard2.currentText()
         if not nom1 or not nom2 or nom1 == nom2:
-            self._chain_set_status("Choisissez deux regards différents.", 'error')
+            self._chain_set_status(i18n.tr('ts_err_deux_regards'), 'error')
             self._chain_set_actions_enabled(False)
             return
         feat1 = self._find_regard_by_nom(nom1)
         feat2 = self._find_regard_by_nom(nom2)
         if feat1 is None or feat2 is None:
-            self._chain_set_status("Regard introuvable.", 'error')
+            self._chain_set_status(i18n.tr('ts_err_regard_introuvable'), 'error')
             self._chain_set_actions_enabled(False)
             return
         key1, key2 = ('regard', feat1.id()), ('regard', feat2.id())
@@ -1700,8 +1687,7 @@ class TableauSaisieDialog(QDialog):
             self.chain_table.setRowCount(0)
             self.chain_profile.set_data([])
             self._chain_set_status(
-                f"Aucune chaîne trouvée entre {nom1} et {nom2}. "
-                "Vérifiez qu'un tracé de conduites les relie bien.", 'error')
+                i18n.tr('ts_chaine_absente', debut=nom1, fin=nom2), 'error')
             self._chain_set_actions_enabled(False)
             return
         self._chain_nodes = [key1] + [step[1] for step in path]
@@ -1709,9 +1695,8 @@ class TableauSaisieDialog(QDialog):
         self._chain_conduites = [step[2] for step in path]
         self._chain_force_fe_mode()
         self._chain_set_status(
-            f"✓ Chaîne trouvée : {len(self._chain_nodes)} ouvrages, "
-            f"{sum(self._chain_segments):.1f} m au total. Vous pouvez modifier "
-            "le tableau ci-dessous ou utiliser une des 3 actions.", 'success')
+            i18n.tr('ts_chaine_trouvee', nb=len(self._chain_nodes),
+                    longueur=f"{sum(self._chain_segments):.1f}"), 'success')
         self._chain_set_actions_enabled(True)
         self._refresh_chain_table()
         self._chain_zoom_whole()
@@ -1983,8 +1968,8 @@ class TableauSaisieDialog(QDialog):
         fe_prev = _fnum(layer0.getFeature(fid0)[_FE_FIELD[role0]])
         if fe_prev is None:
             self._chain_set_status(
-                f"Le FE de {self.combo_regard1.currentText()} est inconnu — "
-                "renseignez-le d'abord (dans le tableau ou l'onglet Regards).", 'error')
+                i18n.tr('ts_fe_inconnu',
+                        ouvrage=self.combo_regard1.currentText()), 'error')
             return False
 
         for i in range(1, len(self._chain_nodes)):
@@ -2009,22 +1994,21 @@ class TableauSaisieDialog(QDialog):
 
     def _chain_apply_pente_imposee(self):
         if not self._chain_nodes:
-            self._chain_set_status("Recherchez d'abord la chaîne.", 'error')
+            self._chain_set_status(i18n.tr('ts_err_chaine_dabord'), 'error')
             return
         pente = _parse_num(self.chain_pente_input.text())
         if pente is None:
             self._chain_set_status(
-                "Pente invalide — saisissez un nombre, ex : 0.5", 'error')
+                i18n.tr('ts_err_pente_invalide'), 'error')
             return
         if self._chain_cascade_pente(pente):
             self._chain_set_status(
-                f"✓ Pente de {pente:.3f} % appliquée depuis "
-                f"{self.combo_regard1.currentText()} — FE, profondeurs, pentes des "
-                "conduites et cotes de piquage mis à jour.", 'success')
+                i18n.tr('ts_pente_appliquee', pente=f"{pente:.3f}",
+                        ouvrage=self.combo_regard1.currentText()), 'success')
 
     def _chain_apply_pente_calculee(self):
         if not self._chain_nodes or len(self._chain_nodes) < 2:
-            self._chain_set_status("Recherchez d'abord la chaîne.", 'error')
+            self._chain_set_status(i18n.tr('ts_err_chaine_dabord'), 'error')
             return
         role0, fid0 = self._chain_nodes[0]
         role1, fid1 = self._chain_nodes[-1]
@@ -2033,24 +2017,22 @@ class TableauSaisieDialog(QDialog):
         total = sum(self._chain_segments)
         if fe0 is None or fe1 is None or not total:
             self._chain_set_status(
-                "Le FE du regard de départ et/ou d'arrivée est manquant "
-                "(ou la longueur totale est nulle) — impossible de calculer la pente.",
-                'error')
+                i18n.tr('ts_fe_extremites_manquants'), 'error')
             return
         pente = (fe0 - fe1) / total * 100
         if self._chain_cascade_pente(pente):
             self._chain_set_status(
-                f"✓ Pente calculée = {pente:.3f} % (sur {total:.1f} m), appliquée.",
-                'success')
+                i18n.tr('ts_pente_calculee', pente=f"{pente:.3f}",
+                        longueur=f"{total:.1f}"), 'success')
 
     def _chain_apply_profondeur_fixe(self):
         if not self._chain_nodes:
-            self._chain_set_status("Recherchez d'abord la chaîne.", 'error')
+            self._chain_set_status(i18n.tr('ts_err_chaine_dabord'), 'error')
             return
         prof = _parse_num(self.chain_prof_input.text())
         if prof is None:
             self._chain_set_status(
-                "Profondeur invalide — saisissez un nombre, ex : 1.00", 'error')
+                i18n.tr('ts_err_prof_invalide'), 'error')
             return
 
         n_skipped = 0
@@ -2068,10 +2050,10 @@ class TableauSaisieDialog(QDialog):
         self._reload_all()
         self._recalc_all_derived()
         self._refresh_chain_table()
-        msg = (f"✓ Profondeur {prof:.2f} m appliquée à {len(self._chain_nodes)} "
-               "ouvrage(s) — pentes des conduites et cotes de piquage mises à jour.")
+        msg = i18n.tr('ts_profondeur_appliquee', prof=f"{prof:.2f}",
+                      nb=len(self._chain_nodes))
         if n_skipped:
-            msg += f" ({n_skipped} sans TN connu — FE non recalculé)"
+            msg += i18n.tr('ts_sans_tn', nb=n_skipped)
         self._chain_set_status(msg, 'success')
 
     # ------------------------------------------------------------------ raccourcis clavier

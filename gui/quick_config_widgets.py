@@ -14,9 +14,11 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtGui import QFont, QPainter, QColor, QPen, QBrush
 from qgis.core import QgsSettings
 
+from ..tools import i18n
+
 from ..tools.stareau_values import materiaux_labels as _materiaux_labels
 
-SKETCHES_PREFIX = "BET_HUMIDE/"
+SKETCHES_PREFIX = "CanaPlan/"
 SETTINGS_KEY = SKETCHES_PREFIX + "default"
 
 # Materiaux de conduite : liste partagee avec le Tableau de saisie et l'export
@@ -69,7 +71,7 @@ def get_default_params():
 
 def get_cubature_config():
     s = QgsSettings()
-    p = "BET_HUMIDE/cubature"
+    p = "CanaPlan/cubature"
     return {
         'ep_lit_pose': s.value(f"{p}/ep_lit_pose", 0.10, float),
         'largeur_conduite_eu': s.value(f"{p}/larg_cond_eu", 0.80, float),
@@ -121,13 +123,18 @@ class TrenchSchemaWidget(QWidget):
 
         weights = []
         if self.data.get('show_sup'):
-            weights.append(('cs', 1.2, "Chaussée sup.", self.data.get('ep_cs', ''), self.data.get('mat_cs', '')))
+            weights.append(('cs', 1.2, i18n.tr('ct_couche_chaussee_sup'),
+                            self.data.get('ep_cs', ''), self.data.get('mat_cs', '')))
         if self.data.get('show_inf'):
-            weights.append(('ci', 1.5, "Chaussée inf.", self.data.get('ep_ci', ''), self.data.get('mat_ci', '')))
+            weights.append(('ci', 1.5, i18n.tr('ct_couche_chaussee_inf'),
+                            self.data.get('ep_ci', ''), self.data.get('mat_ci', '')))
 
-        weights.append(('rem', 2.5, "Remblai", "(var.)", self.data.get('mat_rem', '')))
-        weights.append(('enr', 3, "Zone d'enrobage", self.data.get('ep_enr', ''), self.data.get('mat_enr', '')))
-        weights.append(('lit', 1.2, "Lit de pose", self.data.get('ep_lit', ''), self.data.get('mat_lit', '')))
+        weights.append(('rem', 2.5, i18n.tr('ct_couche_remblai'),
+                        i18n.tr('qc_variable'), self.data.get('mat_rem', '')))
+        weights.append(('enr', 3, i18n.tr('qc_zone_enrobage'),
+                        self.data.get('ep_enr', ''), self.data.get('mat_enr', '')))
+        weights.append(('lit', 1.2, i18n.tr('ct_couche_lit_pose'),
+                        self.data.get('ep_lit', ''), self.data.get('mat_lit', '')))
 
         total_weight = sum(weight for _, weight, _, _, _ in weights)
         if total_weight == 0:
@@ -213,7 +220,7 @@ class CubatureSchemaWidget(QWidget):
         self.setMinimumHeight(180)
         self.setMinimumWidth(350)
         self.val = 0.8
-        self.label = "Conduite EU"
+        self.label = i18n.tr('qc_conduite_eu')
 
     def update_schema(self, val, label):
         self.val = val
@@ -357,14 +364,16 @@ class NetworkSchemaWidget(QWidget):
 
         font.setBold(True)
         painter.setFont(font)
-        painter.drawText(QRectF(cx_c - 100, cy_c + r_c + 10, 200, 20), int(Qt.AlignCenter), f"Conduite: {diam_c} mm")
+        painter.drawText(QRectF(cx_c - 100, cy_c + r_c + 10, 200, 20), int(Qt.AlignCenter),
+                         i18n.tr('qc_schema_conduite', diam=diam_c))
         font.setBold(False)
         painter.setFont(font)
         painter.drawText(QRectF(cx_c - 100, cy_c + r_c + 25, 200, 20), int(Qt.AlignCenter), self.data.get('mat_cond', ''))
 
         font.setBold(True)
         painter.setFont(font)
-        painter.drawText(QRectF(cx_b - 100, cy_b + r_b + 10, 200, 20), int(Qt.AlignCenter), f"Branch.: {diam_b} mm")
+        painter.drawText(QRectF(cx_b - 100, cy_b + r_b + 10, 200, 20), int(Qt.AlignCenter),
+                         i18n.tr('qc_schema_branchement', diam=diam_b))
         font.setBold(False)
         painter.setFont(font)
         painter.drawText(QRectF(cx_b - 100, cy_b + r_b + 25, 200, 20), int(Qt.AlignCenter), self.data.get('mat_branch', ''))
@@ -385,12 +394,13 @@ class ReseauDefautWidget(QWidget):
     def _build_ui(self):
         layout = QVBoxLayout(self)
         for reseau in ("EU", "EP"):
-            group = QGroupBox(f"Réseau {reseau}")
+            group = QGroupBox(i18n.tr('qc_reseau', code=reseau))
             group.setStyleSheet(network_group_stylesheet(reseau))
             group_layout = QVBoxLayout()
 
             form = QFormLayout()
-            for role, label in (("conduite", "Conduites"), ("branchement", "Branchements")):
+            for role, label in (("conduite", i18n.tr('qc_conduites')),
+                                ("branchement", i18n.tr('qc_branchements'))):
                 key = f"{role}_{reseau.lower()}"
                 spin = QSpinBox()
                 spin.setRange(0, 3000)
@@ -403,8 +413,8 @@ class ReseauDefautWidget(QWidget):
                 spin.valueChanged.connect(self._refresh_network_schemas)
                 mat_combo.currentTextChanged.connect(self._refresh_network_schemas)
 
-                form.addRow(f"{label} — Diamètre :", spin)
-                form.addRow(f"{label} — Matériau :", mat_combo)
+                form.addRow(i18n.tr('qc_role_diametre', role=label), spin)
+                form.addRow(i18n.tr('qc_role_materiau', role=label), mat_combo)
 
             group_layout.addLayout(form)
 
@@ -464,10 +474,10 @@ class ReseauDefautWidget(QWidget):
         for reseau in ("EU", "EP"):
             spin_c, mat_c = self._def_widgets[f"conduite_{reseau.lower()}"]
             spin_b, mat_b = self._def_widgets[f"branchement_{reseau.lower()}"]
-            parts.append(
-                f"{reseau} — conduite {spin_c.value()} mm {mat_c.currentText()}, "
-                f"branchement {spin_b.value()} mm {mat_b.currentText()}"
-            )
+            parts.append(i18n.tr(
+                'qc_resume_reseau', code=reseau,
+                diam_c=spin_c.value(), mat_c=mat_c.currentText(),
+                diam_b=spin_b.value(), mat_b=mat_b.currentText()))
         return "\n".join(parts)
 
 
@@ -483,7 +493,7 @@ class CubatureConfigWidget(QWidget):
     def _build_ui(self):
         layout = QVBoxLayout(self)
 
-        group_tranchee = QGroupBox("Paramètres de cubature de tranchées")
+        group_tranchee = QGroupBox(i18n.tr('qc_params_cubature'))
         form = QFormLayout()
 
         ep_lit = QDoubleSpinBox()
@@ -493,13 +503,13 @@ class CubatureConfigWidget(QWidget):
         ep_lit.setSingleStep(0.05)
         ep_lit.setValue(0.10)
         self._cub_widgets['ep_lit_pose'] = ep_lit
-        form.addRow("Épaisseur lit de pose :", ep_lit)
+        form.addRow(i18n.tr('qc_ep_lit_pose'), ep_lit)
 
-        for key, label, default in [
-            ('larg_cond_eu',    "Largeur tranchée Conduite EU :",    0.80),
-            ('larg_cond_ep',    "Largeur tranchée Conduite EP :",    0.80),
-            ('larg_branch_eu',  "Largeur tranchée Branchement EU :", 0.60),
-            ('larg_branch_ep',  "Largeur tranchée Branchement EP :", 0.60),
+        for key, default in [
+            ('larg_cond_eu',   0.80),
+            ('larg_cond_ep',   0.80),
+            ('larg_branch_eu', 0.60),
+            ('larg_branch_ep', 0.60),
         ]:
             spin = QDoubleSpinBox()
             spin.setRange(0.1, 5.0)
@@ -509,19 +519,20 @@ class CubatureConfigWidget(QWidget):
             spin.setValue(default)
             self._cub_widgets[key] = spin
             spin.valueChanged.connect(self._refresh_cubature_schema)
-            form.addRow(label, spin)
+            form.addRow(i18n.tr('qc_' + key), spin)
 
         group_tranchee.setLayout(form)
         layout.addWidget(group_tranchee)
 
-        schema_group = QGroupBox("Aperçu de la largeur")
+        schema_group = QGroupBox(i18n.tr('qc_apercu_largeur'))
         schema_layout = QVBoxLayout()
 
         schema_top_layout = QHBoxLayout()
-        schema_top_layout.addWidget(QLabel("Visualiser la largeur pour :"))
+        schema_top_layout.addWidget(QLabel(i18n.tr('qc_visualiser_pour')))
         self._cubature_combo = QComboBox()
         self._cubature_combo.addItems([
-            "Conduite EU", "Conduite EP", "Branchement EU", "Branchement EP"
+            i18n.tr('qc_conduite_eu'), i18n.tr('qc_conduite_ep'),
+            i18n.tr('qc_branchement_eu'), i18n.tr('qc_branchement_ep'),
         ])
         self._cubature_combo.currentIndexChanged.connect(self._refresh_cubature_schema)
         schema_top_layout.addWidget(self._cubature_combo)
@@ -534,10 +545,10 @@ class CubatureConfigWidget(QWidget):
         layout.addWidget(schema_group)
 
         self._cubature_mapping = {
-            0: ('larg_cond_eu', "Conduite EU"),
-            1: ('larg_cond_ep', "Conduite EP"),
-            2: ('larg_branch_eu', "Branchement EU"),
-            3: ('larg_branch_ep', "Branchement EP"),
+            0: ('larg_cond_eu', 'qc_conduite_eu'),
+            1: ('larg_cond_ep', 'qc_conduite_ep'),
+            2: ('larg_branch_eu', 'qc_branchement_eu'),
+            3: ('larg_branch_ep', 'qc_branchement_ep'),
         }
 
         layout.addStretch()
@@ -545,8 +556,10 @@ class CubatureConfigWidget(QWidget):
 
     def _refresh_cubature_schema(self):
         idx = self._cubature_combo.currentIndex()
-        key, label = self._cubature_mapping.get(idx, ('larg_cond_eu', "Conduite EU"))
-        self._cubature_schema_widget.update_schema(self.get_width(key), label)
+        key, cle_label = self._cubature_mapping.get(
+            idx, ('larg_cond_eu', 'qc_conduite_eu'))
+        self._cubature_schema_widget.update_schema(self.get_width(key),
+                                                   i18n.tr(cle_label))
 
     def get_width(self, key):
         """Largeur de tranchée courante (m) pour une clé
@@ -561,23 +574,23 @@ class CubatureConfigWidget(QWidget):
             'larg_branch_eu': 0.60, 'larg_branch_ep': 0.60,
         }
         for key, widget in self._cub_widgets.items():
-            val = gs.value(f"BET_HUMIDE/cubature/{key}", defaults.get(key, 0), float)
+            val = gs.value(f"CanaPlan/cubature/{key}", defaults.get(key, 0), float)
             widget.setValue(val)
 
     def save_settings(self):
         gs = QgsSettings()
         for key, widget in self._cub_widgets.items():
-            gs.setValue(f"BET_HUMIDE/cubature/{key}", widget.value())
+            gs.setValue(f"CanaPlan/cubature/{key}", widget.value())
 
     def summary(self):
         w = self._cub_widgets
-        return (
-            f"Lit de pose {w['ep_lit_pose'].value():.2f} m — "
-            f"largeurs tranchée : conduite EU {w['larg_cond_eu'].value():.2f} m, "
-            f"conduite EP {w['larg_cond_ep'].value():.2f} m, "
-            f"branchement EU {w['larg_branch_eu'].value():.2f} m, "
-            f"branchement EP {w['larg_branch_ep'].value():.2f} m"
-        )
+        return i18n.tr(
+            'qc_resume_cubature',
+            lit=f"{w['ep_lit_pose'].value():.2f}",
+            ceu=f"{w['larg_cond_eu'].value():.2f}",
+            cep=f"{w['larg_cond_ep'].value():.2f}",
+            beu=f"{w['larg_branch_eu'].value():.2f}",
+            bep=f"{w['larg_branch_ep'].value():.2f}")
 
 
 class RemblaiConfigWidget(QWidget):
@@ -597,14 +610,14 @@ class RemblaiConfigWidget(QWidget):
         self._schema_widget = TrenchSchemaWidget()
         layout.addWidget(self._schema_widget)
 
-        group_remblai = QGroupBox("Paramètres de remblai et chaussée")
+        group_remblai = QGroupBox(i18n.tr('qc_params_remblai'))
         form_remblai = QFormLayout()
 
         mat_lit = QComboBox()
         mat_lit.setEditable(True)
         mat_lit.addItems(MATERIAUX_REMBLAI)
         self._remblai_mat['materiau_lit_pose'] = mat_lit
-        form_remblai.addRow("Matériau lit de pose :", mat_lit)
+        form_remblai.addRow(i18n.tr('qc_mat_lit_pose'), mat_lit)
 
         ep_enrobage = QDoubleSpinBox()
         ep_enrobage.setRange(0.0, 1.0)
@@ -620,15 +633,15 @@ class RemblaiConfigWidget(QWidget):
         row_enr = QHBoxLayout()
         row_enr.addWidget(ep_enrobage)
         row_enr.addWidget(mat_enrobage)
-        form_remblai.addRow("Enrobage (ép. + mat.) :", row_enr)
+        form_remblai.addRow(i18n.tr('qc_enrobage_ep_mat'), row_enr)
 
         mat_remblai = QComboBox()
         mat_remblai.setEditable(True)
         mat_remblai.addItems(MATERIAUX_REMBLAI)
         self._remblai_mat['materiau_remblai'] = mat_remblai
-        form_remblai.addRow("Matériau remblai :", mat_remblai)
+        form_remblai.addRow(i18n.tr('qc_mat_remblai'), mat_remblai)
 
-        cb_inf = QCheckBox("Partie inférieure chaussée")
+        cb_inf = QCheckBox(i18n.tr('qc_partie_inf'))
         self._remblai_cb['chaussee_inf'] = cb_inf
         ep_inf = QDoubleSpinBox()
         ep_inf.setRange(0.0, 1.0)
@@ -649,9 +662,9 @@ class RemblaiConfigWidget(QWidget):
         row_inf = QHBoxLayout()
         row_inf.addWidget(ep_inf)
         row_inf.addWidget(mat_inf)
-        form_remblai.addRow("Ép. + matériau :", row_inf)
+        form_remblai.addRow(i18n.tr('qc_ep_materiau'), row_inf)
 
-        cb_sup = QCheckBox("Partie supérieure chaussée")
+        cb_sup = QCheckBox(i18n.tr('qc_partie_sup'))
         self._remblai_cb['chaussee_sup'] = cb_sup
         ep_sup = QDoubleSpinBox()
         ep_sup.setRange(0.0, 0.50)
@@ -672,7 +685,7 @@ class RemblaiConfigWidget(QWidget):
         row_sup = QHBoxLayout()
         row_sup.addWidget(ep_sup)
         row_sup.addWidget(mat_sup)
-        form_remblai.addRow("Ép. + matériau :", row_sup)
+        form_remblai.addRow(i18n.tr('qc_ep_materiau'), row_sup)
 
         group_remblai.setLayout(form_remblai)
         layout.addWidget(group_remblai)
@@ -746,7 +759,7 @@ class RemblaiConfigWidget(QWidget):
 
     def load_settings(self):
         gs = QgsSettings()
-        p = "BET_HUMIDE/cubature"
+        p = "CanaPlan/cubature"
         for key, widget in self._remblai_widgets.items():
             defaults = {
                 'ep_enrobage': 0.15, 'ep_chaussee_inf': 0.20, 'ep_chaussee_sup': 0.08,
@@ -776,7 +789,7 @@ class RemblaiConfigWidget(QWidget):
 
     def save_settings(self):
         gs = QgsSettings()
-        p = "BET_HUMIDE/cubature"
+        p = "CanaPlan/cubature"
         for key, widget in self._remblai_widgets.items():
             gs.setValue(f"{p}/{key}", widget.value())
         for key, widget in self._remblai_mat.items():
@@ -788,14 +801,14 @@ class RemblaiConfigWidget(QWidget):
         cb = self._remblai_cb
         extra = []
         if cb['chaussee_inf'].isChecked():
-            extra.append("chaussée inf.")
+            extra.append(i18n.tr('ct_couche_chaussee_inf'))
         if cb['chaussee_sup'].isChecked():
-            extra.append("chaussée sup.")
+            extra.append(i18n.tr('ct_couche_chaussee_sup'))
         extra_txt = f" + {', '.join(extra)}" if extra else ""
-        return (
-            f"Lit {self._remblai_mat['materiau_lit_pose'].currentText()}, "
-            f"enrobage {self._remblai_mat['materiau_enrobage'].currentText()} "
-            f"({self._remblai_widgets['ep_enrobage'].value():.2f} m), "
-            f"remblai {self._remblai_mat['materiau_remblai'].currentText()}"
-            f"{extra_txt}"
-        )
+        return i18n.tr(
+            'qc_resume_remblai',
+            lit=self._remblai_mat['materiau_lit_pose'].currentText(),
+            enr=self._remblai_mat['materiau_enrobage'].currentText(),
+            ep_enr=f"{self._remblai_widgets['ep_enrobage'].value():.2f}",
+            rem=self._remblai_mat['materiau_remblai'].currentText(),
+            extra=extra_txt)

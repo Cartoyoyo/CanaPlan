@@ -6,6 +6,8 @@ from qgis.PyQt.QtWidgets import (
     QCheckBox, QLabel, QFrame, QScrollArea, QApplication,
 )
 from qgis.PyQt.QtCore import Qt
+
+from ..tools import i18n
 from .profil_dialog import PAPER_SIZES, _EXPORT_DPI
 
 try:
@@ -53,12 +55,13 @@ _EP_COLORS = ['#0044CC', '#1166DD', '#3388EE', '#0022AA', '#2255FF',
 
 # 5 lignes partagées : libellé regard / libellé conduite
 _N_ROWS = 5
-_ROW_LABELS = [
-    ('Nom',          'Ø (mm)'),
-    ('Abscisse (m)', 'Long. (m)'),
-    ('TN (m)',       'Matériau'),
-    ('FE rad. (m)',  'Pente (%)'),
-    ('Prof. (m)',    '—'),
+# (clé du libellé regard, clé du libellé conduite) ; '—' n'a rien à traduire
+_ROW_LABEL_KEYS = [
+    ('col_nom',          'col_diametre_court'),
+    ('col_abscisse',     'col_long_court'),
+    ('col_tn_court',     'col_materiau'),
+    ('col_fe_rad_court', 'col_pente'),
+    ('col_prof_court',   None),
 ]
 
 _FONT_CART  = 6.8
@@ -84,15 +87,14 @@ class ProfilGroupeDialog(QDialog):
             'noms_piquages': True,
             'distances_piquages': True,
         }
-        self.setWindowTitle("Profil groupé EU + EP")
+        self.setWindowTitle(i18n.tr('pg_titre'))
         self.setMinimumSize(600, 400)
         self.setAttribute(Qt.WA_DeleteOnClose, False)
 
         if not HAS_MPL:
             QMessageBox.critical(
-                self, "matplotlib manquant",
-                "matplotlib est nécessaire pour afficher le profil.\n"
-                "Installez-le via : pip install matplotlib")
+                self, i18n.tr('pf_matplotlib_titre'),
+                i18n.tr('pf_matplotlib_msg'))
             return
 
         self._build_ui()
@@ -130,8 +132,8 @@ class ProfilGroupeDialog(QDialog):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        for label, fmt in [("Exporter PNG", "png"), ("Exporter PDF", "pdf")]:
-            btn = QPushButton(label)
+        for cle, fmt in [('ct_export_png', "png"), ('ct_export_pdf', "pdf")]:
+            btn = QPushButton(i18n.tr(cle).rstrip('…'))
             btn.clicked.connect(lambda _c, f=fmt: self._export(f))
             btn_row.addWidget(btn)
         layout.addLayout(btn_row)
@@ -192,7 +194,7 @@ class ProfilGroupeDialog(QDialog):
         eu_s, eu_e, eu_c = _chain_ends('EU')
         ep_s, ep_e, ep_c = _chain_ends('EP')
 
-        self.figure.text(0.5, 0.99, "Profil groupé EU + EP",
+        self.figure.text(0.5, 0.99, i18n.tr('pg_titre'),
                          fontsize=9, fontweight='bold',
                          ha='center', va='top', color='black')
         if eu_s and eu_s != '—':
@@ -223,7 +225,7 @@ class ProfilGroupeDialog(QDialog):
             self._draw_profile(ax_p, conduites, colors, ref_len,
                                y_min, y_max, x_margin)
             ax_p.tick_params(labelbottom=True)
-            ax_p.set_xlabel("Distance projetée (m)", fontsize=8)
+            ax_p.set_xlabel(i18n.tr('pf_distance_projetee'), fontsize=8)
             self.canvas.draw()
             return
 
@@ -317,7 +319,7 @@ class ProfilGroupeDialog(QDialog):
     def _draw_profile(self, ax, conduites, colors, ref_len,
                       y_min, y_max, x_margin):
 
-        ax.set_ylabel("Altitude (m NGF)", fontsize=8)
+        ax.set_ylabel(i18n.tr('pf_altitude'), fontsize=8)
         ax.set_xlim(-x_margin, ref_len + x_margin)
         ax.set_ylim(y_min, y_max)
         ax.grid(True, linestyle=':', linewidth=0.4, alpha=0.5, zorder=0)
@@ -471,7 +473,9 @@ class ProfilGroupeDialog(QDialog):
         ax.set_yticks([n_rows - i - 0.5 for i in range(n_rows)])
         ax.set_yticklabels([''] * n_rows)
         trans = ax.get_yaxis_transform()   # x = fraction axes, y = données
-        for i, (rl, cl) in enumerate(_ROW_LABELS):
+        for i, (cle_rl, cle_cl) in enumerate(_ROW_LABEL_KEYS):
+            rl = i18n.tr(cle_rl)
+            cl = i18n.tr(cle_cl) if cle_cl else '—'
             y_mid = n_rows - i - 0.5
             has_cond = cl and cl != '—'
             y_r = y_mid + (0.15 if has_cond else 0.0)
@@ -578,7 +582,7 @@ class ProfilGroupeDialog(QDialog):
         if show_xaxis:
             ax.xaxis.set_visible(True)
             ax.tick_params(bottom=True, labelbottom=True, labelsize=_FONT_LABEL)
-            ax.set_xlabel("Distance projetée (m)", fontsize=8, labelpad=2)
+            ax.set_xlabel(i18n.tr('pf_distance_projetee'), fontsize=8, labelpad=2)
         else:
             ax.xaxis.set_visible(False)
 
@@ -618,7 +622,7 @@ class ProfilGroupeDialog(QDialog):
 
         path, _ = QFileDialog.getSaveFileName(
             self,
-            f"Exporter le profil groupé en {fmt.upper()}",
+            i18n.tr('pg_exporter_en', format=fmt.upper()),
             os.path.join(start_dir, default_name),
             f"Fichier {fmt.upper()} (*.{fmt})")
         if path:

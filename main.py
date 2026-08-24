@@ -1,7 +1,7 @@
 import os
 from qgis.PyQt.QtCore import QObject, QSettings, Qt, QVariant
 from qgis.PyQt.QtGui import QIcon, QColor
-from qgis.PyQt.QtWidgets import QAction, QActionGroup, QMessageBox
+from qgis.PyQt.QtWidgets import QAction, QActionGroup, QMenu, QMessageBox
 from qgis.core import (
     QgsProject, QgsVectorLayer, QgsField, QgsWkbTypes,
     QgsSymbol, QgsSimpleLineSymbolLayer, QgsSimpleMarkerSymbolLayer,
@@ -9,7 +9,9 @@ from qgis.core import (
     QgsProperty, QgsSymbolLayer, QgsUnitTypes,
 )
 
-SKETCHES_PREFIX = "BET_HUMIDE/"
+from .tools import i18n
+
+SKETCHES_PREFIX = "CanaPlan/"
 
 class ReseauAssainissementPlugin(QObject):
     def __init__(self, iface):
@@ -35,8 +37,6 @@ class ReseauAssainissementPlugin(QObject):
         except Exception:
             pass
 
-        self.toolbar = self.iface.addToolBar("BET Humide")
-        self.toolbar.setObjectName("ReseauAssainissementToolBar")
 
         # Groupe pour les outils de dessin (non exclusif pour permettre le toggle)
         self.tool_group = QActionGroup(self.iface.mainWindow())
@@ -233,6 +233,12 @@ class ReseauAssainissementPlugin(QObject):
             self.run_enregistrer_projet,
             checkable=False
         )
+        self.action_dict['projets_recents'] = self._add_action(
+            "config.svg",
+            "Projets récents…",
+            self.run_projets_recents,
+            checkable=False
+        )
         self.action_dict['charger_projet'] = self._add_action(
             "config.svg",
             "Charger un projet",
@@ -272,8 +278,6 @@ class ReseauAssainissementPlugin(QObject):
             checkable=False
         )
 
-        # Séparateur avant config
-        self.toolbar.addSeparator()
         self.action_dict['config'] = self._add_action(
             "config.svg",
             "Configurer les couches",
@@ -283,35 +287,36 @@ class ReseauAssainissementPlugin(QObject):
 
         # Ajouter aussi dans le menu, organisé par catégories (même
         # regroupement que le panneau latéral)
-        self.menu = self.iface.pluginMenu().addMenu("BET Humide")
+        self.menu = self.iface.pluginMenu().addMenu("CanaPlan")
 
-        # Bascule affichage/masquage de la toolbar, synchronisée nativement
-        # par Qt avec son état réel (utile si l'utilisateur l'a fermée).
-        toggle_toolbar = self.toolbar.toggleViewAction()
-        toggle_toolbar.setText("Afficher la barre d'outils")
-        self.action_dict['toggle_toolbar'] = toggle_toolbar
-        self.menu.addAction(toggle_toolbar)
+        # Bascule affichage/masquage du panneau latéral : c'est la seule
+        # interface du plugin, il faut pouvoir le rouvrir après fermeture.
+        # L'action est créée après le panneau, en fin d'initGui.
         self.menu.addSeparator()
 
         menu_groups = [
-            ("Projet", ['nouveau_projet_assistant', 'enregistrer_projet', 'enregistrer_projet_sous', 'charger_projet', 'import_dxf', 'import_star_dt']),
-            ("Général", ['renseignement', 'tableau_saisie', 'insert_regard', 'move', 'copy_attributes', 'delete', 'config']),
-            ("EU – Eaux Usées", ['conduite_eu', 'branchement_eu', 'profil_eu', 'coupe_eu', 'renommer_eu']),
-            ("EP – Eaux Pluviales", ['conduite_ep', 'branchement_ep', 'profil_ep', 'coupe_ep', 'renommer_ep']),
-            ("Étiquettes", ['creer_etiquettes', 'afficher_etiquettes', 'taille_etiquettes', 'forcer_etiquettes', 'affichage_etiquettes', 'annotation']),
-            ("Sorties & Impression", ['imprimer', 'profil_groupe', 'coupe_transversale', 'cubature', 'coupe_tranchee_composee', 'export_stareau']),
-            ("Fond de carte", ['fond_projet', 'osm_desature', 'ortho_ign', 'pci_parcelles', 'pci_bati', 'ban_vecteur', 'nom_voie']),
+            ('grp_projet', ['nouveau_projet_assistant', 'projets_recents', 'enregistrer_projet', 'enregistrer_projet_sous', 'charger_projet', 'import_dxf', 'import_star_dt']),
+            ('grp_general', ['renseignement', 'tableau_saisie', 'insert_regard', 'move', 'copy_attributes', 'delete', 'config']),
+            ('grp_eu', ['conduite_eu', 'branchement_eu', 'profil_eu', 'coupe_eu', 'renommer_eu']),
+            ('grp_ep', ['conduite_ep', 'branchement_ep', 'profil_ep', 'coupe_ep', 'renommer_ep']),
+            ('grp_etiquettes', ['creer_etiquettes', 'afficher_etiquettes', 'taille_etiquettes', 'forcer_etiquettes', 'affichage_etiquettes', 'annotation']),
+            ('grp_sorties', ['imprimer', 'profil_groupe', 'coupe_transversale', 'cubature', 'coupe_tranchee_composee', 'export_stareau']),
+            ('grp_fond', ['fond_projet', 'osm_desature', 'ortho_ign', 'pci_parcelles', 'pci_bati', 'ban_vecteur', 'nom_voie']),
         ]
         self.submenus = []
-        for title, keys in menu_groups:
-            submenu = self.menu.addMenu(title)
+        # (sous-menu, clé i18n) : le titre est reposé à chaque changement de langue
+        self._submenus_i18n = []
+        for cle_titre, keys in menu_groups:
+            submenu = self.menu.addMenu(i18n.tr(cle_titre))
             for key in keys:
                 action = self.action_dict.get(key)
                 if action is not None:
                     submenu.addAction(action)
             self.submenus.append(submenu)
+            self._submenus_i18n.append((submenu, cle_titre))
 
-        self.menu.addSeparator()
+        # « À propos » est ajouté au menu après le sous-menu Langue, pour
+        # rester la toute dernière entrée de la liste.
         self.action_dict['about'] = self._add_action(
             "config.svg",
             "À propos",
@@ -319,7 +324,6 @@ class ReseauAssainissementPlugin(QObject):
             checkable=False,
             add_to_toolbar=False,
         )
-        self.menu.addAction(self.action_dict['about'])
 
         # Synchronise le bouton avec l'état actuel du moteur d'étiquettes
         from .gui.etiquettes import get_force_all_labels
@@ -334,6 +338,65 @@ class ReseauAssainissementPlugin(QObject):
         self.side_panel = SidePanel(self, self.iface.mainWindow())
         self.iface.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.side_panel)
 
+        # Unique icône du plugin, dans la barre d'outils Extensions de QGIS :
+        # elle allume et éteint le panneau latéral. toggleViewAction() est
+        # déjà cochable et Qt la garde synchronisée avec l'état réel du dock,
+        # y compris quand l'utilisateur ferme le panneau par sa croix.
+        toggle_panel = self.side_panel.toggleViewAction()
+        toggle_panel.setText(i18n.tr('toggle_panel'))
+        toggle_panel.setIcon(
+            QIcon(os.path.join(self.plugin_dir, "icon", "icon.png")))
+        toggle_panel.setToolTip(i18n.tr('toggle_panel_tip'))
+        self.action_dict['toggle_panel'] = toggle_panel
+        self.menu.insertAction(self.menu.actions()[0], toggle_panel)
+        self.iface.addToolBarIcon(toggle_panel)
+
+        self._build_language_menu()
+
+        self.menu.addSeparator()
+        self.menu.addAction(self.action_dict['about'])
+
+        i18n.signaux.langue_changee.connect(self._retranslate)
+        self._retranslate()
+
+    def _build_language_menu(self):
+        """Sous-menu Langue : cases à cocher exclusives, 'auto' en tête."""
+        self.menu_langue = QMenu(i18n.tr('langue'), self.menu)
+        self.menu.addMenu(self.menu_langue)
+        self._groupe_langue = QActionGroup(self.menu_langue)
+        self._groupe_langue.setExclusive(True)
+        self._actions_langue = []
+        courante = i18n.preference()
+        for code, _libelle in i18n.CHOIX:
+            action = self.menu_langue.addAction(i18n.libelle_choix(code))
+            action.setCheckable(True)
+            action.setChecked(code == courante)
+            self._groupe_langue.addAction(action)
+            action.triggered.connect(
+                lambda _checked=False, c=code: i18n.definir(c))
+            self._actions_langue.append((action, code))
+
+    def _retranslate(self, *_args):
+        """Repose tous les libellés dans la langue courante.
+
+        Appelé en fin d'initGui et à chaque changement de langue. Les clés
+        i18n portent le même nom que les clés de action_dict ; une action sans
+        traduction garde le libellé français écrit dans le code.
+        """
+        for cle, action in self.action_dict.items():
+            if cle in i18n.TR:
+                action.setText(i18n.tr(cle))
+        self.action_dict['toggle_panel'].setToolTip(i18n.tr('toggle_panel_tip'))
+        for submenu, cle_titre in self._submenus_i18n:
+            submenu.setTitle(i18n.tr(cle_titre))
+        self.menu_langue.setTitle(i18n.tr('langue'))
+        for action, code in self._actions_langue:
+            action.setText(i18n.libelle_choix(code))
+            action.setChecked(code == i18n.preference())
+        panel = getattr(self, 'side_panel', None)
+        if panel is not None:
+            panel.retranslate()
+
     def unload(self):
         """Supprime la barre d'outils, les actions et les rubber bands."""
         import sip
@@ -347,22 +410,27 @@ class ReseauAssainissementPlugin(QObject):
             dlg.close()
             dlg.deleteLater()
         self._stareau_dlg = None
+        try:
+            i18n.signaux.langue_changee.disconnect(self._retranslate)
+        except (TypeError, RuntimeError):
+            pass                       # jamais connecté, ou déjà détruit
+        toggle_panel = self.action_dict.get('toggle_panel')
+        if toggle_panel is not None:
+            self.iface.removeToolBarIcon(toggle_panel)
         self.iface.removeDockWidget(self.side_panel)
         self.side_panel.deleteLater()
         for action in self.actions:
-            self.iface.removePluginMenu("BET Humide", action)
+            self.iface.removePluginMenu("CanaPlan", action)
         self.actions.clear()
         # Suppression synchrone (sip.delete) pour éviter le warning de
         # widget dupliqué au rechargement : deleteLater() est asynchrone et
-        # laisse l'ancienne toolbar vivante quand le nouveau initGui s'exécute.
-        for widget in (self.menu, self.toolbar):
-            try:
-                if widget is not None and not sip.isdeleted(widget):
-                    sip.delete(widget)
-            except Exception:
-                pass
+        # laisse l'ancien menu vivant quand le nouveau initGui s'exécute.
+        try:
+            if self.menu is not None and not sip.isdeleted(self.menu):
+                sip.delete(self.menu)
+        except Exception:
+            pass
         self.menu = None
-        self.toolbar = None
 
     def _cleanup_tools(self):
         """Nettoie tous les rubber bands des outils actifs."""
@@ -372,8 +440,13 @@ class ReseauAssainissementPlugin(QObject):
         self.tools.clear()
         self.iface.mapCanvas().refresh()
 
-    def _add_action(self, icon_name, text, callback, checkable=False, add_to_toolbar=True):
-        """Ajoute une action à la barre d'outils et au menu."""
+    def _add_action(self, icon_name, text, callback, checkable=False,
+                    add_to_toolbar=False):
+        """Crée une action du plugin, référencée par le menu et le panneau.
+
+        add_to_toolbar est conservé pour ne pas casser les appels existants :
+        le plugin n'a plus de barre d'outils, le paramètre est sans effet.
+        """
         icon_path = os.path.join(self.plugin_dir, "icon", icon_name)
         action = QAction(QIcon(icon_path), text, self.iface.mainWindow())
         action.setCheckable(checkable)
@@ -382,8 +455,6 @@ class ReseauAssainissementPlugin(QObject):
             self.tool_group.addAction(action)
         else:
             action.triggered.connect(callback)
-        if add_to_toolbar:
-            self.toolbar.addAction(action)
         self.actions.append(action)
         return action
 
@@ -754,8 +825,8 @@ class ReseauAssainissementPlugin(QObject):
                 self.action_dict[key].setChecked(False)
                 from qgis.PyQt.QtWidgets import QMessageBox
                 QMessageBox.information(
-                    None, "Cubature tranchées",
-                    "Aucun élément trouvé dans le périmètre sélectionné.")
+                    None, i18n.tr('msg_cubature_titre'),
+                    i18n.tr('msg_aucun_element'))
                 return
 
             dlg_result = CubatureDialog(all_results, config, self.iface.mainWindow())
@@ -850,8 +921,8 @@ class ReseauAssainissementPlugin(QObject):
         from qgis.PyQt.QtCore import QSettings
         from .gui.etiquettes import get_label_min_scale
         s          = QSettings()
-        last_mode  = s.value("BET_HUMIDE/label_size_mode",  "map_units")
-        last_value = s.value("BET_HUMIDE/label_size_value", None)
+        last_mode  = s.value("CanaPlan/label_size_mode",  "map_units")
+        last_value = s.value("CanaPlan/label_size_value", None)
         if last_value is not None:
             try:
                 last_value = float(last_value)
@@ -865,8 +936,8 @@ class ReseauAssainissementPlugin(QObject):
         if dlg.exec_() != EtiquetteTailleDialog.Accepted:
             return
         mode, value, min_scale = dlg.get_result()
-        s.setValue("BET_HUMIDE/label_size_mode",  mode)
-        s.setValue("BET_HUMIDE/label_size_value", value)
+        s.setValue("CanaPlan/label_size_mode",  mode)
+        s.setValue("CanaPlan/label_size_value", value)
         apply_label_size_all(self, mode, value, min_scale)
 
     def toggle_affichage_etiquettes(self, checked):
@@ -888,7 +959,7 @@ class ReseauAssainissementPlugin(QObject):
 
         :param options: dict optionnel {'osm', 'ortho', 'ban', 'noms_voie',
             'pci_bati', 'pci_parcelles'} -> bool. Une clé absente vaut True
-            (comportement historique du bouton toolbar : tout est chargé).
+            (comportement historique du bouton unique : tout est chargé).
             Utilisé par l'assistant de création de projet pour ne charger
             qu'un sous-ensemble choisi par l'utilisateur.
         """
@@ -975,7 +1046,7 @@ class ReseauAssainissementPlugin(QObject):
 
         if not requests:
             self.iface.messageBar().pushMessage(
-                "Fond de projet", "Fond de projet mis en place",
+                i18n.tr('fond_projet'), i18n.tr('msg_fond_ok'),
                 level=0, duration=6)
             return
 
@@ -1044,7 +1115,7 @@ class ReseauAssainissementPlugin(QObject):
 
         bbox = current_bbox_l93(self.iface.mapCanvas())
         QgsMessageLog.logMessage(
-            f"{title} : bbox envoyée = {bbox}", "BET_HUMIDE", Qgis.Info)
+            f"{title} : bbox envoyée = {bbox}", "CanaPlan", Qgis.Info)
         for req in requests:
             req['bbox'] = bbox
 
@@ -1060,7 +1131,8 @@ class ReseauAssainissementPlugin(QObject):
                 for res in results:
                     insecure = insecure or res['insecure']
                     if not res['path']:
-                        msgs.append(f"{res['name']} : 0 objet dans l'emprise")
+                        msgs.append(i18n.tr('msg_wfs_vide',
+                                                couche=res['name']))
                         continue
                     # Une couche déjà chargée sous le même nom est mise à
                     # jour sur place (nouvelle source de données) plutôt que
@@ -1072,13 +1144,15 @@ class ReseauAssainissementPlugin(QObject):
                     if existing is not None:
                         existing.setDataSource(res['path'], res['name'], "ogr")
                         if not existing.isValid():
-                            msgs.append(f"{res['name']} : couche invalide")
+                            msgs.append(i18n.tr('msg_wfs_invalide',
+                                                    couche=res['name']))
                             continue
                         layer = existing
                     else:
                         layer = QgsVectorLayer(res['path'], res['name'], "ogr")
                         if not layer.isValid():
-                            msgs.append(f"{res['name']} : couche invalide")
+                            msgs.append(i18n.tr('msg_wfs_invalide',
+                                                    couche=res['name']))
                             continue
                         if insert_cb is not None:
                             insert_cb(layer)
@@ -1099,8 +1173,8 @@ class ReseauAssainissementPlugin(QObject):
                 if restore_extent is not None:
                     restore_extent[0].freeze(False)
             if insecure:
-                msgs.append("certificat TLS non vérifié (proxy ?)")
-            msg = f"{loaded} objet(s) chargé(s)"
+                msgs.append(i18n.tr('msg_wfs_tls'))
+            msg = i18n.tr('msg_wfs_charges', nb=loaded)
             if msgs:
                 msg += "  |  " + " / ".join(msgs)
             iface.messageBar().pushMessage(
@@ -1113,7 +1187,7 @@ class ReseauAssainissementPlugin(QObject):
 
         fetch_wfs_async(title, requests, on_done)
         iface.messageBar().pushMessage(
-            title, "Téléchargement en cours…", level=0, duration=3)
+            title, i18n.tr('msg_telechargement'), level=0, duration=3)
 
     @staticmethod
     def _make_label_settings(field, is_expr, placement, size=8,
@@ -1294,8 +1368,9 @@ class ReseauAssainissementPlugin(QObject):
         layer = QgsRasterLayer(source, name, "wms")
         if not layer.isValid():
             from qgis.PyQt.QtWidgets import QMessageBox
-            QMessageBox.warning(self.iface.mainWindow(), "Fond de carte",
-                                f"Impossible de charger la couche WMS :\n{name}")
+            QMessageBox.warning(self.iface.mainWindow(),
+                                i18n.tr('msg_fond_carte'),
+                                i18n.tr('msg_wms_echec', nom=name))
             return
         self._add_raster_bottom_keep_extent(layer)
 
@@ -1316,8 +1391,9 @@ class ReseauAssainissementPlugin(QObject):
         layer = QgsRasterLayer(source, name, "wms")
         if not layer.isValid():
             from qgis.PyQt.QtWidgets import QMessageBox
-            QMessageBox.warning(self.iface.mainWindow(), "Fond de carte",
-                                f"Impossible de charger la couche WMS :\n{name}")
+            QMessageBox.warning(self.iface.mainWindow(),
+                                i18n.tr('msg_fond_carte'),
+                                i18n.tr('msg_wms_echec', nom=name))
             return
         self._add_raster_bottom_keep_extent(layer)
 
@@ -1337,6 +1413,18 @@ class ReseauAssainissementPlugin(QObject):
     def run_charger_projet(self):
         from .tools.projet_bet import load_projet
         load_projet(self, self.iface)
+
+    def run_projets_recents(self):
+        """Ouvre la fenêtre de choix parmi les 4 derniers projets."""
+        from .gui.recent_projects_dialog import RecentProjectsDialog
+        from .tools.projet_bet import load_projet, recent_projects
+
+        dlg = RecentProjectsDialog(recent_projects(), self.iface.mainWindow())
+        if dlg.exec_() != RecentProjectsDialog.Accepted:
+            return
+        bet_path = dlg.selected_path()
+        if bet_path:
+            load_projet(self, self.iface, bet_path)
 
     def run_imprimer(self):
         from .gui.export_dialog import ExportDialog
@@ -1388,10 +1476,8 @@ class ReseauAssainissementPlugin(QObject):
         if crs.mapUnits() != QgsUnitTypes.DistanceMeters:
             from qgis.PyQt.QtWidgets import QMessageBox
             QMessageBox.warning(
-                self.iface.mainWindow(), "Impression",
-                f"Le CRS du projet ({crs.authid()}) n'est pas en mètres.\n"
-                "Les dimensions des feuilles risquent d'être incorrectes.\n"
-                "Recommandé : EPSG:2154 (RGF93 / Lambert-93).",
+                self.iface.mainWindow(), i18n.tr('msg_impression'),
+                i18n.tr('msg_crs_non_metrique', crs=crs.authid()),
             )
 
         tool = PrintTool(self.iface.mapCanvas(), self.iface, settings)
@@ -1399,13 +1485,9 @@ class ReseauAssainissementPlugin(QObject):
         self.iface.mapCanvas().setMapTool(tool)
         self.tools['imprimer'] = tool
 
-        fmt = settings['format']
-        ori = settings['orientation']
-        ech = settings['echelle']
+        from .tools.print_tool import _aide_pose
         self.iface.messageBar().pushMessage(
-            "Impression",
-            f"{fmt} {ori}  ·  1:{ech:,}  —  "
-            "1er clic : ancrer  ·  orienter  ·  2e clic : fixer  |  Clic droit : exporter  |  Échap : changer l'échelle".replace(",", " "),
+            i18n.tr('msg_impression'), _aide_pose(settings),
             level=0, duration=0,
         )
 
@@ -1429,18 +1511,22 @@ class ReseauAssainissementPlugin(QObject):
                 n_ok, n_skip, out_path = export_profils_eu_ep(
                     couches_eu, "EU", choices['profil_eu_format'], out_dir)
                 if n_ok:
-                    msgs.append(f"Profils EU : {n_ok} page(s) → {os.path.basename(out_path)}")
+                    msgs.append(i18n.tr(
+                        'msg_profils_ok', reseau="EU", nb=n_ok,
+                        fichier=os.path.basename(out_path)))
                 else:
-                    msgs.append("Profils EU : aucune conduite trouvée")
+                    msgs.append(i18n.tr('msg_profils_vide', reseau="EU"))
 
             if choices['profil_ep']:
                 couches_ep = self._get_couches("EP")
                 n_ok, n_skip, out_path = export_profils_eu_ep(
                     couches_ep, "EP", choices['profil_ep_format'], out_dir)
                 if n_ok:
-                    msgs.append(f"Profils EP : {n_ok} page(s) → {os.path.basename(out_path)}")
+                    msgs.append(i18n.tr(
+                        'msg_profils_ok', reseau="EP", nb=n_ok,
+                        fichier=os.path.basename(out_path)))
                 else:
-                    msgs.append("Profils EP : aucune conduite trouvée")
+                    msgs.append(i18n.tr('msg_profils_vide', reseau="EP"))
 
             if choices['profil_groupe']:
                 couches_eu = self._get_couches("EU")
@@ -1449,19 +1535,21 @@ class ReseauAssainissementPlugin(QObject):
                     couches_eu, couches_ep, choices['profil_groupe_format'], out_dir,
                     reseau_ref=choices['profil_groupe_reseau'])
                 msgs.append(
-                    f"Profil groupé → {os.path.basename(out_path)}" if ok
-                    else "Profil groupé : aucune conduite trouvée")
+                    i18n.tr('msg_profil_groupe_ok',
+                            fichier=os.path.basename(out_path)) if ok
+                    else i18n.tr('msg_profil_groupe_vide'))
 
         except Exception as e:
-            msgs.append(f"Erreur : {e}")
+            msgs.append(i18n.tr('msg_erreur_detail', detail=e))
         finally:
             QApplication.restoreOverrideCursor()
 
         if msgs:
             QMessageBox.information(
                 self.iface.mainWindow(),
-                "Export profils terminé",
-                "\n".join(msgs) + f"\n\nDossier : {out_dir}",
+                i18n.tr('msg_export_profils_ok'),
+                "\n".join(msgs) + "\n\n"
+                + i18n.tr('msg_dossier', chemin=out_dir),
             )
 
     def _export_dxf_direct(self, out_dir=None):
@@ -1489,7 +1577,7 @@ class ReseauAssainissementPlugin(QObject):
             start_dir = project_dir() or os.path.expanduser("~")
             dxf_path, _ = QFileDialog.getSaveFileName(
                 self.iface.mainWindow(),
-                "Exporter le plan en DXF 2018",
+                i18n.tr('msg_export_dxf_titre'),
                 os.path.join(start_dir, default_name),
                 "DXF (*.dxf)",
             )
@@ -1549,7 +1637,7 @@ class ReseauAssainissementPlugin(QObject):
         except Exception as e:
             QMessageBox.warning(
                 self.iface.mainWindow(), "StaR-Eau",
-                f"Erreur lors de l'export :\n{e}")
+                i18n.tr('msg_erreur_export', erreur=e))
             return
         finally:
             QApplication.restoreOverrideCursor()
@@ -1558,7 +1646,8 @@ class ReseauAssainissementPlugin(QObject):
                            for name, count in stats.get('couches', {}).items())
         self.iface.messageBar().pushMessage(
             "StaR-Eau",
-            f"Export terminé — {os.path.basename(path)} ({detail})",
+            i18n.tr('msg_export_stareau_ok',
+                    fichier=os.path.basename(path), detail=detail),
             level=0, duration=8)
 
     def run_import_star_dt(self):
@@ -1578,17 +1667,17 @@ class ReseauAssainissementPlugin(QObject):
             from qgis.PyQt.QtWidgets import QMessageBox
             QMessageBox.warning(
                 self.iface.mainWindow(), "Star-DT",
-                f"Erreur lors de l'import :\n{e}")
+                i18n.tr('msg_erreur_import', erreur=e))
             return
         if created:
             self.iface.messageBar().pushMessage(
                 "Star-DT",
-                f"{len(created)} couche(s) importee(s) depuis {len(paths)} "
-                f"fichier(s) dans {out}",
+                i18n.tr('msg_import_ok', couches=len(created),
+                        fichiers=len(paths), dossier=out),
                 level=0, duration=5)
         else:
             self.iface.messageBar().pushMessage(
-                "Star-DT", "Aucun element a importer.",
+                "Star-DT", i18n.tr('msg_rien_a_importer'),
                 level=1, duration=4)
 
     def show_config_dialog(self):

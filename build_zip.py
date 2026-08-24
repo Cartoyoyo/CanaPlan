@@ -4,8 +4,9 @@
 Usage :  python build_zip.py [dossier_sortie]
 
 Exclut du paquet : .git, __pycache__, *.dist-info, libs/bin, libs/share,
-fichiers de travail (audit.md, amelioration.txt, uml_structure.mmd / .d2 /
-.puml, icon/fichedemarque.md, .gitignore, build_zip.py lui-même)
+fichiers de travail (audit.md, amelioration.txt, INTERVIEW.md,
+assistant_creation_projet.md, uml_structure.mmd / .d2 / .puml,
+icon/fichedemarque.md, symbology-style.db, .gitignore, build_zip.py lui-même)
 et fichiers temporaires (*.pyc, *.tmp).
 
 NB : libs/numpy est CONSERVÉ — certaines installations QGIS (ex. 3.40.x)
@@ -19,6 +20,8 @@ PLUGIN_NAME = "CanaPlan"
 
 EXCLUDE_DIRS = {
     ".git", "__pycache__",
+    # captures d'ecran du README : referencees par aucun module, 3.8 Mo
+    "images",
     os.path.join("libs", "bin"),
     os.path.join("libs", "share"),
 }
@@ -26,6 +29,8 @@ EXCLUDE_FILES = {
     "audit.md", "amelioration.txt",
     "uml_structure.puml", "uml_structure.mmd", "uml_structure.d2",
     ".gitignore", "build_zip.py",
+    "INTERVIEW.md", "assistant_creation_projet.md",
+    "symbology-style.db",
     os.path.join("icon", "fichedemarque.md"),
 }
 EXCLUDE_SUFFIXES = (".pyc", ".pyo", ".tmp", ".log")

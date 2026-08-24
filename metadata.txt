@@ -9,6 +9,7 @@ email=yoan.laloux@laposte.net
 linkedin=https://www.linkedin.com/in/ylaloux/
 repository=https://github.com/Cartoyoyo/CanaPlan
 tracker=https://github.com/Cartoyoyo/CanaPlan/issues
+license=GNU GPL v3
 homepage=https://github.com/Cartoyoyo/CanaPlan
 tags=assainissement,réseau,EU,EP,profil en long,cubature,DXF,BET,StaR-Eau,GeoPackage,CNIG,ASTEE,Star-DT,DT-DICT
 experimental=False

@@ -1,0 +1,18 @@
+# Librairies embarquées dans libs/, réinstallées par la CI avant de
+# construire le ZIP de distribution.
+#
+#   pip install --target libs -r requirements-libs.txt
+#
+# libs/ est exclu du dépôt (63 Mo) : ce fichier est la source de vérité de
+# ce que contient le paquet publié. Les versions sont figées pour qu'un
+# ZIP reconstruit six mois plus tard soit identique à celui d'aujourd'hui.
+#
+# matplotlib n'y figure pas : QGIS le fournit déjà.
+# numpy est conservé bien que QGIS l'embarque souvent — certaines
+# installations (3.40.x) ne l'ont pas, et ezdxf en dépend.
+
+numpy==2.4.4
+ezdxf==1.4.3
+fontTools==4.62.1
+pyparsing==3.3.2
+typing_extensions

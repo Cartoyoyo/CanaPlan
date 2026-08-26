@@ -234,6 +234,7 @@ class CubatureDialog(QDialog):
         self.results = results
         self.config = config
         self.bfs_prefix = bfs_prefix  # ex: "REP01_REP04" pour le mode BFS
+        self._ouvrir_dossier = True   # False le temps d'un export groupé
         self.show_remblai = show_remblai
         self.setWindowTitle(i18n.tr('cb_titre'))
         self.setWindowFlags(
@@ -480,20 +481,56 @@ class CubatureDialog(QDialog):
 
     # ------------------------------------------------------------------ exports
 
+    def exporter_fichiers(self, out_dir, pdf=False, xlsx=False, csv=False):
+        """Écrit les exports demandés dans out_dir, sans aucune boîte de dialogue.
+
+        Utilisé par l'export groupé, où le dialogue n'est jamais affiché.
+        Retourne la liste des chemins réellement écrits.
+        """
+        formats = (
+            (pdf,  "pdf",  self._export_pdf),
+            (xlsx, "xlsx", self._export_xlsx),
+            (csv,  "csv",  self._export_csv),
+        )
+        ecrits = []
+        self._ouvrir_dossier = False
+        try:
+            for actif, ext, exporter in formats:
+                if not actif:
+                    continue
+                path = os.path.join(out_dir, self._default_filename(ext))
+                exporter(path=path)
+                if os.path.exists(path):
+                    ecrits.append(path)
+        finally:
+            self._ouvrir_dossier = True
+        return ecrits
+
     def _open_folder(self, path):
+        # En export groupé plusieurs fichiers partent d'affilée : ouvrir
+        # l'explorateur à chaque écriture serait insupportable.
+        if not self._ouvrir_dossier:
+            return
         folder = os.path.dirname(os.path.abspath(path))
         QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
 
     def _default_filename(self, ext):
-        prefix = "remblai" if self.show_remblai else "cubature"
+        # Tous les fichiers produits par l'outil sont prefixes "cubature"
+        # pour rester groupes dans l'explorateur.
+        parts = ["cubature"]
+        if self.show_remblai:
+            parts.append("remblai")
         if self.bfs_prefix:
-            return f"{self.bfs_prefix}_{prefix}_tranchee.{ext}"
-        return f"{prefix}_tranchees.{ext}"
+            parts += [self.bfs_prefix, "tranchee"]
+        else:
+            parts.append("tranchees")
+        return "_".join(parts) + "." + ext
 
-    def _export_csv(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self, i18n.tr('cb_enregistrer_csv'), self._default_filename("csv"),
-            i18n.tr('fic_csv'))
+    def _export_csv(self, checked=False, path=None):
+        if path is None:
+            path, _ = QFileDialog.getSaveFileName(
+                self, i18n.tr('cb_enregistrer_csv'),
+                self._default_filename("csv"), i18n.tr('fic_csv'))
         if not path:
             return
         try:
@@ -526,10 +563,11 @@ class CubatureDialog(QDialog):
         except Exception as e:
             QMessageBox.critical(self, i18n.tr('cb_err_csv'), str(e))
 
-    def _export_pdf(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self, i18n.tr('cb_enregistrer_pdf'), self._default_filename("pdf"),
-            i18n.tr('fic_pdf'))
+    def _export_pdf(self, checked=False, path=None):
+        if path is None:
+            path, _ = QFileDialog.getSaveFileName(
+                self, i18n.tr('cb_enregistrer_pdf'),
+                self._default_filename("pdf"), i18n.tr('fic_pdf'))
         if not path:
             return
         try:
@@ -1238,10 +1276,11 @@ class CubatureDialog(QDialog):
         doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
         self._open_folder(path)
 
-    def _export_xlsx(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self, i18n.tr('cb_enregistrer_xlsx'), self._default_filename("xlsx"),
-            i18n.tr('fic_xlsx'))
+    def _export_xlsx(self, checked=False, path=None):
+        if path is None:
+            path, _ = QFileDialog.getSaveFileName(
+                self, i18n.tr('cb_enregistrer_xlsx'),
+                self._default_filename("xlsx"), i18n.tr('fic_xlsx'))
         if not path:
             return
         try:

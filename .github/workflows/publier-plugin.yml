@@ -1,0 +1,147 @@
+# Publication de CanaPlan sur plugins.qgis.org
+#
+# Se déclenche sur un tag de version (v1.6, v1.6.1…), jamais sur un simple
+# push : un commit de documentation ne doit pas publier une version.
+# « Run workflow » depuis l'onglet Actions permet un envoi manuel, avec une
+# option pour construire le ZIP sans le publier.
+#
+# Secrets à créer dans Settings > Secrets and variables > Actions :
+#   OSGEO_USERNAME   identifiant OSGeo
+#   OSGEO_PASSWORD   mot de passe OSGeo
+
+name: Publier sur plugins.qgis.org
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publier:
+        description: "Envoyer sur plugins.qgis.org (sinon, construit le ZIP seulement)"
+        type: boolean
+        default: false
+
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'   # version de QGIS 3.40+
+
+      - name: Lire la version de metadata.txt
+        id: version
+        run: |
+          VERSION=$(grep -Po '^version=\K.*' metadata.txt | tr -d '[:space:]')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version du plugin : $VERSION"
+
+      - name: Vérifier que le tag correspond à metadata.txt
+        # Un tag v1.6 qui publierait un metadata.txt resté en 1.5 mettrait en
+        # ligne une version que personne ne pourrait identifier.
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          META="${{ steps.version.outputs.version }}"
+          if [ "$TAG" != "$META" ]; then
+            echo "::error::Le tag v$TAG ne correspond pas à version=$META dans metadata.txt"
+            exit 1
+          fi
+          echo "Tag et metadata.txt concordent : $META"
+
+      - name: Compiler tous les modules
+        # Une erreur de syntaxe ne doit pas atteindre plugins.qgis.org.
+        run: |
+          python -m compileall -q $(git ls-files '*.py' | tr '\n' ' ')
+
+      - name: Installer les librairies embarquées
+        # libs/ est exclu du dépôt : on le reconstruit à l'identique depuis
+        # requirements-libs.txt, qui fige les versions.
+        run: |
+          python -m pip install --upgrade pip
+          pip install --target libs -r requirements-libs.txt
+          echo "Contenu de libs/ :"
+          ls -1 libs
+
+      - name: Construire le ZIP
+        run: |
+          python build_zip.py .
+          ls -lh CanaPlan_v${{ steps.version.outputs.version }}.zip
+
+      - name: Vérifier la structure du ZIP
+        # plugins.qgis.org exige un dossier racine portant le nom du plugin.
+        run: |
+          python - <<'PY'
+          import zipfile, os, sys
+          version = os.environ["VERSION"]
+          chemin = f"CanaPlan_v{version}.zip"
+          with zipfile.ZipFile(chemin) as z:
+              noms = z.namelist()
+          attendus = ["CanaPlan/__init__.py", "CanaPlan/metadata.txt",
+                      "CanaPlan/main.py", "CanaPlan/icon/icon.png"]
+          manquants = [n for n in attendus if n not in noms]
+          if manquants:
+              sys.exit(f"::error::absents du ZIP : {manquants}")
+          if any(n.startswith("libs/") or n == "__init__.py" for n in noms):
+              sys.exit("::error::le ZIP n'a pas de dossier racine CanaPlan/")
+          mo = os.path.getsize(chemin) / 1e6
+          print(f"{len(noms)} fichiers, {mo:.1f} Mo")
+          if mo > 25:
+              print(f"::warning::ZIP de {mo:.1f} Mo — plugins.qgis.org "
+                    "peut refuser les paquets volumineux")
+          PY
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Conserver le ZIP comme artefact
+        # Récupérable depuis l'onglet Actions, même si l'envoi échoue.
+        uses: actions/upload-artifact@v4
+        with:
+          name: CanaPlan_v${{ steps.version.outputs.version }}
+          path: CanaPlan_v${{ steps.version.outputs.version }}.zip
+          retention-days: 90
+
+      - name: Envoyer sur plugins.qgis.org
+        if: startsWith(github.ref, 'refs/tags/') || inputs.publier
+        env:
+          OSGEO_USERNAME: ${{ secrets.OSGEO_USERNAME }}
+          OSGEO_PASSWORD: ${{ secrets.OSGEO_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python - <<'PY'
+          import os, sys, xmlrpc.client
+          from urllib.parse import quote
+
+          utilisateur = os.environ.get("OSGEO_USERNAME")
+          motdepasse = os.environ.get("OSGEO_PASSWORD")
+          if not utilisateur or not motdepasse:
+              sys.exit("::error::secrets OSGEO_USERNAME / OSGEO_PASSWORD absents")
+
+          chemin = f"CanaPlan_v{os.environ['VERSION']}.zip"
+          with open(chemin, "rb") as f:
+              donnees = f.read()
+
+          # quote() : un mot de passe contenant @ ou : casserait l'URL.
+          adresse = (f"https://{quote(utilisateur, safe='')}:"
+                     f"{quote(motdepasse, safe='')}@plugins.qgis.org/plugins/RPC2/")
+          serveur = xmlrpc.client.ServerProxy(adresse, verbose=False)
+          try:
+              resultat = serveur.plugin.upload(xmlrpc.client.Binary(donnees))
+          except xmlrpc.client.Fault as e:
+              # Le message peut contenir l'URL, donc les identifiants.
+              sys.exit(f"::error::refus de plugins.qgis.org : {e.faultString}")
+          print(f"Publié : {resultat}")
+          PY
+
+      - name: Créer la release GitHub
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: CanaPlan_v${{ steps.version.outputs.version }}.zip
+          generate_release_notes: true

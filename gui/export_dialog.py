@@ -5,44 +5,95 @@ import os
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox,
     QComboBox, QFrame, QDialogButtonBox, QLineEdit, QPushButton,
-    QFileDialog, QMessageBox,
+    QFileDialog, QMessageBox, QWidget, QSizePolicy, QGridLayout,
 )
 from qgis.PyQt.QtCore import Qt
 
 from ..tools import i18n
+from .print_settings_widget import PrintSettingsWidget
 
 _FORMATS = ['A4', 'A3', 'A2', 'A1', 'A0']
 
+# Formats papier de la coupe type, alignés sur PAPER_SIZES du dialogue de coupe
+_COUPE_PAPIERS = ['a4_paysage', 'a3_paysage', 'a4_portrait', 'a3_portrait']
+
+# Retrait des réglages sous leur case maîtresse
+_INDENT = 18
+
 
 class ExportDialog(QDialog):
-    """Dialogue de choix des exports : plan PDF/DXF et profils en long."""
+    """Dialogue de choix des exports : plan, profils, cubature, coupes types.
+
+    Tout tient dans une seule fenêtre : l'utilisateur la parcourt de haut en
+    bas et coche ce qu'il veut. Les explications de portée (ce que l'export
+    groupé ne sait pas faire) sont en infobulle plutôt qu'en toutes lettres,
+    pour que la fenêtre reste d'un seul tenant à l'écran.
+    """
 
     def __init__(self, parent=None, default_dir=None):
         super().__init__(parent)
         self.setWindowTitle(i18n.tr('exp_titre'))
-        self.setMinimumWidth(460)
+        self.setMinimumWidth(500)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
-        # ── Plan cartographique ───────────────────────────────────────────
-        lbl_plan = QLabel(i18n.tr('exp_plan_carto'))
-        lbl_plan.setStyleSheet("font-weight: bold;")
-        layout.addWidget(lbl_plan)
+        self._bloc_tout_en_un(layout)
+
+        # Les réglages du plan sont montés avant le bloc Plan : leurs listes
+        # se posent au bout de la case « Plan PDF ».
+        self.reglages = PrintSettingsWidget(self, compact=True,
+                                            disposition='inline')
+
+        self._bloc_plan(layout)
+        layout.addWidget(_hsep())
+        self._bloc_profils(layout)
+        layout.addWidget(_hsep())
+        self._bloc_cubature(layout)
+        layout.addWidget(_hsep())
+        self._bloc_coupes(layout)
+        layout.addWidget(_hsep())
+        self._bloc_dossier(layout, default_dir)
+        layout.addWidget(_hsep())
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.button(QDialogButtonBox.Ok).setText(i18n.tr('exp_bouton'))
+        btns.accepted.connect(self._on_accept)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+    # ------------------------------------------------------------------ blocs
+
+    def _bloc_plan(self, layout):
+        layout.addWidget(_titre(i18n.tr('exp_plan_carto')))
 
         self.cb_pdf = QCheckBox(i18n.tr('exp_plan_pdf'))
         self.cb_pdf.setChecked(True)
         self.cb_dxf = QCheckBox(i18n.tr('exp_plan_dxf'))
-        layout.addWidget(self.cb_pdf)
+
+        # Format, orientation, échelle et résolution au bout de la case, sans
+        # libellés : chaque liste se lit d'elle-même et son infobulle la nomme.
+        ligne = QHBoxLayout()
+        ligne.setSpacing(8)
+        ligne.addWidget(self.cb_pdf)
+        ligne.addWidget(self.reglages.ligne_combos, 1)
+        layout.addLayout(ligne)
+
         layout.addWidget(self.cb_dxf)
 
-        layout.addWidget(_hsep())
+        # Titre du plan et mode de cadrage, en retrait sous les cases.
+        retrait = QHBoxLayout()
+        retrait.setContentsMargins(_INDENT, 0, 0, 0)
+        retrait.addWidget(self.reglages)
+        layout.addLayout(retrait)
 
-        # ── Profils en long ───────────────────────────────────────────────
-        lbl_profils = QLabel(i18n.tr('exp_profils'))
-        lbl_profils.setStyleSheet("font-weight: bold;")
-        layout.addWidget(lbl_profils)
+        self.cb_pdf.toggled.connect(self._sync_impression)
+        self.cb_dxf.toggled.connect(self._sync_impression)
+        self._sync_impression()
+
+    def _bloc_profils(self, layout):
+        layout.addWidget(_titre(i18n.tr('exp_profils')))
 
         self.cb_eu,  self.fmt_eu  = self._profil_row(
             layout, i18n.tr('exp_profils_reseau', code="EU"))
@@ -50,12 +101,131 @@ class ExportDialog(QDialog):
             layout, i18n.tr('exp_profils_reseau', code="EP"))
         self.cb_grp, self.fmt_grp, self.ref_grp = self._profil_groupe_row(layout)
 
-        layout.addWidget(_hsep())
+    def _bloc_cubature(self, layout):
+        layout.addWidget(_titre(i18n.tr('exp_cubature_titre')))
 
-        # ── Dossier d'export ──────────────────────────────────────────────
-        lbl_dir = QLabel(i18n.tr('exp_dossier'))
-        lbl_dir.setStyleSheet("font-weight: bold;")
-        layout.addWidget(lbl_dir)
+        self.cb_cubature = QCheckBox(i18n.tr('exp_cub_inclure'))
+        self.cb_cubature.setToolTip(i18n.tr('exp_cub_note'))
+        layout.addWidget(self.cb_cubature)
+
+        # Tous les réglages vivent dans ce conteneur : une seule connexion
+        # suffit à les activer ou les griser avec la case maîtresse.
+        self._cub_box = QWidget()
+        box = QVBoxLayout(self._cub_box)
+        box.setContentsMargins(_INDENT, 0, 0, 0)
+        box.setSpacing(4)
+
+        self.cub_perimetre = QComboBox()
+        self.cub_perimetre.addItem(i18n.tr('cb_tout'),    'tout')
+        self.cub_perimetre.addItem(i18n.tr('cb_eu_seul'), 'EU')
+        self.cub_perimetre.addItem(i18n.tr('cb_ep_seul'), 'EP')
+
+        self.cub_conduites = QCheckBox(i18n.tr('cb_conduites'))
+        self.cub_conduites.setChecked(True)
+        self.cub_branchements = QCheckBox(i18n.tr('cb_branchements'))
+        self.cub_branchements.setChecked(True)
+
+        box.addWidget(_hrow(
+            QLabel(i18n.tr('exp_cub_perimetre')), self.cub_perimetre,
+            self.cub_conduites, self.cub_branchements))
+
+        self.cub_pdf = QCheckBox("PDF")
+        self.cub_pdf.setChecked(True)
+        self.cub_xlsx = QCheckBox("XLSX")
+        self.cub_csv = QCheckBox("CSV")
+
+        box.addWidget(_hrow(
+            QLabel(i18n.tr('exp_cub_formats')),
+            self.cub_pdf, self.cub_xlsx, self.cub_csv))
+
+        self._cub_box.setEnabled(False)
+        self.cb_cubature.toggled.connect(self._cub_box.setEnabled)
+        layout.addWidget(self._cub_box)
+
+    def _bloc_coupes(self, layout):
+        layout.addWidget(_titre(i18n.tr('exp_coupes_titre')))
+
+        self.cb_coupe_eu = QCheckBox(i18n.tr('exp_coupe_type', code="EU"))
+        self.cb_coupe_ep = QCheckBox(i18n.tr('exp_coupe_type', code="EP"))
+        for case in (self.cb_coupe_eu, self.cb_coupe_ep):
+            case.setToolTip(i18n.tr('exp_coupe_note'))
+        layout.addWidget(_hrow(self.cb_coupe_eu, self.cb_coupe_ep))
+
+        self._coupe_box = QWidget()
+        box = QHBoxLayout(self._coupe_box)
+        box.setContentsMargins(_INDENT, 0, 0, 0)
+        box.setSpacing(8)
+
+        self.coupe_papier = QComboBox()
+        for cle in _COUPE_PAPIERS:
+            self.coupe_papier.addItem(_libelle_papier(cle), cle)
+        self.coupe_fichier = QComboBox()
+        self.coupe_fichier.addItems(['PDF', 'PNG'])
+        self.coupe_fichier.setFixedWidth(70)
+
+        box.addWidget(QLabel(i18n.tr('exp_coupe_format')))
+        box.addWidget(self.coupe_papier)
+        box.addWidget(self.coupe_fichier)
+        box.addStretch()
+
+        self._coupe_box.setEnabled(False)
+        self.cb_coupe_eu.toggled.connect(self._sync_coupe_box)
+        self.cb_coupe_ep.toggled.connect(self._sync_coupe_box)
+        layout.addWidget(self._coupe_box)
+
+    def _bloc_tout_en_un(self, layout):
+        """Raccourci « tout en un », dans le coin haut droit de la fenêtre.
+
+        Il ignore délibérément les cases cochées plus bas : c'est un bouton de
+        sortie de secours, pas une option supplémentaire. Le coin, à l'écart
+        de la colonne d'options, et la couleur pleine disent l'un comme
+        l'autre qu'il ne se combine avec rien.
+        """
+        self._tout_en_un = False
+
+        btn_zip = QPushButton(i18n.tr('exp_tout_en_un'))
+        # Le résumé d'abord : c'est ce qu'on veut lire en survolant, le détail
+        # des cas particuliers vient après.
+        btn_zip.setToolTip("%s\n\n%s" % (i18n.tr('exp_tout_en_un_resume'),
+                                         i18n.tr('exp_tout_en_un_note')))
+        btn_zip.setCursor(Qt.PointingHandCursor)
+        # Le bouton garde la largeur de son libellé, quelle que soit la place
+        # laissée par le ressort : dans un coin, un bouton étiré n'en est plus
+        # un. La hauteur suit le thème, la traduction la largeur.
+        btn_zip.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        btn_zip.setStyleSheet(
+            "QPushButton {"
+            "  background-color: #CC0000; color: #FFFFFF;"
+            "  font-weight: bold; border: none; border-radius: 3px;"
+            "  padding: 6px 14px;"
+            "}"
+            "QPushButton:hover  { background-color: #E01010; }"
+            "QPushButton:pressed{ background-color: #A30000; }"
+        )
+        btn_zip.clicked.connect(self._on_tout_en_un)
+
+        coin = QHBoxLayout()
+        coin.setContentsMargins(0, 0, 0, 0)
+        coin.addStretch()          # pousse le bouton dans le coin droit
+        coin.addWidget(btn_zip)
+        layout.addLayout(coin)
+
+    def _sync_impression(self):
+        """Les réglages ne valent que pour le plan : grisés sans lui.
+
+        Grisés plutôt que masqués, pour que la fenêtre ne change pas de
+        taille à chaque clic sur une case.
+        """
+        actif = self.cb_pdf.isChecked() or self.cb_dxf.isChecked()
+        self.reglages.setEnabled(actif)
+        self.reglages.ligne_combos.setEnabled(actif)
+
+    def get_print_settings(self):
+        """Réglages d'impression, au format attendu par PrintTool."""
+        return self.reglages.get_settings()
+
+    def _bloc_dossier(self, layout, default_dir):
+        layout.addWidget(_titre(i18n.tr('exp_dossier')))
 
         dir_row = QHBoxLayout()
         self.dir_edit = QLineEdit(default_dir or os.path.expanduser("~"))
@@ -66,13 +236,11 @@ class ExportDialog(QDialog):
         dir_row.addWidget(btn_browse)
         layout.addLayout(dir_row)
 
-        layout.addWidget(_hsep())
+    # ------------------------------------------------------------------ slots
 
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.button(QDialogButtonBox.Ok).setText(i18n.tr('exp_bouton'))
-        btns.accepted.connect(self._on_accept)
-        btns.rejected.connect(self.reject)
-        layout.addWidget(btns)
+    def _sync_coupe_box(self):
+        self._coupe_box.setEnabled(
+            self.cb_coupe_eu.isChecked() or self.cb_coupe_ep.isChecked())
 
     def _browse_dir(self):
         start = self.dir_edit.text().strip() or os.path.expanduser("~")
@@ -84,13 +252,23 @@ class ExportDialog(QDialog):
             self.dir_edit.setText(path)
 
     def _on_accept(self):
+        """Valide le dossier puis ferme. Retourne False si le dossier cloche."""
         path = self.dir_edit.text().strip()
         if not path or not os.path.isdir(path):
             QMessageBox.warning(
                 self, i18n.tr('exp_dossier_invalide'),
                 i18n.tr('exp_dossier_absent'))
-            return
+            return False
         self.accept()
+        return True
+
+    def _on_tout_en_un(self):
+        # Le drapeau ne se lève que si le dossier est valide : sinon la
+        # fenêtre reste ouverte et un nouveau clic sur Exporter ne doit pas
+        # partir en mode tout en un.
+        self._tout_en_un = self._on_accept()
+
+    # ------------------------------------------------------------------ lignes
 
     def _profil_row(self, layout, label):
         row = QHBoxLayout()
@@ -137,6 +315,8 @@ class ExportDialog(QDialog):
         layout.addLayout(row)
         return cb, fmt_combo, ref_combo
 
+    # ------------------------------------------------------------------ résultat
+
     def get_choices(self):
         return {
             'plan_pdf':              self.cb_pdf.isChecked(),
@@ -148,8 +328,53 @@ class ExportDialog(QDialog):
             'profil_groupe':         self.cb_grp.isChecked(),
             'profil_groupe_format':  self.fmt_grp.currentText(),
             'profil_groupe_reseau':  self.ref_grp.currentText(),
+            'cubature':              self.cb_cubature.isChecked(),
+            'cubature_perimetre':    self.cub_perimetre.currentData(),
+            'cubature_conduites':    self.cub_conduites.isChecked(),
+            'cubature_branchements': self.cub_branchements.isChecked(),
+            'cubature_pdf':          self.cub_pdf.isChecked(),
+            'cubature_xlsx':         self.cub_xlsx.isChecked(),
+            'cubature_csv':          self.cub_csv.isChecked(),
+            'coupe_eu':              self.cb_coupe_eu.isChecked(),
+            'coupe_ep':              self.cb_coupe_ep.isChecked(),
+            'coupe_papier':          self.coupe_papier.currentData(),
+            'coupe_fichier':         self.coupe_fichier.currentText().lower(),
+            'tout_en_un':            self._tout_en_un,
             'output_dir':            self.dir_edit.text().strip(),
         }
+
+
+# ─── Petits assembleurs de widgets ───────────────────────────────────────────
+
+def _titre(texte):
+    lbl = QLabel(texte)
+    lbl.setStyleSheet("font-weight: bold;")
+    return lbl
+
+
+def _hrow(*widgets):
+    """Widgets côte à côte, poussés à gauche."""
+    w = QWidget()
+    h = QHBoxLayout(w)
+    h.setContentsMargins(0, 0, 0, 0)
+    h.setSpacing(10)
+    for ww in widgets:
+        h.addWidget(ww)
+    h.addStretch()
+    return w
+
+
+def _libelle_papier(cle):
+    """« A4 paysage » depuis une clé de PAPER_SIZES, dans la langue courante."""
+    format_court, orientation = cle.split('_')
+    return f"{format_court.upper()} {i18n.tr('pd_' + orientation).lower()}"
+
+
+def _vsep():
+    sep = QFrame()
+    sep.setFrameShape(QFrame.VLine)
+    sep.setFrameShadow(QFrame.Sunken)
+    return sep
 
 
 def _hsep():

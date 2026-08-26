@@ -20,6 +20,62 @@ _STATE_MOVE   = 0   # rectangle suit la souris (libre ou domino)
 _STATE_ROTATE = 1   # ancrage fixé, rectangle pivote autour du centre
 
 
+# Instrumentation TEMPORAIRE du temps d'export (journal QGIS, onglet CanaPlan).
+# Passer à False pour la couper sans rien retirer d'autre.
+_CHRONO = True
+
+
+class _Chrono:
+    """Chronomètre d'étapes, déversé dans le journal QGIS.
+
+    Volontairement silencieux si _CHRONO est False, pour qu'aucun appel de
+    mesure n'ait à être retiré du code quand on coupe l'instrumentation.
+    """
+
+    TAG = "CanaPlan"
+
+    def __init__(self, titre):
+        import time
+        self._time = time.perf_counter
+        self._t0 = self._time()
+        self._precedent = self._t0
+        if _CHRONO:
+            self.log(f"───── {titre} ─────")
+
+    def log(self, message):
+        if not _CHRONO:
+            return
+        from qgis.core import QgsMessageLog, Qgis
+        QgsMessageLog.logMessage(message, self.TAG, Qgis.Info)
+
+    def etape(self, libelle):
+        """Temps écoulé depuis l'étape précédente, et depuis le début."""
+        if not _CHRONO:
+            return
+        maintenant = self._time()
+        self.log("%-34s %7.2f s   (cumul %6.2f s)"
+                 % (libelle, maintenant - self._precedent, maintenant - self._t0))
+        self._precedent = maintenant
+
+    def depuis_debut(self):
+        return self._time() - self._t0
+
+
+# Teintes des emprises sur le plan d'ensemble. Choisies franchement
+# distinctes les unes des autres : c'est la couleur, plus que le numéro, qui
+# permet de suivre une planche du regard quand les emprises se recouvrent.
+_TEINTES_PLANCHES = (210, 0, 135, 32, 280, 175, 55, 320)
+
+
+def _couleur_planche(index, alpha=255):
+    """Couleur d'une planche, cyclique au-delà de la palette."""
+    from qgis.PyQt.QtGui import QColor
+    teinte = _TEINTES_PLANCHES[index % len(_TEINTES_PLANCHES)]
+    couleur = QColor.fromHsv(teinte, 205, 190)
+    couleur.setAlpha(alpha)
+    return couleur
+
+
 def _aide_pose(settings):
     """Message de la barre d'état pendant la pose des feuilles."""
     return i18n.tr(
@@ -32,10 +88,17 @@ def _aide_pose(settings):
 
 class PrintTool(QgsMapTool):
 
-    def __init__(self, canvas, iface, settings):
+    def __init__(self, canvas, iface, settings, on_finished=None):
         super().__init__(canvas)
         self.iface = iface
         self.s     = settings
+
+        # Appelé une seule fois quand l'outil rend la main, que l'export ait
+        # eu lieu ou que l'utilisateur ait abandonné. L'export tout en un s'en
+        # sert pour refermer son archive : lui seul sait quand la pose des
+        # feuilles est finie.
+        self._on_finished       = on_finished
+        self._finished_notified = False
 
         factor  = settings["echelle"] / 1000.0
         self._w = settings["w_mm"] * factor   # largeur feuille en mètres
@@ -83,6 +146,8 @@ class PrintTool(QgsMapTool):
     def activate(self):
         super().activate()
         self.canvas().setCursor(Qt.CrossCursor)
+        if self.s.get('cadrage_auto'):
+            return   # rien à poser : l'aide n'aurait aucun sens
         self.iface.messageBar().pushMessage(
             i18n.tr('msg_impression'), _aide_pose(self.s),
             level=0, duration=0,
@@ -103,6 +168,23 @@ class PrintTool(QgsMapTool):
         self._cur_rot = 0.0
         self._state   = _STATE_MOVE
         super().deactivate()
+        self._notify_finished()
+
+    def _notify_finished(self):
+        """Prévient l'appelant, une fois au plus.
+
+        Différé d'un tour de boucle : deactivate() est appelé au milieu d'un
+        changement d'outil du canevas, où ouvrir une fenêtre modale n'est pas
+        sain.
+        """
+        if self._finished_notified or self._on_finished is None:
+            return
+        self._finished_notified = True
+
+        from qgis.PyQt.QtCore import QTimer
+        callback = self._on_finished
+        self._on_finished = None
+        QTimer.singleShot(0, callback)
 
     # ── Événements canvas ──────────────────────────────────────────────────
 
@@ -207,17 +289,25 @@ class PrintTool(QgsMapTool):
             if dlg.scale_combo.itemData(idx) == self.s["echelle"]:
                 dlg.scale_combo.setCurrentIndex(idx)
                 break
+        # On pose des planches à la main : rouvrir les réglages ne doit pas
+        # faire repartir en cadrage automatique, qui est pourtant le défaut.
+        if self.s.get('cadrage_auto'):
+            dlg.rb_auto.setChecked(True)
+        else:
+            dlg.rb_manuel.setChecked(True)
 
         if dlg.exec_() != PrintDialog.Accepted:
             self.canvas().unsetMapTool(self)
             return
 
-        # Préserver les choix PDF/DXF déjà faits
-        do_pdf = self.s.get('do_pdf', True)
-        do_dxf = self.s.get('do_dxf', False)
-        self.s   = dlg.get_settings()
-        self.s['do_pdf'] = do_pdf
-        self.s['do_dxf'] = do_dxf
+        # La fenêtre ne rend que les réglages de mise en page : tout ce qui
+        # a été décidé ailleurs — formats à produire, dossier de sortie,
+        # ouverture après export — doit survivre à sa réouverture.
+        conserves = {cle: self.s[cle]
+                     for cle in ('do_pdf', 'do_dxf', 'output_dir', 'open_after')
+                     if cle in self.s}
+        self.s = dlg.get_settings()
+        self.s.update(conserves)
         factor   = self.s["echelle"] / 1000.0
         self._w  = self.s["w_mm"] * factor
         self._h  = self.s["h_mm"] * factor
@@ -293,6 +383,30 @@ class PrintTool(QgsMapTool):
         return [
             QgsPointXY(cx + lx * ct + ly * st,
                        cy - lx * st + ly * ct)
+            for lx, ly in local
+        ]
+
+    def _corners_zone_carte(self, cx, cy, theta_rad):
+        """Coins de la zone cartographiée d'une feuille, cartouche exclu.
+
+        _corners() délimite la feuille de papier ; la page imprimée, elle,
+        ne montre que la zone au-dessus du cartouche, et son centre est donc
+        un demi-cartouche plus haut. Le plan d'ensemble doit délimiter cette
+        zone-là, sans quoi ses cadres annoncent une bande de terrain que les
+        pages ne montrent pas.
+        """
+        carto_h_m = self._carto_h_m()
+        ct, st = math.cos(theta_rad), math.sin(theta_rad)
+        # Même remontée que dans _generate_pdf pour passer du centre de la
+        # feuille au centre de la carte.
+        ccx = cx + (carto_h_m / 2.0) * st
+        ccy = cy + (carto_h_m / 2.0) * ct
+        hw = self._w / 2.0
+        hh = (self._h - carto_h_m) / 2.0
+        local = [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]
+        return [
+            QgsPointXY(ccx + lx * ct + ly * st,
+                       ccy - lx * st + ly * ct)
             for lx, ly in local
         ]
 
@@ -391,7 +505,23 @@ class PrintTool(QgsMapTool):
 
     # ── Pose d'une feuille ─────────────────────────────────────────────────
 
-    def _place_sheet(self, center, rotation_rad):
+    def definir_feuilles(self, planches):
+        """Impose la liste des planches, sans passer par les clics.
+
+        Utilisé par le cadrage automatique. Les emprises s'affichent comme
+        des feuilles posées à la main : le reste de l'outil, export compris,
+        ne fait aucune différence entre les deux origines.
+        """
+        for centre, rotation in planches:
+            self._place_sheet(centre, rotation, annoncer=False)
+
+    def exporter_maintenant(self):
+        """Lance l'export sans attendre le clic droit (cadrage automatique)."""
+        if not self._sheets:
+            return
+        self._ask_and_export()
+
+    def _place_sheet(self, center, rotation_rad, annoncer=True):
         corners = self._corners(center.x(), center.y(), rotation_rad)
         band = QgsRubberBand(self.canvas(), QgsWkbTypes.PolygonGeometry)
         band.setColor(QColor(30, 100, 200, 45))
@@ -405,12 +535,13 @@ class PrintTool(QgsMapTool):
         })
         self._bands.append(band)
 
-        n = len(self._sheets)
-        self.iface.messageBar().pushMessage(
-            i18n.tr('msg_impression'),
-            i18n.tr('pt_feuille_posee', n=n),
-            level=0, duration=4,
-        )
+        if annoncer:
+            n = len(self._sheets)
+            self.iface.messageBar().pushMessage(
+                i18n.tr('msg_impression'),
+                i18n.tr('pt_feuille_posee', n=n),
+                level=0, duration=4,
+            )
 
     # ── Choix du format d'export ───────────────────────────────────────────
 
@@ -468,15 +599,17 @@ class PrintTool(QgsMapTool):
 
         run_export_dxf_with_ui(
             self.iface, dxf_path, extent, float(self.s["echelle"]),
-            with_label_decorations=True, force_2d=True, open_after=True,
+            with_label_decorations=True, force_2d=True,
+            open_after=self.s.get('open_after', True),
         )
 
     # ── Export PDF ─────────────────────────────────────────────────────────
 
     def _export_pdf(self):
-        overview_settings = self._ask_overview_settings()
-        # overview_settings est None si l'utilisateur a annulé la fenêtre overview
-        # ou un dict si accepté, ou False si refusé
+        # Le plan d'ensemble est un réglage de la fenêtre d'export, plus une
+        # question posée au milieu de l'export.
+        overview_settings = (self._overview_settings()
+                             if self.s.get('plan_ensemble', True) else False)
 
         from .projet_bet import project_dir
         # Nom du fichier projet (sans extension) comme nom PDF par défaut
@@ -520,21 +653,13 @@ class PrintTool(QgsMapTool):
         finally:
             QApplication.restoreOverrideCursor()
 
-    def _ask_overview_settings(self):
-        """Demande simplement si l'utilisateur veut un plan d'ensemble.
-        L'échelle est calculée automatiquement pour faire tenir la bbox
-        des feuilles + 30 % de marge dans le même format que les détails."""
-        from qgis.PyQt.QtWidgets import QMessageBox
+    def _overview_settings(self):
+        """Réglages du plan d'ensemble, ou False s'il n'y a rien à cadrer.
 
-        rep = QMessageBox.question(
-            self.iface.mainWindow(),
-            i18n.tr('pt_plan_ensemble'),
-            i18n.tr('pt_plan_ensemble_q'),
-            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
-        )
-        if rep == QMessageBox.Cancel:
-            return None
-        if rep == QMessageBox.No:
+        L'échelle est calculée automatiquement pour faire tenir la bbox des
+        planches + 30 % de marge dans le même format que les détails.
+        """
+        if not self._sheets:
             return False
 
         # Bbox de toutes les emprises (coins, rotation incluse)
@@ -607,6 +732,8 @@ class PrintTool(QgsMapTool):
         from qgis.PyQt.QtWidgets import QProgressDialog
         from qgis.core import QgsProject
 
+        chrono = _Chrono("Export PDF")
+
         w_mm    = self.s["w_mm"]
         h_mm    = self.s["h_mm"]
         echelle = self.s["echelle"]
@@ -633,6 +760,33 @@ class PrintTool(QgsMapTool):
                         if node.layer() is not None]
         _print_layers = [lyr for lyr in _ordered
                          if lyr is not None and lyr.id() in _visible_ids]
+
+        chrono.etape("preparation des couches")
+        if _CHRONO:
+            # Le fournisseur distingue les couches locales des flux distants,
+            # dont la latence est le premier suspect.
+            chrono.log("  %d couches, %d feuilles, %.0f dpi, format %s"
+                       % (len(_print_layers), n, dpi, self.s['format']))
+            for lyr in _print_layers:
+                try:
+                    fournisseur = lyr.dataProvider().name()
+                except Exception:
+                    fournisseur = "?"
+                if fournisseur in ('wms', 'wmts', 'xyz', 'arcgismapserver'):
+                    detail = "  <-- flux distant"
+                    # Le format demande et le mode de tuilage pesent bien plus
+                    # lourd que tout le reste : on veut les voir.
+                    try:
+                        chrono.log("      source: %s" % lyr.source())
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        detail = "  %d entites" % lyr.featureCount()
+                    except Exception:
+                        detail = ""
+                chrono.log("    [%-8s] %-34s%s"
+                           % (fournisseur, lyr.name(), detail))
 
         pdf_title = os.path.splitext(os.path.basename(pdf_path))[0].replace("_", " ")
         titre     = self._split_two_lines(pdf_title)
@@ -686,15 +840,38 @@ class PrintTool(QgsMapTool):
             ms.setOutputSize(QSize(out_w or w_px, out_h or h_px))
             ms.setExtent(QgsRectangle(cx - w_m / 2, cy - h_m / 2,
                                        cx + w_m / 2, cy + h_m / 2))
-            ms.setRotation(math.degrees(rot_rad))
+            # Signe inverse : QgsMapSettings.setRotation() fait tourner le
+            # CONTENU, alors que rot_rad oriente la PLANCHE. Vérifié sur
+            # l'API : une ligne d'azimut +30° est redressée par
+            # setRotation(-30) ; setRotation(+30) la porte à +60°, soit deux
+            # fois l'inclinaison — ce que montraient les planches.
+            ms.setRotation(-math.degrees(rot_rad))
             ms.setOutputDpi(dpi)
             ms.setBackgroundColor(QColor(255, 255, 255))
             try:
                 ms.setFlag(QgsMapSettings.Antialiasing,       True)
                 ms.setFlag(QgsMapSettings.DrawLabeling,       True)
                 ms.setFlag(QgsMapSettings.UseAdvancedEffects, True)
-                ms.setFlag(QgsMapSettings.ForceVectorOutput,  True)
+                # ForceVectorOutput n'a rien à faire ici : la sortie de ce job
+                # est une QImage (renderedImage()), recollée ensuite dans le
+                # QPrinter. Le drapeau ne préservait donc aucun vectoriel mais
+                # privait QGIS de ses raccourcis de rendu.
             except AttributeError:
+                pass
+
+            # Vertices tombant dans le même pixel : inutiles à cette
+            # résolution, mais coûteux à parcourir sur les fonds cadastraux.
+            # Seuil en pixels, donc invisible par construction.
+            try:
+                from qgis.core import QgsVectorSimplifyMethod
+                simplify = QgsVectorSimplifyMethod()
+                simplify.setSimplifyHints(
+                    QgsVectorSimplifyMethod.GeometrySimplification)
+                simplify.setSimplifyAlgorithm(QgsVectorSimplifyMethod.Distance)
+                simplify.setThreshold(1.0)
+                simplify.setForceLocalOptimization(True)
+                ms.setSimplifyMethod(simplify)
+            except Exception:
                 pass
             # ParallelJob : les couches d'une même page sont rendues sur
             # plusieurs threads (SequentialJob n'en utilisait qu'un seul).
@@ -703,35 +880,67 @@ class PrintTool(QgsMapTool):
             return job
 
         def _draw_scalebar(ech=None):
-            # Barre d'échelle : par défaut échelle des feuilles de détail,
-            # sinon celle passée en paramètre (plan d'ensemble).
-            ech    = ech or echelle
-            sb_w_m = w_mm * 0.40 / 1000.0 * ech
-            seg_m  = self._nice_scalebar_step(sb_w_m / 3.0)
-            seg_px = seg_m * 1000.0 / ech * dpi / 25.4
-            total_px = int(seg_px * 3)
-            sb_h_px  = max(4, px(4))
-            sb_y_px  = carto_y_px - px(3) - sb_h_px
-            sb_x_px  = (w_px - total_px) // 2
-            for j in range(3):
-                r = QRect(sb_x_px + j * int(seg_px), sb_y_px,
-                          int(seg_px), sb_h_px)
-                painter.fillRect(r, QColor(0, 0, 0) if j % 2 == 0
-                                 else QColor(255, 255, 255))
-                painter.setPen(QPen(QColor(0, 0, 0), 1))
-                painter.drawRect(r)
+            """Barre d'échelle discrète, tracée à même la carte."""
+            ech = ech or echelle
+            n_seg = 4
+
+            # Largeur visée ~28 % de la page, arrondie à une valeur ronde.
+            sb_w_m  = w_mm * 0.28 / 1000.0 * ech
+            seg_m   = self._nice_scalebar_step(sb_w_m / n_seg)
+            seg_px  = seg_m * 1000.0 / ech * dpi / 25.4
+            total_px = int(seg_px * n_seg)
+
+            sb_h_px = max(3, px(1.8))     # barre fine : 1,8 mm
+
+            # La police d'abord : c'est elle qui impose la hauteur de la
+            # bande de libellés. Fixer cette hauteur en millimètres coupait
+            # le texte par le bas dès que la police dépassait — ce qui était
+            # le cas sur tous les formats à partir du A3.
+            drapeau = Qt.AlignHCenter | Qt.AlignBottom
             f_sb = QFont("Arial")
-            f_sb.setPointSize(max(6, int(carto_h_mm / 25.4 * 72 * 0.24)))
+            f_sb.setPointSize(max(5, int(carto_h_mm / 25.4 * 72 * 0.16)))
             painter.setFont(f_sb)
-            painter.setPen(QColor(0, 0, 0))
-            lbl_h = px(5)
-            for j in range(4):
-                lx = sb_x_px + j * int(seg_px)
+            lbl_h = painter.boundingRect(
+                QRect(0, 0, w_px, px(30)), drapeau, "0000 m").height()
+            lbl_h += max(1, px(0.8))
+
+            sb_x = (w_px - total_px) // 2
+            sb_y = carto_y_px - px(3) - sb_h_px
+
+            encre = QColor(0x33, 0x33, 0x33)
+
+            # ── Segments alternés ────────────────────────────────────────
+            for k in range(n_seg):
+                r = QRect(sb_x + int(k * seg_px), sb_y, int(seg_px), sb_h_px)
+                painter.fillRect(r, encre if k % 2 == 0
+                                 else QColor(255, 255, 255))
+
+            # Un seul contour pour toute la barre, plus les séparations : les
+            # segments encadrés un par un doublaient chaque trait intérieur.
+            painter.setPen(QPen(encre, 1))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(QRect(sb_x, sb_y, total_px, sb_h_px))
+            for k in range(1, n_seg):
+                x = sb_x + int(k * seg_px)
+                painter.drawLine(x, sb_y, x, sb_y + sb_h_px)
+
+            # ── Graduations ──────────────────────────────────────────────
+            painter.setPen(encre)
+            for k in range(n_seg + 1):
+                valeur = seg_m * k
+                texte = ("%g" % valeur)
+                if k == n_seg:
+                    texte += " m"     # l'unité une seule fois, en bout
+                lx = sb_x + int(k * seg_px)
+                # Largeur mesurée et non calée sur une graduation : le dernier
+                # libellé porte l'unité, il est donc plus large qu'un pas de
+                # graduation et se faisait tronquer.
+                besoin = painter.boundingRect(
+                    QRect(0, 0, w_px, lbl_h), drapeau, texte)
+                demi = besoin.width() // 2 + max(1, px(0.6))
                 painter.drawText(
-                    QRect(lx - int(seg_px) // 2, sb_y_px - lbl_h,
-                          int(seg_px), lbl_h),
-                    Qt.AlignHCenter | Qt.AlignVCenter,
-                    f"{int(j * seg_m)} m")
+                    QRect(lx - demi, sb_y - lbl_h, 2 * demi, lbl_h),
+                    drapeau, texte)
 
         def _draw_cartouche(titre_txt, fmt, page_num):
             painter.fillRect(
@@ -740,10 +949,37 @@ class PrintTool(QgsMapTool):
             painter.setPen(QPen(QColor(0, 0, 0), 1))
             painter.drawLine(0, carto_y_px, w_px, carto_y_px)
             pt = max(7, int(carto_h_mm / 25.4 * 72 * 0.30))
+
+            def _police_ajustee(text, max_w, max_h, bold):
+                """Plus grande taille <= pt qui fait tenir `text` dans la case.
+
+                La taille de base ne se déduit que de la hauteur du bandeau.
+                En portrait, celle-ci est plafonnée à 30 mm sur une page
+                étroite : la case de date, qui ne fait que 12 % de la largeur,
+                est alors bien trop petite. Le retour à la ligne ne sauve rien,
+                une date n'ayant aucune espace où se couper.
+                """
+                f = QFont("Arial")
+                f.setBold(bold)
+                flags = Qt.AlignHCenter | Qt.AlignVCenter | Qt.TextWordWrap
+                for taille in range(int(pt), 4, -1):
+                    f.setPointSize(taille)
+                    # boundingRect du painter : métriques du périphérique de
+                    # sortie, pas celles de l'écran.
+                    painter.setFont(f)
+                    besoin = painter.boundingRect(
+                        QRect(0, 0, max_w, max_h), flags, text)
+                    if besoin.width() <= max_w and besoin.height() <= max_h:
+                        break
+                return f
+
+            # La date est incompressible (10 caractères sans espace) alors
+            # que le titre a toujours de la marge : les 4 % transférés ne
+            # coûtent rien au titre et évitent une date en corps 6.
             sections = [
-                (titre_txt, 0.00, 0.45, True),
-                (fmt,       0.45, 0.32, False),
-                (QDate.currentDate().toString("dd/MM/yyyy"), 0.77, 0.12, False),
+                (titre_txt, 0.00, 0.41, True),
+                (fmt,       0.41, 0.32, False),
+                (QDate.currentDate().toString("dd/MM/yyyy"), 0.73, 0.16, False),
                 (page_num,  0.89, 0.11, False),
             ]
             for text, xf, wf, bold in sections:
@@ -751,10 +987,8 @@ class PrintTool(QgsMapTool):
                 wp = int(wf * w_px)
                 if xf > 0:
                     painter.drawLine(xp, carto_y_px, xp, h_px)
-                f = QFont("Arial")
-                f.setPointSize(pt)
-                f.setBold(bold)
-                painter.setFont(f)
+                painter.setFont(
+                    _police_ajustee(text, wp - 8, carto_h_px, bold))
                 painter.setPen(QColor(0, 0, 0))
                 painter.drawText(
                     QRect(xp + 4, carto_y_px, wp - 8, carto_h_px),
@@ -766,8 +1000,12 @@ class PrintTool(QgsMapTool):
 
         def _draw_north_arrow(rot_rad):
             """Flèche du nord en haut à droite de la zone carte.
-            La carte est rendue avec setRotation(rot) : le nord pointe
-            à rot radians dans le sens anti-horaire depuis le haut de page."""
+
+            La carte est rendue avec setRotation(-rot) : le contenu tourne de
+            -rot, donc le nord s'écarte du haut de page de rot dans le sens
+            anti-horaire. La flèche était déjà dessinée ainsi — c'est le
+            rendu qui suivait la mauvaise convention.
+            """
             size   = px(14)          # diamètre du médaillon (~14 mm)
             margin = px(5)
             cx_a   = w_px - margin - size // 2
@@ -841,15 +1079,27 @@ class PrintTool(QgsMapTool):
             jobs.append(_start_render(
                 cx_c, cy_c, rot, self._w, h_map_m_det, w_px, h_map_px))
 
+        chrono.etape("lancement des %d jobs" % len(jobs))
+
         progress = QProgressDialog(
             i18n.tr('pt_rendu_cartes'), i18n.tr('annuler'), 0, len(jobs),
             self.iface.mainWindow())
         progress.setWindowTitle(i18n.tr('msg_impression'))
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(400)
+        deja_fini = [False] * len(jobs)
         try:
             while True:
-                done = sum(1 for j in jobs if not j.isActive())
+                done = 0
+                for i, j in enumerate(jobs):
+                    if j.isActive():
+                        continue
+                    done += 1
+                    # Premier passage à l'état terminé : on horodate ce job.
+                    if not deja_fini[i]:
+                        deja_fini[i] = True
+                        chrono.log("  job %d/%d rendu           %7.2f s"
+                                   % (i + 1, len(jobs), chrono.depuis_debut()))
                 progress.setValue(done)
                 if progress.wasCanceled():
                     for j in jobs:
@@ -863,6 +1113,8 @@ class PrintTool(QgsMapTool):
                 QApplication.processEvents(QEventLoop.AllEvents, 50)
         finally:
             progress.close()
+
+        chrono.etape("attente rendu des cartes")
 
         img_ov      = jobs[0].renderedImage() if overview_settings else None
         detail_imgs = [j.renderedImage()
@@ -914,30 +1166,82 @@ class PrintTool(QgsMapTool):
             # un transparency group PDF que Qt5 ne ferme pas sans restore(),
             # ce qui crée un voile blanc sur toutes les pages suivantes.
             painter.save()
+            painter.setRenderHint(QPainter.Antialiasing, True)
+
+            # Chaque planche reçoit sa teinte, et le style de trait alterne
+            # au-delà de la palette : deux planches de même couleur ne se
+            # ressemblent alors jamais tout à fait.
+            polys = []
             for si, sheet in enumerate(self._sheets):
-                corners = self._corners(
+                # Zone cartographiée et non feuille entière : le cadre doit
+                # délimiter exactement ce que la page montrera.
+                corners = self._corners_zone_carte(
                     sheet['center'].x(), sheet['center'].y(),
                     sheet['rotation_rad'])
-                pts = [_map_to_px(c) for c in corners]
-                poly = QPolygon(pts)
-                painter.setPen(QPen(QColor(20, 80, 180, 230), 2))
-                painter.setBrush(QColor(30, 100, 200, 50))
+                polys.append(QPolygon([_map_to_px(c) for c in corners]))
+
+            # Passe 1 : les fonds, très légers. Un aplat marqué s'additionne
+            # dans les recouvrements et noircit justement les zones où il
+            # faudrait y voir clair.
+            painter.setPen(Qt.NoPen)
+            for si, poly in enumerate(polys):
+                painter.setBrush(_couleur_planche(si, 30))
                 painter.drawPolygon(poly)
-                ctr = _map_to_px(sheet['center'])
-                # Numéro à 25 % de la hauteur du cadre de la feuille sur le
-                # plan d'ensemble (plancher ~4 mm pour rester lisible).
-                sheet_h_px = self._h / ov_h_m * h_map_px
-                num_px     = max(px(4), int(sheet_h_px * 0.25))
-                f_num = QFont("Arial")
-                f_num.setBold(True)
-                f_num.setPixelSize(num_px)
-                painter.setFont(f_num)
-                painter.setPen(QColor(20, 80, 180))
-                half = max(px(8), int(sheet_h_px / 2))
-                painter.drawText(
-                    QRect(ctr.x() - half, ctr.y() - half, 2 * half, 2 * half),
-                    Qt.AlignHCenter | Qt.AlignVCenter,
-                    str(si + 1))
+
+            # Passe 2 : tous les contours par-dessus tous les fonds, sinon le
+            # fond d'une planche vient masquer le contour de sa voisine.
+            painter.setBrush(Qt.NoBrush)
+            for si, poly in enumerate(polys):
+                style = (Qt.SolidLine
+                         if (si // len(_TEINTES_PLANCHES)) % 2 == 0
+                         else Qt.DashLine)
+                stylo = QPen(_couleur_planche(si, 245), max(2, px(0.6)))
+                stylo.setStyle(style)
+                stylo.setJoinStyle(Qt.MiterJoin)
+                painter.setPen(stylo)
+                painter.drawPolygon(poly)
+
+            # Passe 3 : les numéros. Un chiffre cerné de blanc plutôt
+            # qu'une pastille pleine : le liseré suffit à le détacher d'une
+            # ortho, sans masquer le fond de plan au centre de la planche,
+            # justement là où on veut le lire.
+            from qgis.PyQt.QtGui import QPainterPath, QFontMetrics
+
+            sheet_h_px = self._h / ov_h_m * h_map_px
+            f_num = QFont("Arial")
+            f_num.setBold(True)
+            f_num.setPixelSize(max(px(3.2), int(sheet_h_px * 0.20)))
+            metrique = QFontMetrics(f_num, painter.device())
+            liseré = max(2, px(0.55))
+
+            for si, sheet in enumerate(self._sheets):
+                # Centre de la zone carte : le centre de la feuille tombe
+                # dans le cartouche, donc à côté de ce que la page montre.
+                coins = self._corners_zone_carte(
+                    sheet['center'].x(), sheet['center'].y(),
+                    sheet['rotation_rad'])
+                ctr = _map_to_px(QgsPointXY(
+                    sum(c.x() for c in coins) / 4.0,
+                    sum(c.y() for c in coins) / 4.0))
+                texte = str(si + 1)
+                try:
+                    largeur = metrique.horizontalAdvance(texte)
+                except AttributeError:
+                    largeur = metrique.width(texte)   # Qt < 5.11
+
+                chemin = QPainterPath()
+                # addText part de la ligne de base : on recentre à la main.
+                chemin.addText(
+                    ctr.x() - largeur / 2.0,
+                    ctr.y() + (metrique.ascent() - metrique.descent()) / 2.0,
+                    f_num, texte)
+
+                painter.setPen(QPen(QColor(255, 255, 255, 230), liseré))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawPath(chemin)              # le cerne
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(_couleur_planche(si, 255))
+                painter.drawPath(chemin)              # le chiffre
             painter.restore()
 
             _draw_north_arrow(0.0)
@@ -963,13 +1267,17 @@ class PrintTool(QgsMapTool):
 
         painter.end()
 
+        chrono.etape("composition et ecriture PDF")
+        chrono.log("TOTAL %.2f s" % chrono.depuis_debut())
+
         self.iface.messageBar().pushMessage(
             i18n.tr('msg_impression'),
             i18n.tr('pt_pdf_exporte', nb=n, chemin=pdf_path),
             level=0, duration=8,
         )
-        try:
-            os.startfile(pdf_path)
-        except Exception:
-            pass
+        if self.s.get('open_after', True):
+            try:
+                os.startfile(pdf_path)
+            except Exception:
+                pass
 

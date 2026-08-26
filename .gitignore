@@ -14,3 +14,6 @@ libs/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Rendu du diagramme (regenere par : d2 uml_structure.d2 uml_structure.svg)
+uml_structure.svg

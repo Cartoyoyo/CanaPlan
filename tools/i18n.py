@@ -2021,7 +2021,7 @@ TR = {
     },
     'msg_crs_non_metrique': {
         'fr': "Le CRS du projet ({crs}) n'est pas en mètres.\nLes dimensions "
-              "des feuilles risquent d'être incorrectes.\nRecommandé : "
+              "des planches risquent d'être incorrectes.\nRecommandé : "
               "EPSG:2154 (RGF93 / Lambert-93).",
         'en': "The project CRS ({crs}) is not metric.\nSheet dimensions may be "
               "wrong.\nRecommended: EPSG:2154 (RGF93 / Lambert-93).",
@@ -2099,6 +2099,313 @@ TR = {
         'fr': "Profils en long :", 'en': "Longitudinal profiles:",
         'es': "Perfiles longitudinales:", 'pt': "Perfis longitudinais:",
         'de': "Längsschnitte:",
+    },
+    # -- Titres de bloc du dialogue d'export -------------------------------
+    'exp_cubature_titre': {
+        'fr': "Cubature", 'en': "Earthworks", 'es': "Cubicación",
+        'pt': "Cubagem", 'de': "Massenermittlung",
+    },
+    'exp_coupes_titre': {
+        'fr': "Coupes", 'en': "Cross-sections", 'es': "Secciones",
+        'pt': "Secções", 'de': "Querschnitte",
+    },
+
+    # -- Onglet Cubature ---------------------------------------------------
+    'exp_cub_inclure': {
+        'fr': "Inclure la cubature des tranchées",
+        'en': "Include trench earthworks",
+        'es': "Incluir la cubicación de zanjas",
+        'pt': "Incluir a cubagem das valas",
+        'de': "Grabenmassen einbeziehen",
+    },
+    'exp_cub_perimetre': {
+        'fr': "Périmètre :", 'en': "Scope:", 'es': "Ámbito:",
+        'pt': "Âmbito:", 'de': "Umfang:",
+    },
+    'exp_cub_contenu': {
+        'fr': "Contenu :", 'en': "Content:", 'es': "Contenido:",
+        'pt': "Conteúdo:", 'de': "Inhalt:",
+    },
+    'exp_cub_formats': {
+        'fr': "Formats :", 'en': "Formats:", 'es': "Formatos:",
+        'pt': "Formatos:", 'de': "Formate:",
+    },
+    'exp_cub_note': {
+        'fr': "Les modes axe et BFS restent disponibles dans l'outil Cubature "
+              "de la barre d'outils : ils demandent de désigner des ouvrages "
+              "sur la carte.",
+        'en': "The axis and BFS modes remain available in the Earthworks tool "
+              "on the toolbar: they require picking structures on the map.",
+        'es': "Los modos eje y BFS siguen disponibles en la herramienta "
+              "Cubicación de la barra: requieren designar obras en el mapa.",
+        'pt': "Os modos eixo e BFS continuam disponíveis na ferramenta "
+              "Cubagem da barra: exigem designar órgãos no mapa.",
+        'de': "Die Modi Achse und BFS bleiben im Werkzeug Massenermittlung "
+              "verfügbar: sie erfordern die Auswahl von Bauwerken auf der Karte.",
+    },
+
+    # -- Onglet Coupes -----------------------------------------------------
+    'exp_coupe_type': {
+        'fr': "Coupe type {code}", 'en': "{code} typical section",
+        'es': "Sección tipo {code}", 'pt': "Secção tipo {code}",
+        'de': "Regelquerschnitt {code}",
+    },
+    'exp_coupe_format': {
+        'fr': "Format :", 'en': "Format:", 'es': "Formato:",
+        'pt': "Formato:", 'de': "Format:",
+    },
+    'exp_coupe_note': {
+        'fr': "La coupe type est construite sur le diamètre le plus fréquent, "
+              "le matériau dominant et la profondeur moyenne du réseau. "
+              "Pour une coupe à un endroit précis, utilisez l'outil "
+              "Coupe transversale de la barre d'outils.",
+        'en': "The typical section uses the most frequent diameter, the dominant "
+              "material and the average depth of the network. For a section at a "
+              "given location, use the Cross-section tool on the toolbar.",
+        'es': "La sección tipo usa el diámetro más frecuente, el material "
+              "dominante y la profundidad media de la red. Para una sección en "
+              "un punto concreto, use la herramienta Sección transversal.",
+        'pt': "A secção tipo usa o diâmetro mais frequente, o material "
+              "dominante e a profundidade média da rede. Para uma secção num "
+              "ponto preciso, use a ferramenta Secção transversal.",
+        'de': "Der Regelquerschnitt verwendet den häufigsten Durchmesser, das "
+              "vorherrschende Material und die mittlere Tiefe des Netzes. Für "
+              "einen Schnitt an einer bestimmten Stelle nutzen Sie das Werkzeug "
+              "Querschnitt.",
+    },
+
+    # -- Comptes rendus d'export -------------------------------------------
+    'msg_cubature_export_ok': {
+        'fr': "Cubature : {nb} éléments exportés ({fichiers})",
+        'en': "Earthworks: {nb} items exported ({fichiers})",
+        'es': "Cubicación: {nb} elementos exportados ({fichiers})",
+        'pt': "Cubagem: {nb} elementos exportados ({fichiers})",
+        'de': "Massenermittlung: {nb} Elemente exportiert ({fichiers})",
+    },
+    'msg_cubature_export_vide': {
+        'fr': "Cubature : aucun élément à exporter",
+        'en': "Earthworks: nothing to export",
+        'es': "Cubicación: nada que exportar",
+        'pt': "Cubagem: nada a exportar",
+        'de': "Massenermittlung: nichts zu exportieren",
+    },
+    'msg_coupe_export_ok': {
+        'fr': "Coupe type {reseau} : {fichier}",
+        'en': "{reseau} typical section: {fichier}",
+        'es': "Sección tipo {reseau}: {fichier}",
+        'pt': "Secção tipo {reseau}: {fichier}",
+        'de': "Regelquerschnitt {reseau}: {fichier}",
+    },
+    'msg_coupe_export_vide': {
+        'fr': "Coupe type {reseau} : données insuffisantes "
+              "(diamètre, fil d'eau ou TN manquant)",
+        'en': "{reseau} typical section: insufficient data "
+              "(missing diameter, invert or ground level)",
+        'es': "Sección tipo {reseau}: datos insuficientes "
+              "(falta diámetro, cota de solera o TN)",
+        'pt': "Secção tipo {reseau}: dados insuficientes "
+              "(falta diâmetro, soleira ou TN)",
+        'de': "Regelquerschnitt {reseau}: unzureichende Daten "
+              "(Durchmesser, Sohle oder Gelände fehlt)",
+    },
+    'msg_export_sorties_ok': {
+        'fr': "Export terminé", 'en': "Export complete",
+        'es': "Exportación finalizada", 'pt': "Exportação concluída",
+        'de': "Export abgeschlossen",
+    },
+    # -- Bouton Tout en un -------------------------------------------------
+    'exp_tout_en_un': {
+        'fr': "Toutes les pièces (ZIP)", 'en': "All documents (ZIP)",
+        'es': "Todos los documentos (ZIP)", 'pt': "Todos os documentos (ZIP)",
+        'de': "Alle Unterlagen (ZIP)",
+    },
+    'exp_tout_en_un_resume': {
+        'fr': "Plan PDF + DXF, profils EU/EP, cubature remblai (PDF + XLSX) "
+              "et coupes types, dans une seule archive.",
+        'en': "PDF + DXF map, EU/EP profiles, backfill earthworks (PDF + XLSX) "
+              "and typical sections, in a single archive.",
+        'es': "Plano PDF + DXF, perfiles EU/EP, cubicación de relleno "
+              "(PDF + XLSX) y secciones tipo, en un solo archivo.",
+        'pt': "Planta PDF + DXF, perfis EU/EP, cubagem de aterro (PDF + XLSX) "
+              "e secções tipo, num único arquivo.",
+        'de': "Plan PDF + DXF, EU/EP-Längsschnitte, Verfüllmassen (PDF + XLSX) "
+              "und Regelquerschnitte, in einem einzigen Archiv.",
+    },
+    'exp_tout_en_un_note': {
+        'fr': "Produit toutes les sorties dans une seule archive : plan PDF "
+              "et DXF, profils EU et EP, cubature de tout le projet (PDF et "
+              "XLSX), coupes types EU et EP. Les cases ci-dessus sont "
+              "ignorées. Le cadrage du plan reste à poser sur la carte, comme "
+              "d'habitude : l'archive est refermée ensuite.",
+        'en': "Produces every output in a single archive: PDF and DXF map, EU "
+              "and EP profiles, project-wide earthworks (PDF and XLSX), EU and "
+              "EP typical sections. The boxes above are ignored. The map "
+              "framing is still placed on the canvas as usual: the archive is "
+              "closed afterwards.",
+        'es': "Genera todas las salidas en un solo archivo: plano PDF y DXF, "
+              "perfiles EU y EP, cubicación de todo el proyecto (PDF y XLSX), "
+              "secciones tipo EU y EP. Las casillas anteriores se ignoran. El "
+              "encuadre del plano sigue colocándose en el mapa: el archivo se "
+              "cierra después.",
+        'pt': "Produz todas as saídas num único arquivo: planta PDF e DXF, "
+              "perfis EU e EP, cubagem de todo o projeto (PDF e XLSX), secções "
+              "tipo EU e EP. As caixas acima são ignoradas. O enquadramento da "
+              "planta continua a ser colocado no mapa: o arquivo é fechado a "
+              "seguir.",
+        'de': "Erzeugt alle Ausgaben in einem einzigen Archiv: Plan als PDF und "
+              "DXF, EU- und EP-Längsschnitte, Massenermittlung des gesamten "
+              "Projekts (PDF und XLSX), Regelquerschnitte EU und EP. Die "
+              "Kästchen oben werden ignoriert. Der Planausschnitt wird wie "
+              "gewohnt auf der Karte gesetzt: das Archiv wird danach "
+              "geschlossen.",
+    },
+    'msg_tout_en_un': {
+        'fr': "Toutes les pièces", 'en': "All documents",
+        'es': "Todos los documentos", 'pt': "Todos os documentos",
+        'de': "Alle Unterlagen",
+    },
+    'msg_tout_en_un_pose': {
+        'fr': "Sorties automatiques écrites. Posez maintenant le cadrage du "
+              "plan : l'archive ZIP sera refermée ensuite.",
+        'en': "Automatic outputs written. Now place the map framing: the ZIP "
+              "archive will be closed afterwards.",
+        'es': "Salidas automáticas escritas. Coloque ahora el encuadre del "
+              "plano: el archivo ZIP se cerrará después.",
+        'pt': "Saídas automáticas escritas. Coloque agora o enquadramento da "
+              "planta: o arquivo ZIP será fechado a seguir.",
+        'de': "Automatische Ausgaben geschrieben. Setzen Sie nun den "
+              "Planausschnitt: das ZIP-Archiv wird danach geschlossen.",
+    },
+    'msg_zip_ok': {
+        'fr': "Archive créée : {fichier} ({nb} fichiers)",
+        'en': "Archive created: {fichier} ({nb} files)",
+        'es': "Archivo creado: {fichier} ({nb} archivos)",
+        'pt': "Arquivo criado: {fichier} ({nb} ficheiros)",
+        'de': "Archiv erstellt: {fichier} ({nb} Dateien)",
+    },
+    'msg_zip_vide': {
+        'fr': "Aucun fichier n'a pu être produit : archive non créée.",
+        'en': "No file could be produced: archive not created.",
+        'es': "No se pudo producir ningún archivo: archivo no creado.",
+        'pt': "Nenhum ficheiro pôde ser produzido: arquivo não criado.",
+        'de': "Es konnte keine Datei erzeugt werden: Archiv nicht erstellt.",
+    },
+    'msg_zip_erreur': {
+        'fr': "Création de l'archive impossible : {erreur}",
+        'en': "Could not create the archive: {erreur}",
+        'es': "No se pudo crear el archivo: {erreur}",
+        'pt': "Não foi possível criar o arquivo: {erreur}",
+        'de': "Archiv konnte nicht erstellt werden: {erreur}",
+    },
+    # -- Cadrage des planches (fenetre d'impression) ------------------------
+    'pd_cadrage': {
+        'fr': "Cadrage :", 'en': "Sheet layout:", 'es': "Encuadre:",
+        'pt': "Enquadramento:", 'de': "Blattaufteilung:",
+    },
+    'pd_cadrage_manuel': {
+        'fr': "Pose manuelle sur la carte",
+        'en': "Place sheets manually on the map",
+        'es': "Colocación manual en el mapa",
+        'pt': "Colocação manual no mapa",
+        'de': "Blätter manuell auf der Karte setzen",
+    },
+    'pd_cadrage_auto': {
+        'fr': "Cadrage automatique",
+        'en': "Automatic layout",
+        'es': "Encuadre automático",
+        'pt': "Enquadramento automático",
+        'de': "Automatische Aufteilung",
+    },
+    'pd_cadrage_note_manuel': {
+        'fr': "Vous posez chaque planche : clic pour ancrer, clic pour "
+              "orienter, clic droit pour exporter.",
+        'en': "You place each sheet: click to anchor, click to orient, "
+              "right-click to export.",
+        'es': "Usted coloca cada plancha: clic para anclar, clic para "
+              "orientar, clic derecho para exportar.",
+        'pt': "Coloca cada prancha: clique para ancorar, clique para "
+              "orientar, clique direito para exportar.",
+        'de': "Sie setzen jedes Blatt: Klick zum Verankern, Klick zum "
+              "Ausrichten, Rechtsklick zum Exportieren.",
+    },
+    'pd_cadrage_note_auto': {
+        'fr': "Les planches sont calculées pour couvrir tout le réseau avec "
+              "le moins de planches possible à l'échelle choisie, puis "
+              "l'export part directement.",
+        'en': "Sheets are computed to cover the whole network with as few "
+              "pages as possible at the chosen scale, then the export starts "
+              "straight away.",
+        'es': "Las planchas se calculan para cubrir toda la red con el menor "
+              "número de hojas posible a la escala elegida, y la exportación "
+              "comienza de inmediato.",
+        'pt': "As pranchas são calculadas para cobrir toda a rede com o menor "
+              "número de folhas possível à escala escolhida, e a exportação "
+              "começa de imediato.",
+        'de': "Die Blätter werden so berechnet, dass das gesamte Netz mit so "
+              "wenigen Seiten wie möglich im gewählten Maßstab abgedeckt wird; "
+              "der Export startet danach sofort.",
+    },
+    'msg_cadrage_calcul': {
+        'fr': "Calcul du cadrage automatique…",
+        'en': "Computing automatic layout…",
+        'es': "Calculando el encuadre automático…",
+        'pt': "A calcular o enquadramento automático…",
+        'de': "Automatische Aufteilung wird berechnet…",
+    },
+    'msg_cadrage_aucun': {
+        'fr': "Aucun élément de réseau à cadrer : vérifiez que les couches "
+              "EU ou EP contiennent des données.",
+        'en': "No network feature to lay out: check that the EU or EP layers "
+              "contain data.",
+        'es': "Ningún elemento de red que encuadrar: compruebe que las capas "
+              "EU o EP contienen datos.",
+        'pt': "Nenhum elemento de rede para enquadrar: verifique se as camadas "
+              "EU ou EP contêm dados.",
+        'de': "Kein Netzelement zum Aufteilen: prüfen Sie, ob die EU- oder "
+              "EP-Layer Daten enthalten.",
+    },
+    'msg_cadrage_beaucoup': {
+        'fr': "Le cadrage automatique donne {nb} planches à l'échelle "
+              "1 : {echelle}. L'export sera long. Continuer ?",
+        'en': "The automatic layout yields {nb} sheets at scale 1:{echelle}. "
+              "The export will take a while. Continue?",
+        'es': "El encuadre automático da {nb} planchas a escala 1:{echelle}. "
+              "La exportación será larga. ¿Continuar?",
+        'pt': "O enquadramento automático dá {nb} pranchas à escala "
+              "1:{echelle}. A exportação será longa. Continuar?",
+        'de': "Die automatische Aufteilung ergibt {nb} Blätter im Maßstab "
+              "1:{echelle}. Der Export wird lange dauern. Fortfahren?",
+    },
+    'msg_cadrage_pret': {
+        'fr': "{nb} planches calculées à l'échelle 1 : {echelle}.",
+        'en': "{nb} sheets computed at scale 1:{echelle}.",
+        'es': "{nb} planchas calculadas a escala 1:{echelle}.",
+        'pt': "{nb} pranchas calculadas à escala 1:{echelle}.",
+        'de': "{nb} Blätter im Maßstab 1:{echelle} berechnet.",
+    },
+    'exp_impression_titre': {
+        'fr': "Réglages du plan", 'en': "Map settings",
+        'es': "Ajustes del plano", 'pt': "Definições da planta",
+        'de': "Planeinstellungen",
+    },
+    'pd_plan_ensemble_case': {
+        'fr': "Plan d'ensemble en première page",
+        'en': "Overview map as first page",
+        'es': "Plano de conjunto en la primera página",
+        'pt': "Planta de conjunto na primeira página",
+        'de': "Übersichtsplan als erste Seite",
+    },
+    'pd_plan_ensemble_note': {
+        'fr': "Une première page situe toutes les planches, numérotées, sur "
+              "une vue d'ensemble à échelle réduite.",
+        'en': "A first page locates every sheet, numbered, on a reduced-scale "
+              "overview.",
+        'es': "Una primera página sitúa todas las planchas, numeradas, en una "
+              "vista de conjunto a escala reducida.",
+        'pt': "Uma primeira página situa todas as pranchas, numeradas, numa "
+              "vista de conjunto à escala reduzida.",
+        'de': "Eine erste Seite verortet alle nummerierten Blätter auf einer "
+              "Übersicht in verkleinertem Maßstab.",
     },
     'exp_dossier': {
         'fr': "Dossier d'export :", 'en': "Output folder:",
@@ -3546,7 +3853,7 @@ TR = {
     #  Impression / mise en planches
     # ─────────────────────────────────────────────────────────────────────
     'pt_orienter': {
-        'fr': "Feuille {n} — orientez avec la souris · 2ᵉ clic pour fixer",
+        'fr': "Planche {n} — orientez avec la souris · 2ᵉ clic pour fixer",
         'en': "Sheet {n} — aim with the mouse · 2nd click to lock",
         'es': "Hoja {n} — oriente con el ratón · 2.º clic para fijar",
         'pt': "Folha {n} — oriente com o rato · 2.º clique para fixar",
@@ -3558,14 +3865,14 @@ TR = {
         'de': "Verankerung abgebrochen",
     },
     'pt_feuille_supprimee': {
-        'fr': "Feuille {n} supprimée — Retour arrière : supprimer la précédente",
+        'fr': "Planche {n} supprimée — Retour arrière : supprimer la précédente",
         'en': "Sheet {n} removed — Backspace: remove the previous one",
         'es': "Hoja {n} eliminada — Retroceso: eliminar la anterior",
         'pt': "Folha {n} eliminada — Retrocesso: eliminar a anterior",
         'de': "Blatt {n} entfernt — Rücktaste: vorheriges entfernen",
     },
     'pt_feuille_posee': {
-        'fr': "Feuille {n} posée — 1er clic pour la suivante · clic droit pour "
+        'fr': "Planche {n} posée — 1er clic pour la suivante · clic droit pour "
               "exporter",
         'en': "Sheet {n} placed — click for the next one · right-click to export",
         'es': "Hoja {n} colocada — clic para la siguiente · clic derecho para "
@@ -3624,7 +3931,7 @@ TR = {
         'de': "PDF-Export abgebrochen.",
     },
     'pt_pdf_exporte': {
-        'fr': "PDF exporté — {nb} feuille : {chemin}",
+        'fr': "PDF exporté — {nb} planche : {chemin}",
         'en': "PDF exported — {nb} sheet(s): {chemin}",
         'es': "PDF exportado — {nb} hoja(s): {chemin}",
         'pt': "PDF exportado — {nb} folha(s): {chemin}",
@@ -4600,7 +4907,7 @@ TR = {
         'de': "Druckeinstellungen",
     },
     'pd_placer': {
-        'fr': "Placer les feuilles →", 'en': "Place the sheets →",
+        'fr': "Placer les planches →", 'en': "Place the sheets →",
         'es': "Colocar las hojas →", 'pt': "Colocar as folhas →",
         'de': "Blätter platzieren →",
     },
@@ -4742,7 +5049,7 @@ TR = {
               "einem anderen Programm geöffnet ist.",
     },
     'pt_nb_feuilles': {
-        'fr': "{nb} feuille(s)  —  1 : {echelle}",
+        'fr': "{nb} planche(s)  —  1 : {echelle}",
         'en': "{nb} sheet(s)  —  1 : {echelle}",
         'es': "{nb} hoja(s)  —  1 : {echelle}",
         'pt': "{nb} folha(s)  —  1 : {echelle}",

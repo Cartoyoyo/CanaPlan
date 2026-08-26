@@ -4,7 +4,8 @@
 Usage :  python build_zip.py [dossier_sortie]
 
 Exclut du paquet : .git, __pycache__, *.dist-info, libs/bin, libs/share,
-fichiers de travail (audit.md, amelioration.txt, INTERVIEW.md,
+le workflow de publication (.github), le figeage des librairies
+(requirements-libs.txt), fichiers de travail (audit.md, amelioration.txt, INTERVIEW.md,
 assistant_creation_projet.md, uml_structure.mmd / .d2 / .puml,
 icon/fichedemarque.md, symbology-style.db, .gitignore, build_zip.py lui-même)
 et fichiers temporaires (*.pyc, *.tmp).
@@ -19,7 +20,7 @@ import zipfile
 PLUGIN_NAME = "CanaPlan"
 
 EXCLUDE_DIRS = {
-    ".git", "__pycache__",
+    ".git", ".github", "__pycache__",
     # captures d'ecran du README : referencees par aucun module, 3.8 Mo
     "images",
     os.path.join("libs", "bin"),
@@ -28,7 +29,7 @@ EXCLUDE_DIRS = {
 EXCLUDE_FILES = {
     "audit.md", "amelioration.txt",
     "uml_structure.puml", "uml_structure.mmd", "uml_structure.d2",
-    ".gitignore", "build_zip.py",
+    ".gitignore", "build_zip.py", "requirements-libs.txt",
     "INTERVIEW.md", "assistant_creation_projet.md",
     "symbology-style.db",
     os.path.join("icon", "fichedemarque.md"),

@@ -236,7 +236,7 @@ etiquettes*, et suit le projet `.bet`.
 | **Charger un projet** | Charge un fichier `.bet` (v2 ZIP ou v1 JSON legacy) et restaure les couches, etiquettes et visibilite. |
 | **Importer DXF / DWG** | Convertit un fichier DXF/DWG en couches vectorielles (points, polylignes, polygones). |
 | **Importer Star-DT (GML)** | Lit un ou plusieurs fichiers GML Star-DT / StaR-Elec (standard DT-DICT, reseaux enterres) et cree les couches points / polylignes / polygones correspondantes, filtrees par type d'objet. Selection multiple et glisser-deposer. Voir la section dediee ci-dessous. Sans rapport avec StaR-Eau : Star-DT decrit les reseaux pour les declarations de travaux, StaR-Eau decrit le patrimoine eau / assainissement. |
-| **Imprimer / Exporter PDF / DXF** | Positionne les feuilles d'impression sur la carte (clic + rotation), puis genere un PDF multi-pages avec cartouche, barre d'echelle et page de vue d'ensemble optionnelle. Resolution PDF parametrable (96 / 150 / 200 / 300 dpi ou personnalisee) avec suggestion automatique selon le format (A4 → 300 dpi, A2/A3 → 200 dpi, A0/A1 → 150 dpi). Export DXF 2018 fidele en parallele : symbologie, etiquettes (MTEXT + decoration ezdxf : fond + cadre + callout), symboles ponctuels, pattern de tirets EU/EP. Encodage CP1252 (compatibilite AutoCAD). |
+| **Imprimer / Exporter PDF / DXF** | Fenetre unique : sorties a produire et reglages du plan au meme endroit. **Cadrage automatique** (par defaut) : on choisit le format et l'echelle, le plugin calcule le decoupage couvrant tout le reseau avec le moins de planches possible, la plus grande longueur du reseau alignee sur la plus grande dimension de la feuille, planches numerotees dans l'ordre du terrain et cartouche du meme cote d'une planche a l'autre. **Pose manuelle** toujours disponible (clic + rotation). Genere un PDF multi-pages avec cartouche, barre d'echelle et plan d'ensemble (case cochee par defaut) ou chaque planche apparait avec sa teinte et son numero. Resolution PDF parametrable (96 / 150 / 200 / 300 dpi ou personnalisee) avec suggestion automatique selon le format (A4 → 300 dpi, A2/A3 → 200 dpi, A0/A1 → 150 dpi). Export DXF 2018 fidele en parallele : symbologie, etiquettes (MTEXT + decoration ezdxf : fond + cadre + callout), symboles ponctuels, pattern de tirets EU/EP. Encodage CP1252 (compatibilite AutoCAD). |
 | **Export combine** | Dialogue unique pour generer en une passe : plan PDF, plan DXF, profils EU, profils EP, profil groupe (avec choix du reseau de reference EU ou EP). Tous les exports vont dans un dossier choisi, noms de fichiers automatiques (1er regard / dernier regard). |
 | **Exporter StaR-Eau (GPKG)** | Genere un GeoPackage conforme au geostandard **StaR-Eau V2024** (CNIG / ASTEE). Menu *Sorties & Impression*. Voir la section dediee ci-dessous. |
 
@@ -394,15 +394,46 @@ sous-totaux et export CSV / PDF / Excel.
 
 #### 🖨️ Impression et export PDF / DXF
 
-Du réglage de la feuille jusqu'au plan livré, en quatre temps :
+Une seule fenêtre rassemble ce qu'on veut produire et la façon dont le plan
+s'imprime : plus aucune boîte de dialogue intermédiaire entre la validation et
+le PDF.
 
-1. **Paramètres d'impression** — titre du plan, format, orientation, échelle
-   et résolution PDF (avec suggestion automatique selon le format).
-2. **Export combiné** — une seule passe pour générer plan PDF, plan DXF et
-   profils en long EU / EP / groupé, dans un dossier choisi.
-3. **Placement des cadres** — positionnement des feuilles sur la carte par
-   clic + rotation, numérotation automatique.
-4. **Plan final** — cartouche, flèche du nord, barre d'échelle, prêt à livrer.
+**Ce qu'on exporte** — plan PDF, plan DXF, profils en long EU / EP / groupé,
+cubature (périmètre, contenu, PDF / XLSX / CSV) et coupes types EU / EP, le
+tout dans un dossier choisi.
+
+**Comment le plan s'imprime** — titre, format, orientation, échelle et
+résolution, en listes déroulantes à la suite de la case *Plan PDF*. La
+résolution est suggérée selon le format (A4 → 300 dpi, A2/A3 → 200,
+A0/A1 → 150).
+
+**Le cadrage des planches**, au choix :
+
+- **Automatique** *(par défaut)* — on ne donne que le format et l'échelle. Le
+  plugin cherche le découpage qui couvre tout le réseau avec **le moins de
+  planches possible**, oriente chacune pour coucher la plus grande longueur du
+  réseau sur la plus grande dimension de la feuille (axe horizontal médian en
+  paysage, vertical en portrait), les numérote **dans l'ordre du terrain** et
+  garde le **cartouche du même côté** d'une planche jointive à l'autre, pour
+  que les tirages s'assemblent sans en retourner un. La marge réservée autour
+  du réseau se déduit des **étiquettes réellement affichées** — leur texte est
+  évalué — afin qu'aucune ne soit coupée. À échelle large, quand tout tient
+  sur une planche, celle-ci est centrée sur le réseau, nord en haut.
+- **Pose manuelle** — placement des planches à la souris, clic pour ancrer,
+  clic pour orienter, clic droit pour lancer l'export. `Échap` rouvre les
+  réglages sans perdre les planches déjà posées.
+
+**Le plan d'ensemble** *(case cochée par défaut)* ouvre le dossier : chaque
+planche y apparaît avec **sa propre teinte** et son numéro cerné de blanc, et
+son cadre délimite exactement la zone que montrera la planche.
+
+**Le plan final** porte cartouche, flèche du nord et barre d'échelle.
+
+> **Toutes les pièces (ZIP)** — le bouton rouge, en haut à droite de la
+> fenêtre, produit d'un coup le plan PDF et DXF, les profils EU et EP, la
+> cubature remblai (PDF + XLSX) et les coupes types EU et EP, rassemblés dans
+> une seule archive. Les cases cochées sont ignorées : c'est un raccourci
+> « tout le dossier », pas une option de plus.
 
 <div align="center">
   <img src="images/imprime_exporter_pdfdxf_parametreimpression.png" alt="Paramètres d'impression">
@@ -1050,7 +1081,8 @@ CanaPlan/
 │   ├── side_panel.py               # Panneau lateral (arbre des outils)
 │   ├── etiquettes.py               # Moteur d'etiquettes QGIS
 │   ├── renseignement_dialog.py     # Formulaire d'attributs
-│   ├── print_dialog.py             # Dialogue format / echelle / orientation
+│   ├── print_settings_widget.py    # Bloc reglages du plan (format/echelle/dpi/cadrage), partage export + impression
+│   ├── print_dialog.py             # Fenetre de reglages, rouverte par Echap pendant la pose
 │   ├── profil_dialog.py            # Affichage du profil en long (matplotlib)
 │   ├── profil_groupe_dialog.py     # Profil groupe EU + EP (matplotlib)
 │   ├── coupe_transversale_dialog.py# Plan de coupe transversale (matplotlib) + plan de situation QGIS
@@ -1061,7 +1093,7 @@ CanaPlan/
 │   ├── annotation_dialog.py        # Dialogue d'annotation (texte, police, couleur, cadre, transparence)
 │   ├── tableau_saisie_dialog.py    # Tableau de saisie groupee (regards/tabourets/conduites/branchements)
 │   ├── chain_profile_widget.py     # Widget du profil simplifie pour l'onglet Chaine du tableau de saisie
-│   ├── export_dialog.py            # Dialogue d'export combine (plan PDF/DXF + profils)
+│   ├── export_dialog.py            # Fenetre unique d'export : sorties + reglages du plan + bouton Toutes les pieces (ZIP)
 │   ├── welcome_dialog.py           # Dialogue d'accueil (assistant / ouvrir / annuler)
 │   ├── project_wizard_dialog.py    # Assistant de creation de projet (adresse, fonds de plan, config rapide, recap)
 │   ├── quick_config_widgets.py     # Widgets Reseau/Cubature/Remblai partages entre ConfigDialog et l'assistant
@@ -1084,7 +1116,9 @@ CanaPlan/
 │   ├── renommer_tool.py            # Renumerotation le long d'un chemin BFS
 │   ├── cubature_tool.py            # Selection BFS/axe pour cubature/remblai tranchees
 │   ├── calc_cubature.py            # Calcul cubature (volumes, BFS, remblai par couche)
-│   ├── print_tool.py               # Impression PDF multi-feuilles
+│   ├── print_tool.py               # Impression PDF multi-planches (pose manuelle ou cadrage automatique)
+│   ├── cadrage_auto.py             # Decoupage automatique en planches : couverture minimale, orientation, ordre, marge etiquettes
+│   ├── coupe_type.py               # Coupe type EU/EP calculee sur les statistiques du reseau (sans troncon designe)
 │   ├── coupe_transversale_tool.py  # Outil de trace de l'axe de coupe (EU+EP ou mono-reseau)
 │   ├── annotation_tool.py          # Outil d'annotation texte (clic / ctrl+clic / ctrl+c-v)
 │   ├── profil_batch.py             # Export batch profils EU/EP/groupe (ExportDialog)

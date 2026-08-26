@@ -2,10 +2,10 @@
 name=CanaPlan – Réseau Assainissement
 description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE).
 icon=icon/icon.png
-version=1.5
+version=1.6
 qgisMinimumVersion=3.28
 author=Yoan Laloux
-email=yoan.laloux@laposte.net
+email=y.laloux@vichy-communaute.fr
 linkedin=https://www.linkedin.com/in/ylaloux/
 repository=https://github.com/Cartoyoyo/CanaPlan
 tracker=https://github.com/Cartoyoyo/CanaPlan/issues
@@ -18,6 +18,37 @@ deprecated=False
 about=CanaPlan est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement EU (Eaux Usées) et EP (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement. La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle. Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE).
 
 changelog=
+    1.6  Impression repensee. Cadrage automatique des planches : on choisit le
+         format et l'echelle, le plugin calcule le decoupage qui couvre tout le
+         reseau avec le moins de planches possible, en alignant la plus grande
+         longueur du reseau sur la plus grande dimension de la feuille (axe
+         horizontal en paysage, vertical en portrait). Les planches sont
+         numerotees dans l'ordre du terrain, de proche en proche, et leur
+         cartouche reste du meme cote d'une planche jointive a l'autre : les
+         tirages s'assemblent sans en retourner un. La marge reservee autour du
+         reseau se deduit des etiquettes reellement affichees, dont le texte est
+         evalue, pour qu'aucune ne soit tronquee. Correction majeure : la
+         rotation des planches n'etait pas appliquee au rendu (signe inverse),
+         de sorte qu'une planche inclinee sortait a deux fois son inclinaison au
+         lieu d'etre redressee ; le cadre du plan d'ensemble delimite desormais
+         exactement la zone cartographiee, cartouche exclu.
+         Les reglages d'impression rejoignent la fenetre d'export : une seule
+         fenetre pour tout, listes deroulantes a la suite de la case Plan PDF,
+         plus aucune boite de dialogue intermediaire. Nouveau bouton « Toutes
+         les pieces (ZIP) » qui produit en une fois le plan PDF et DXF, les
+         profils EU et EP, la cubature remblai (PDF et XLSX) et les coupes
+         types EU et EP, rassembles dans une archive. Le plan d'ensemble
+         devient une case cochee par defaut, comme le cadrage automatique.
+         Plan d'ensemble plus lisible : une teinte par planche, numeros cernes
+         de blanc au lieu de pastilles opaques qui masquaient le fond.
+         Barre d'echelle redessinee, plus fine et plus discrete, unite affichee
+         une seule fois. Cartouche : la taille du texte s'adapte a chaque case,
+         la date n'est plus tronquee sur les formats etroits.
+         Export : cubature et coupes types s'ajoutent a l'export groupe, tous
+         les fichiers produits sont prefixes par leur nature.
+         Performance : l'export PDF est environ quatre fois plus rapide
+         (25 s -> 6 s sur un cas reel), les fonds WMS ne sont plus demandes en
+         tuiles de 256 px et le rendu n'impose plus ForceVectorOutput inutile.
     1.5  Interface entièrement multilingue (français, anglais, espagnol,
          portugais, allemand) : toutes les fenêtres suivent désormais la langue
          choisie dans le panneau CanaPlan ou le menu Langue. Sont traduits les

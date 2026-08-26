@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════
-#  CanaPlan — Diagramme structurel (v1.4)
+#  CanaPlan — Diagramme structurel (v1.6)
 #  Source de reference, en remplacement de l ancien uml_structure.puml.
 #
 #  Rendu :   d2 uml_structure.d2 uml_structure.svg
@@ -230,26 +230,46 @@ bet: "CanaPlan" {
       # "1-0.25" -> 0.75, "2+0.5-0.1" -> 2.4. Pas d eval.
     }
 
-    PrintDialog: {
+    PrintSettingsWidget: {
       shape: class
       "+titre_edit": "QLineEdit"
       "+format_combo": "QComboBox"
       "+orient_combo": "QComboBox"
       "+scale_combo": "QComboBox"
       "+dpi_combo": "QComboBox"
-      "-_custom_spin": "QSpinBox"
-      "-_custom_widget": "QWidget"
-      "-_dpi_custom_spin": "QSpinBox"
-      "-_dpi_custom_widget": "QWidget"
-      "-_dpi_note": "QLabel"
-      "+__init__(parent)": ""
+      "+rb_manuel": "QRadioButton"
+      "+rb_auto": "QRadioButton"
+      "+cb_ensemble": "QCheckBox"
+      "+ligne_combos": "QWidget"
+      "-_custom_spin / _dpi_custom_spin": "QSpinBox"
+      "-_custom_widget / _dpi_custom_widget": "QWidget"
+      "-_dpi_note / _cadrage_note": "QLabel"
+      "+__init__(parent, compact, disposition)": ""
+      "-_monter_en_ligne()": ""
       "-_on_scale_changed(index)": ""
       "-_on_dpi_changed()": ""
+      "-_on_cadrage_changed()": ""
       "-_suggest_dpi()": ""
       "+get_settings()": "dict"
-      # Note : resolution PDF 96/150/200/300 dpi ou personnalisee.
-      # Suggestion automatique selon format : A4->300, A2/A3->200,
-      # A0/A1->150. N ecrase pas une saisie personnalisee active.
+      # Note : bloc partage entre ExportDialog (disposition inline, listes
+      # nues a la suite de la case Plan PDF) et PrintDialog (formulaire).
+      # Resolution 96/150/200/300 dpi ou personnalisee, suggeree selon le
+      # format : A4->300, A2/A3->200, A0/A1->150 ; n ecrase pas une saisie
+      # personnalisee active.
+      # Cadrage automatique et plan d ensemble coches par defaut.
+    }
+
+    PrintDialog: {
+      shape: class
+      "+reglages": "PrintSettingsWidget"
+      "+titre_edit / format_combo / orient_combo / scale_combo": "(relais)"
+      "+__init__(parent)": ""
+      "+get_settings()": "dict"
+      # Note : simple enveloppe autour de PrintSettingsWidget. N est plus
+      # ouverte par le plugin — les reglages vivent dans ExportDialog — mais
+      # reste utilisee par PrintTool._reopen_settings (Echap pendant la pose,
+      # pour changer d echelle sans reprendre les planches). Les widgets sont
+      # relayes tels quels car l appelant les manipule directement.
     }
 
     ProfilDialog: {
@@ -281,18 +301,32 @@ bet: "CanaPlan" {
 
     ExportDialog: {
       shape: class
-      "-cb_plan_pdf": "QCheckBox"
-      "-cb_plan_dxf": "QCheckBox"
-      "-cb_eu": "QCheckBox"
-      "-cb_ep": "QCheckBox"
-      "-cb_grp": "QCheckBox"
+      "+reglages": "PrintSettingsWidget"
+      "-cb_pdf / cb_dxf": "QCheckBox"
+      "-cb_eu / cb_ep / cb_grp": "QCheckBox"
       "-fmt_eu / fmt_ep / fmt_grp": "QComboBox"
       "-ref_grp": "QComboBox"
-      "-output_dir": "str"
-      "+__init__(parent)": ""
+      "-cb_cubature": "QCheckBox"
+      "-cub_perimetre": "QComboBox"
+      "-cub_conduites / cub_branchements": "QCheckBox"
+      "-cub_pdf / cub_xlsx / cub_csv": "QCheckBox"
+      "-cb_coupe_eu / cb_coupe_ep": "QCheckBox"
+      "-coupe_papier / coupe_fichier": "QComboBox"
+      "-_tout_en_un": "bool"
+      "-dir_edit": "QLineEdit"
+      "+__init__(parent, default_dir)": ""
       "+get_choices()": "dict"
-      "-_profil_row(layout, label)": "tuple"
-      "-_profil_groupe_row(layout)": "tuple"
+      "+get_print_settings()": "dict"
+      "-_bloc_plan / _bloc_profils / _bloc_cubature / _bloc_coupes": ""
+      "-_bloc_tout_en_un(layout)": ""
+      "-_sync_impression()": ""
+      "-_on_tout_en_un()": "bool"
+      # Note : fenetre unique — sorties a produire ET reglages du plan.
+      # Le plugin n ouvre plus PrintDialog. Les reglages sont grises tant
+      # que ni PDF ni DXF n est coche.
+      # Bouton « Toutes les pieces (ZIP) », en coin haut droit : ignore les
+      # cases et produit plan PDF+DXF, profils EU/EP, cubature remblai
+      # (PDF+XLSX) et coupes types EU/EP dans une archive.
     }
 
     ProfilGroupeDialog: {
@@ -1329,11 +1363,16 @@ bet: "CanaPlan" {
       "+canvasMoveEvent(event)": ""
       "+canvasReleaseEvent(event)": ""
       "+keyPressEvent(event)": ""
-      "-_place_sheet(center, rot)": ""
-      "-_generate_pdf(pdf_path)": ""
+      "-_place_sheet(center, rot, annoncer)": ""
+      "+definir_feuilles(planches)": ""
+      "+exporter_maintenant()": ""
+      "-_corners(cx, cy, theta)": "list[QgsPointXY]"
+      "-_corners_zone_carte(cx, cy, theta)": "list[QgsPointXY]"
+      "-_generate_pdf(pdf_path, overview)": ""
       "-_start_render(cx, cy, rot, w_m, h_m, w_px, h_px) [static]": "QgsMapRendererParallelJob"
       "-_split_two_lines(text) [static]": "str"
-      "-_ask_overview_settings(n, dpi) [static]": "bool"
+      "-_overview_settings()": "dict|bool"
+      "-_notify_finished()": ""
       "-_reset()": ""
       # Note : PDF multi-pages — pre-rendu de toutes les images avant
       # ouverture QPrinter (evite les interactions rendu/PDF Qt5).
@@ -1341,11 +1380,29 @@ bet: "CanaPlan" {
       # WMS/ortho recouvertes), attente via QProgressDialog annulable
       # (plus de waitForFinished bloquant). Images liberees au fil de
       # l ecriture des pages.
-      # Fleche du nord (medaillon, suit la rotation de la feuille).
+      # Fleche du nord (medaillon, suit la rotation de la planche).
+      # ATTENTION au signe de la rotation : setRotation() fait tourner le
+      # CONTENU, alors que rotation_rad oriente la PLANCHE. Le rendu utilise
+      # donc setRotation(-degrees(rot)). Verifie sur l API : une ligne
+      # d azimut +30 est redressee par -30 ; +30 la porte a +60, soit deux
+      # fois l inclinaison. La fleche du nord suivait deja cette convention.
+      # definir_feuilles() + exporter_maintenant() : le cadrage automatique
+      # remplit les planches par calcul au lieu des clics, puis lance
+      # l export sans attendre le clic droit.
+      # on_finished : appele une fois quand l outil rend la main (export
+      # termine OU abandon), differe d un tour de boucle. L export « Toutes
+      # les pieces » s en sert pour refermer son archive.
+      # Plan d ensemble : une teinte par planche (_couleur_planche), fonds
+      # d abord puis contours puis numeros cernes de blanc ; le cadre trace
+      # la ZONE CARTE (_corners_zone_carte), pas la feuille entiere.
       # Retour arriere / Suppr : depile la derniere feuille posee.
       # Echelle du plan d ensemble normalisee (1:500, 1:1000...) et
       # affichee au cartouche ; barre d echelle propre a l ensemble.
       # Confirmation avant ecrasement si output_dir predefini.
+      # Plan d ensemble : plus de question modale, c est le reglage
+      # plan_ensemble (case cochee par defaut) qui decide.
+      # open_after : l export « Toutes les pieces » ecrit dans le TEMP puis
+      # supprime, il desactive donc l ouverture du PDF et du DXF.
       # Zone carte = h_mm - carto_h_mm ; centre ajuste :
       #   cx_c = cx + (carto_h_m/2)*sin(rot),
       #   cy_c = cy + (carto_h_m/2)*cos(rot).
@@ -1390,6 +1447,64 @@ bet: "CanaPlan" {
       "-_compute_groupe_data(eu, ep, pts)": "dict"
       "-_safe_name(s)": "str"
       "-_regard_name(feat)": "str"
+    }
+
+    cadrage_auto: "cadrage_auto «module»" {
+      shape: class
+      class: module
+      "+calculer_planches(couches, w_mm, h_mm, echelle, max, marge_mm)": "list"
+      "+ordonner_planches(planches)": "list"
+      "+harmoniser_orientations(planches, carto_h_m)": "list"
+      "+mesurer_etiquettes(couches, echelle)": "(float, float)"
+      "+marge_depuis_couches(couches, echelle, label_size)": "float"
+      "+marge_pour_etiquettes(label_size, echelle)": "float"
+      "+hauteur_cartouche_mm(h_mm)": "float"
+      "+normaliser(angle)": "float"
+      "+collecter_points(couches, pas)": "list"
+      "-_axe_principal(points, cx, cy)": "float|None"
+      "-_ecart_angulaire(a, b)": "float"
+      "-_compter(points_uv, a0, w_u, b0, h_u)": "int"
+      # Note : couverture gloutonne. A chaque tour on part de l element non
+      # couvert le plus excentre, on essaie 12 orientations (pas de 15 deg
+      # sur 180) x 25 decalages, et on retient la meilleure. L ALIGNEMENT
+      # prime sur la couverture (tolerance 10 deg) : une planche penchee
+      # exploite sa diagonale et gagnerait toujours au comptage, au prix
+      # d un dossier de planches de travers. Cout mesure : +7 % de planches.
+      # Repere papier identique a PrintTool._corners :
+      #   largeur -> (cos t, -sin t)   hauteur -> (sin t, cos t)
+      # Le centre rendu est celui de la FEUILLE : on retire un demi-
+      # cartouche au centre de la zone carte.
+      # Echelle large : si tout tient sur une planche, elle est centree sur
+      # le reseau, rotation nulle (nord en haut).
+      # Marge en MILLIMETRES PAPIER, pas en pourcentage : ce qui deborde est
+      # la LARGEUR des etiquettes (une etiquette de regard fait ~58 mm en
+      # 8 pt), et une etiquette occupe une taille fixe sur le papier quelle
+      # que soit l echelle. Plafonnee a 20 % de la plus petite dimension
+      # utile, sinon des etiquettes en unites carte a grande echelle ne
+      # laisseraient plus de carte.
+      # ordonner_planches : le glouton saute d un bout du chantier a l
+      # autre ; on renumerote de proche en proche depuis la planche la plus
+      # a l ouest.
+      # harmoniser_orientations : deux planches jointives a +85 et -85 se
+      # lisent tete-beche. On retourne une planche de 180 deg des qu elle
+      # s ecarte de plus d un quart de tour de la precedente — meme emprise,
+      # cartouche a l oppose, donc le centre FEUILLE se decale d une hauteur
+      # de cartouche.
+    }
+
+    coupe_type: "coupe_type «module»" {
+      shape: class
+      class: module
+      "+stats_reseau(couches, reseau, config)": "dict|None"
+      "+exporter_coupe_type(couches, config, reseau, out_dir, fmt, paper, parent)": "(str, dict)"
+      "-_valeur_num(feat, champ)": "float|None"
+      "-_valeur_texte(feat, champ)": "str"
+      "-_couches_valides(couches)": "iter"
+      # Note : coupe representative sans troncon designe — diametre le plus
+      # frequent, materiau dominant, profondeur moyenne (TN - fil d eau sur
+      # les regards), largeur de la config projet. Le dessin est delegue a
+      # CoupeTransversaleDialog, instancie sans etre affiche : aucune
+      # duplication du code de rendu.
     }
 
     dxf_export: "dxf_export «module»" {
@@ -1569,6 +1684,7 @@ bet.gui.StarEauExportDialog -> qgis_api.QDialog {class: inherit}
 bet.gui.AboutDialog -> qgis_api.QDialog {class: inherit}
 bet.gui.ConfigDialog -> qgis_api.QDialog {class: inherit}
 bet.gui.PrintDialog -> qgis_api.QDialog {class: inherit}
+bet.gui.PrintSettingsWidget -> qgis_api.QWidget {class: inherit}
 bet.gui.ProfilDialog -> qgis_api.QDialog {class: inherit}
 bet.gui.ProfilGroupeDialog -> qgis_api.QDialog {class: inherit}
 bet.gui.ProfilOptionsDialog -> qgis_api.QDialog {class: inherit}
@@ -1662,7 +1778,9 @@ bet.gui.CubatureDialog_note -- bet.gui.CubatureDialog {
 # ═══════════════════════════════════════════════════════════════════════
 bet.ReseauAssainissementPlugin -> bet.gui.ConfigDialog: "instancie et ouvre" {class: depend}
 bet.ReseauAssainissementPlugin -> bet.gui.etiquettes: "apply_etiquettes()" {class: depend}
-bet.ReseauAssainissementPlugin -> bet.gui.PrintDialog: "instancie et ouvre" {class: depend}
+# PrintDialog n est plus ouverte par le plugin : ses reglages vivent dans
+# ExportDialog. Seul PrintTool la rouvre (Echap pendant la pose).
+bet.tools.PrintTool -> bet.gui.PrintDialog: "rouvre (Echap)" {class: depend}
 bet.ReseauAssainissementPlugin -> bet.gui.EtiquetteTailleDialog: "ouvre" {class: depend}
 bet.ReseauAssainissementPlugin -> bet.gui.EtiquetteAffichageDialog: "ouvre" {class: depend}
 bet.ReseauAssainissementPlugin -> bet.tools.projet_bet: "save / load" {class: depend}
@@ -1723,6 +1841,12 @@ bet.tools.CubatureTool -> bet.tools.spatial_utils: "nearest_point_feature" {clas
 bet.tools.CoupeTransversaleTool -> bet.tools.graph_utils: "_to_float / QGIS_NULL" {class: depend}
 bet.tools.AnnotationTool -> bet.tools.annotation_tool: "find_annotation_at / make_text_format" {class: depend}
 bet.gui.ExportDialog -> bet.tools.profil_batch: "delegue exports profils" {class: depend}
+bet.gui.ExportDialog -> bet.gui.PrintSettingsWidget: "reglages du plan (inline)" {class: compose}
+bet.gui.PrintDialog -> bet.gui.PrintSettingsWidget: "reglages du plan (formulaire)" {class: compose}
+bet.ReseauAssainissementPlugin -> bet.tools.cadrage_auto: "calculer_planches / marge_depuis_couches" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.coupe_type: "exporter_coupe_type (EU / EP)" {class: depend}
+bet.tools.coupe_type -> bet.gui.CoupeTransversaleDialog: "moteur de rendu (non affiche)" {class: depend}
+bet.tools.cadrage_auto -> bet.gui.etiquettes: "pal_settings (mesure des etiquettes)" {class: depend}
 bet.tools.PrintTool -> bet.tools.dxf_export: "run_export_dxf_with_ui()" {class: depend}
 bet.tools.dxf_export -> bet.tools.dxf_postprocess: "decorations etiquettes / symboles" {class: depend}
 bet.gui.StarDtDialog -> bet.tools.star_dt_import: "scan_star_dt / sort_output_types" {class: depend}

@@ -995,7 +995,7 @@ class ReseauAssainissementPlugin(QObject):
             if _wanted('osm') and osm_name not in existing:
                 lyr = QgsRasterLayer(
                     "crs=EPSG:2154&featureCount=10&format=image/png"
-                    "&layers=faded&maxHeight=256&maxWidth=256"
+                    "&layers=faded&maxHeight=2048&maxWidth=2048"
                     "&styles=&url=https://osm.datagrandest.fr/mapcache",
                     osm_name, "wms")
                 if lyr.isValid():
@@ -1008,7 +1008,7 @@ class ReseauAssainissementPlugin(QObject):
             if _wanted('ortho') and ortho_name not in existing:
                 lyr = QgsRasterLayer(
                     "crs=EPSG:2154&featureCount=10&format=image/jpeg"
-                    "&layers=ORTHOIMAGERY.ORTHOPHOTOS&maxHeight=256&maxWidth=256"
+                    "&layers=ORTHOIMAGERY.ORTHOPHOTOS&maxHeight=2048&maxWidth=2048"
                     "&styles=&url=https://data.geopf.fr/wms-r/wms",
                     ortho_name, "wms")
                 if lyr.isValid():
@@ -1357,7 +1357,7 @@ class ReseauAssainissementPlugin(QObject):
         name   = "Ortho IGN (BD ORTHO nationale)"
         source = (
             "crs=EPSG:2154&featureCount=10&format=image/jpeg"
-            "&layers=ORTHOIMAGERY.ORTHOPHOTOS&maxHeight=256&maxWidth=256"
+            "&layers=ORTHOIMAGERY.ORTHOPHOTOS&maxHeight=2048&maxWidth=2048"
             "&styles=&url=https://data.geopf.fr/wms-r/wms"
         )
         self._remove_orphan_layer(name)
@@ -1379,7 +1379,7 @@ class ReseauAssainissementPlugin(QObject):
         name   = "OSM Desature"
         source = (
             "crs=EPSG:2154&featureCount=10&format=image/png"
-            "&layers=faded&maxHeight=256&maxWidth=256"
+            "&layers=faded&maxHeight=2048&maxWidth=2048"
             "&styles=&url=https://osm.datagrandest.fr/mapcache"
         )
         self._remove_orphan_layer(name)
@@ -1435,21 +1435,48 @@ class ReseauAssainissementPlugin(QObject):
         if dlg_export.exec_() != ExportDialog.Accepted:
             return
         choices = dlg_export.get_choices()
+        # Les réglages du plan sont désormais dans la même fenêtre : plus de
+        # PrintDialog à traverser avant d'exporter.
+        settings = dlg_export.get_print_settings()
+
+        if choices.get('tout_en_un'):
+            self._export_tout_en_un(choices, settings)
+            return
 
         do_plan_pdf  = choices['plan_pdf']
         do_plan_dxf  = choices['plan_dxf']
         do_profil_eu  = choices['profil_eu']
         do_profil_ep  = choices['profil_ep']
         do_profil_grp = choices['profil_groupe']
+        do_cubature   = choices['cubature']
+        do_coupes     = choices['coupe_eu'] or choices['coupe_ep']
 
-        if not any([do_plan_pdf, do_plan_dxf, do_profil_eu, do_profil_ep, do_profil_grp]):
+        if not any([do_plan_pdf, do_plan_dxf, do_profil_eu, do_profil_ep,
+                    do_profil_grp, do_cubature, do_coupes]):
             return
 
         # ── Profils en long (export immédiat, sans interaction carte) ──────
         if do_profil_eu or do_profil_ep or do_profil_grp:
             self._export_profils_batch(choices)
 
-        # ── Plan PDF/DXF → PrintDialog + PrintTool ─────────────────────────
+        # ── Cubature et coupes types (export immédiat, sans interaction) ───
+        # Un seul compte rendu pour les deux : ils partagent le dossier de
+        # sortie et l'utilisateur les a demandés d'un même clic.
+        msgs = []
+        if do_cubature:
+            msgs.extend(self._export_cubature_batch(choices))
+        if do_coupes:
+            msgs.extend(self._export_coupes_batch(choices))
+        if msgs:
+            from qgis.PyQt.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self.iface.mainWindow(),
+                i18n.tr('msg_export_sorties_ok'),
+                "\n".join(msgs) + "\n\n"
+                + i18n.tr('msg_dossier', chemin=choices.get('output_dir', '')),
+            )
+
+        # ── Plan PDF/DXF → PrintTool ───────────────────────────────────────
         if not do_plan_pdf and not do_plan_dxf:
             return
 
@@ -1459,15 +1486,9 @@ class ReseauAssainissementPlugin(QObject):
             self._export_dxf_direct(out_dir=out_dir)
             return
 
-        from .gui.print_dialog import PrintDialog
         from .tools.print_tool import PrintTool
         from qgis.core import QgsUnitTypes
 
-        dlg = PrintDialog(self.iface.mainWindow())
-        if dlg.exec_() != PrintDialog.Accepted:
-            return
-
-        settings = dlg.get_settings()
         settings['do_pdf']     = do_plan_pdf
         settings['do_dxf']     = do_plan_dxf
         settings['output_dir'] = out_dir
@@ -1480,6 +1501,10 @@ class ReseauAssainissementPlugin(QObject):
                 i18n.tr('msg_crs_non_metrique', crs=crs.authid()),
             )
 
+        if settings.get('cadrage_auto'):
+            self._imprimer_cadrage_auto(settings)
+            return
+
         tool = PrintTool(self.iface.mapCanvas(), self.iface, settings)
         self._cleanup_tools()
         self.iface.mapCanvas().setMapTool(tool)
@@ -1491,15 +1516,374 @@ class ReseauAssainissementPlugin(QObject):
             level=0, duration=0,
         )
 
-    def _export_profils_batch(self, choices):
-        """Export batch des profils en long vers des PDF dans le dossier choisi."""
+    def _export_tout_en_un(self, choices, settings):
+        """Bouton « Tout en un » : toutes les sorties dans une archive ZIP.
+
+        Les sorties automatiques (profils, cubature, coupes types) partent
+        d'abord dans un dossier de travail. Le cadrage du plan reste posé à la
+        main sur la carte, comme pour un export normal : c'est PrintTool qui
+        signale la fin, et l'archive est refermée à ce moment-là.
+        """
+        import os
+        import tempfile
+        from datetime import datetime
+        from qgis.PyQt.QtWidgets import QMessageBox
+        from qgis.core import QgsProject, QgsUnitTypes
+
+        out_dir = choices.get('output_dir')
+        if not out_dir or not os.path.isdir(out_dir):
+            return
+
+        # Nom horodaté : jamais de collision avec un export précédent.
+        projet_path = QgsProject.instance().fileName()
+        base = (os.path.splitext(os.path.basename(projet_path))[0]
+                if projet_path else "CanaPlan")
+        base = f"{base}_tout_en_un_{datetime.now():%Y%m%d_%H%M}"
+
+        # Le travail se fait dans le TEMP du système, jamais dans le dossier
+        # de l'utilisateur : celui-ci ne doit jamais voir apparaître autre
+        # chose que l'archive, même pendant la pose des feuilles.
+        try:
+            work_dir = tempfile.mkdtemp(prefix="canaplan_tout_en_un_")
+        except OSError as e:
+            QMessageBox.critical(self.iface.mainWindow(),
+                                 i18n.tr('msg_tout_en_un'),
+                                 i18n.tr('msg_zip_erreur', erreur=e))
+            return
+
+        # « Tout » veut dire tout : les cases du dialogue ne s'appliquent pas,
+        # seuls les formats papier retenus par l'utilisateur sont repris.
+        sous_choix = dict(choices)
+        sous_choix.update({
+            'output_dir':            work_dir,
+            'profil_eu':             True,
+            'profil_ep':             True,
+            'profil_groupe':         False,
+            'cubature':              True,
+            'cubature_perimetre':    'tout',
+            'cubature_conduites':    True,
+            'cubature_branchements': True,
+            'cubature_pdf':          True,
+            'cubature_xlsx':         True,
+            'cubature_csv':          False,
+            'cubature_remblai':      True,
+            'coupe_eu':              True,
+            'coupe_ep':              True,
+        })
+
+        msgs = []
+        msgs.extend(self._export_profils_batch(sous_choix, silencieux=True))
+        msgs.extend(self._export_cubature_batch(sous_choix))
+        msgs.extend(self._export_coupes_batch(sous_choix))
+
+        # ── Plan PDF + DXF : cadrage posé par l'utilisateur ────────────────
+        from .tools.print_tool import PrintTool, _aide_pose
+
+        settings = dict(settings)   # ne pas polluer les réglages de l'appelant
+        settings['do_pdf']     = True
+        settings['do_dxf']     = True
+        settings['output_dir'] = work_dir
+        # Les fichiers partent dans le TEMP et sont supprimés après archivage :
+        # les ouvrir afficherait un PDF et lancerait AutoCAD sur des fichiers
+        # qui n'existeront plus dans la seconde.
+        settings['open_after'] = False
+
+        crs = self.iface.mapCanvas().mapSettings().destinationCrs()
+        if crs.mapUnits() != QgsUnitTypes.DistanceMeters:
+            QMessageBox.warning(
+                self.iface.mainWindow(), i18n.tr('msg_impression'),
+                i18n.tr('msg_crs_non_metrique', crs=crs.authid()),
+            )
+
+        cloture = lambda: self._finaliser_zip(work_dir, out_dir, base, msgs)
+
+        if settings.get('cadrage_auto'):
+            # Le ZIP se referme de la même façon : c'est PrintTool qui
+            # signale la fin, qu'il ait été nourri par des clics ou par le
+            # calcul.
+            self._imprimer_cadrage_auto(settings, on_finished=cloture)
+            return
+
+        tool = PrintTool(
+            self.iface.mapCanvas(), self.iface, settings,
+            on_finished=cloture,
+        )
+        self._cleanup_tools()
+        self.iface.mapCanvas().setMapTool(tool)
+        self.tools['imprimer'] = tool
+
+        self.iface.messageBar().pushMessage(
+            i18n.tr('msg_tout_en_un'),
+            i18n.tr('msg_tout_en_un_pose') + "  " + _aide_pose(settings),
+            level=0, duration=0,
+        )
+
+    # Au-delà, on demande confirmation : un export de cette taille prend
+    # plusieurs minutes, et le cas vient presque toujours d'une échelle trop
+    # grande saisie par erreur.
+    _SEUIL_PLANCHES = 20
+
+    def _imprimer_cadrage_auto(self, settings, on_finished=None):
+        """Calcule les planches, puis lance l'export sans pose manuelle.
+
+        `on_finished` est transmis à PrintTool, et appelé aussi sur les
+        abandons : sans cela, un tout en un interrompu laisserait son dossier
+        de travail derrière lui.
+        """
+        from qgis.PyQt.QtCore import Qt, QSettings
+        from qgis.PyQt.QtWidgets import QApplication, QMessageBox
+        from qgis.core import QgsProject
+
+        from .tools.cadrage_auto import calculer_planches, marge_depuis_couches
+        from .tools.print_tool import PrintTool
+        from .tools.projet_bet import _read_label_size
+
+        def abandon():
+            if on_finished is not None:
+                on_finished()
+
+        # ── Couches à couvrir : le réseau seul ────────────────────────────
+        # Les fonds (cadastre, ortho) couvrent tout le département : les
+        # inclure ferait cadrer sur eux et non sur le chantier.
+        couches = []
+        for reseau in ("EU", "EP"):
+            jeu = self._get_couches(reseau) or {}
+            for cle in ('conduite', 'regard', 'branchement', 'tabouret'):
+                couche = jeu.get(cle)
+                if couche is not None:
+                    couches.append(couche)
+
+        if not couches:
+            QMessageBox.warning(self.iface.mainWindow(),
+                                i18n.tr('msg_impression'),
+                                i18n.tr('msg_cadrage_aucun'))
+            abandon()
+            return
+
+        # La marge se déduit des étiquettes réellement affichées : c'est
+        # leur largeur, et non la géométrie ni la hauteur de la police, qui
+        # déborde le plus des planches.
+        try:
+            label_size = _read_label_size(QgsProject.instance(), QSettings())
+        except Exception:
+            label_size = None
+        marge = marge_depuis_couches(couches, settings['echelle'], label_size)
+
+        self.iface.messageBar().pushMessage(
+            i18n.tr('msg_impression'), i18n.tr('msg_cadrage_calcul'),
+            level=0, duration=3)
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            planches = calculer_planches(
+                couches, settings['w_mm'], settings['h_mm'],
+                settings['echelle'], marge_mm=marge)
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.critical(self.iface.mainWindow(),
+                                 i18n.tr('msg_impression'),
+                                 i18n.tr('msg_erreur_detail', detail=e))
+            abandon()
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        if not planches:
+            QMessageBox.warning(self.iface.mainWindow(),
+                                i18n.tr('msg_impression'),
+                                i18n.tr('msg_cadrage_aucun'))
+            abandon()
+            return
+
+        if len(planches) > self._SEUIL_PLANCHES:
+            rep = QMessageBox.question(
+                self.iface.mainWindow(), i18n.tr('msg_impression'),
+                i18n.tr('msg_cadrage_beaucoup', nb=len(planches),
+                        echelle=settings['echelle']),
+                QMessageBox.Yes | QMessageBox.No)
+            if rep != QMessageBox.Yes:
+                abandon()
+                return
+
+        tool = PrintTool(self.iface.mapCanvas(), self.iface, settings,
+                         on_finished=on_finished)
+        self._cleanup_tools()
+        self.iface.mapCanvas().setMapTool(tool)
+        self.tools['imprimer'] = tool
+
+        tool.definir_feuilles(planches)
+        self.iface.messageBar().pushMessage(
+            i18n.tr('msg_impression'),
+            i18n.tr('msg_cadrage_pret', nb=len(planches),
+                    echelle=settings['echelle']),
+            level=0, duration=5)
+        tool.exporter_maintenant()
+
+    def _finaliser_zip(self, work_dir, out_dir, base, msgs):
+        """Zippe le dossier de travail, le supprime, et rend compte."""
+        import os
+        import shutil
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        fichiers = []
+        if os.path.isdir(work_dir):
+            for racine, _sous_dossiers, noms in os.walk(work_dir):
+                fichiers.extend(os.path.join(racine, n) for n in noms)
+
+        if not fichiers:
+            shutil.rmtree(work_dir, ignore_errors=True)
+            QMessageBox.warning(self.iface.mainWindow(),
+                                i18n.tr('msg_tout_en_un'),
+                                i18n.tr('msg_zip_vide'))
+            return
+
+        zip_path = os.path.join(out_dir, base + ".zip")
+        try:
+            shutil.make_archive(os.path.join(out_dir, base), 'zip', work_dir)
+        except Exception as e:
+            QMessageBox.critical(self.iface.mainWindow(),
+                                 i18n.tr('msg_tout_en_un'),
+                                 i18n.tr('msg_zip_erreur', erreur=e))
+            return
+        finally:
+            # Le dossier temporaire ne doit jamais survivre, réussite ou non.
+            shutil.rmtree(work_dir, ignore_errors=True)
+
+        msgs = list(msgs) + [i18n.tr('msg_zip_ok',
+                                     fichier=os.path.basename(zip_path),
+                                     nb=len(fichiers))]
+        QMessageBox.information(
+            self.iface.mainWindow(), i18n.tr('msg_tout_en_un'),
+            "\n".join(msgs) + "\n\n"
+            + i18n.tr('msg_dossier', chemin=out_dir),
+        )
+
+    def _export_cubature_batch(self, choices):
+        """Cubature de l'export groupé : calcul sur le réseau, sans carte.
+
+        Les modes axe et BFS ne sont pas repris ici : ils supposent de
+        désigner des ouvrages, ce que l'export groupé ne peut pas faire.
+        Retourne les lignes de compte rendu à afficher.
+        """
+        import os
+        from qgis.PyQt.QtWidgets import QApplication
+        from qgis.PyQt.QtCore import Qt
+
+        from .config_dialog import get_cubature_config
+        from .gui.cubature_dialog import CubatureDialog
+        from .tools.calc_cubature import calculer_cubature_reseau
+
+        out_dir = choices.get('output_dir')
+        if not out_dir or not os.path.isdir(out_dir):
+            return []
+
+        formats = {cle: bool(choices.get('cubature_' + cle))
+                   for cle in ('pdf', 'xlsx', 'csv')}
+        if not any(formats.values()):
+            return []
+
+        config    = get_cubature_config()
+        perimetre = choices.get('cubature_perimetre', 'tout')
+
+        reseaux = []
+        if perimetre in ('tout', 'EU'):
+            reseaux.append(('EU', self._get_couches("EU")))
+        if perimetre in ('tout', 'EP'):
+            reseaux.append(('EP', self._get_couches("EP")))
+
+        all_results = []
+        for reseau, couches in reseaux:
+            if not couches:
+                continue
+            results = calculer_cubature_reseau(couches, config, reseau)
+            if not choices.get('cubature_conduites', True):
+                results = [r for r in results if r.get('type') != 'Conduite']
+            if not choices.get('cubature_branchements', True):
+                results = [r for r in results if r.get('type') != 'Branchement']
+            all_results.extend(results)
+
+        if not all_results:
+            return [i18n.tr('msg_cubature_export_vide')]
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            # Le dialogue porte toute la mise en page des exports ; on s'en
+            # sert comme moteur de rendu, sans jamais l'afficher.
+            dlg = CubatureDialog(
+                all_results, config, self.iface.mainWindow(),
+                show_remblai=bool(choices.get('cubature_remblai')))
+            try:
+                ecrits = dlg.exporter_fichiers(out_dir, **formats)
+            finally:
+                dlg.deleteLater()
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        if not ecrits:
+            return [i18n.tr('msg_cubature_export_vide')]
+        return [i18n.tr(
+            'msg_cubature_export_ok', nb=len(all_results),
+            fichiers=", ".join(os.path.basename(c) for c in ecrits))]
+
+    def _export_coupes_batch(self, choices):
+        """Coupes types EU / EP de l'export groupé.
+
+        Retourne les lignes de compte rendu à afficher.
+        """
+        import os
+        from qgis.PyQt.QtWidgets import QApplication
+        from qgis.PyQt.QtCore import Qt
+
+        from .config_dialog import get_cubature_config
+        from .tools.coupe_type import exporter_coupe_type
+
+        out_dir = choices.get('output_dir')
+        if not out_dir or not os.path.isdir(out_dir):
+            return []
+
+        demandes = [r for r in ('EU', 'EP') if choices.get('coupe_' + r.lower())]
+        if not demandes:
+            return []
+
+        config = get_cubature_config()
+        msgs   = []
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            for reseau in demandes:
+                couches = self._get_couches(reseau)
+                path = None
+                if couches:
+                    path, _stats = exporter_coupe_type(
+                        couches, config, reseau, out_dir,
+                        fmt=choices.get('coupe_fichier', 'pdf'),
+                        paper=choices.get('coupe_papier', 'a4_paysage'),
+                        parent=self.iface.mainWindow(),
+                    )
+                msgs.append(
+                    i18n.tr('msg_coupe_export_ok', reseau=reseau,
+                            fichier=os.path.basename(path)) if path
+                    else i18n.tr('msg_coupe_export_vide', reseau=reseau))
+        except Exception as e:
+            msgs.append(i18n.tr('msg_erreur_detail', detail=e))
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        return msgs
+
+    def _export_profils_batch(self, choices, silencieux=False):
+        """Export batch des profils en long vers des PDF dans le dossier choisi.
+
+        Retourne les lignes de compte rendu. `silencieux` les renvoie sans les
+        afficher, pour que l'export tout en un n'empile pas les fenêtres.
+        """
         import os
         from qgis.PyQt.QtWidgets import QApplication, QMessageBox
         from qgis.PyQt.QtCore import Qt
 
         out_dir = choices.get('output_dir')
         if not out_dir or not os.path.isdir(out_dir):
-            return
+            return []
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
         msgs = []
@@ -1544,13 +1928,14 @@ class ReseauAssainissementPlugin(QObject):
         finally:
             QApplication.restoreOverrideCursor()
 
-        if msgs:
+        if msgs and not silencieux:
             QMessageBox.information(
                 self.iface.mainWindow(),
                 i18n.tr('msg_export_profils_ok'),
                 "\n".join(msgs) + "\n\n"
                 + i18n.tr('msg_dossier', chemin=out_dir),
             )
+        return msgs
 
     def _export_dxf_direct(self, out_dir=None):
         """Export DXF direct sans PrintDialog ni placement de feuilles.

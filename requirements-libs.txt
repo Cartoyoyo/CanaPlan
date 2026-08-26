@@ -4,14 +4,20 @@
 #   pip install --target libs -r requirements-libs.txt
 #
 # libs/ est exclu du dépôt (63 Mo) : ce fichier est la source de vérité de
-# ce que contient le paquet publié. Les versions sont figées pour qu'un
-# ZIP reconstruit six mois plus tard soit identique à celui d'aujourd'hui.
+# ce que contient le paquet publié. Les versions sont figées pour qu'un ZIP
+# reconstruit six mois plus tard soit identique à celui d'aujourd'hui.
 #
-# matplotlib n'y figure pas : QGIS le fournit déjà.
-# numpy est conservé bien que QGIS l'embarque souvent — certaines
-# installations (3.40.x) ne l'ont pas, et ezdxf en dépend.
+# UNIQUEMENT DU PUR PYTHON, volontairement.
+#
+# Le plugin fait sys.path.insert(0, libs) : ce qui se trouve ici passe AVANT
+# les librairies de QGIS. Un paquet compilé embarqué serait donc charge en
+# priorité — et un binaire construit pour la plateforme de la CI (Linux)
+# masquerait, chez un utilisateur Windows, le module fonctionnel de QGIS.
+#
+# numpy et matplotlib sont donc exclus : QGIS les fournit. Si numpy venait
+# reellement a manquer, dxf_postprocess sait installer les dependances a la
+# demande, sur la machine cible et donc avec la bonne architecture.
 
-numpy==2.4.4
 ezdxf==1.4.3
 fontTools==4.62.1
 pyparsing==3.3.2

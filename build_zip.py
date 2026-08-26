@@ -10,8 +10,11 @@ assistant_creation_projet.md, uml_structure.mmd / .d2 / .puml,
 icon/fichedemarque.md, symbology-style.db, .gitignore, build_zip.py lui-même)
 et fichiers temporaires (*.pyc, *.tmp).
 
-NB : libs/numpy est CONSERVÉ — certaines installations QGIS (ex. 3.40.x)
-n'embarquent pas numpy, dont ezdxf a besoin.
+NB : libs/numpy est EXCLU du paquet. Le plugin insere libs/ en tete du
+sys.path : un numpy embarque masquerait celui de QGIS, et un binaire
+compile pour une seule plateforme casserait le plugin sur les autres.
+QGIS fournit numpy ; a defaut, dxf_postprocess l'installe a la demande sur
+la machine cible.
 """
 import os
 import sys
@@ -25,6 +28,12 @@ EXCLUDE_DIRS = {
     "images",
     os.path.join("libs", "bin"),
     os.path.join("libs", "share"),
+    # numpy n'est PAS distribue : le plugin fait sys.path.insert(0, libs),
+    # donc un numpy embarque passe avant celui de QGIS. Compile pour une
+    # seule plateforme il casserait ailleurs ; sans binaires il ne sert a
+    # rien. QGIS le fournit, et dxf_postprocess sait l'installer au besoin.
+    os.path.join("libs", "numpy"),
+    os.path.join("libs", "numpy.libs"),
 }
 EXCLUDE_FILES = {
     "audit.md", "amelioration.txt",
@@ -36,12 +45,26 @@ EXCLUDE_FILES = {
 }
 EXCLUDE_SUFFIXES = (".pyc", ".pyo", ".tmp", ".log")
 
+# Poids mort des librairies : suites de tests, en-tetes de compilation et
+# stubs de typage ne servent jamais a l'execution. Sur les roues Linux que
+# reconstruit la CI, ils pesent plus de la moitie du paquet (105 Mo avant,
+# et le ZIP passait de 15 a 28 Mo).
+LIB_EXCLUDE_DIRS = {"tests", "test", "testing", "_pyinstaller", "__pycache__"}
+LIB_EXCLUDE_SUFFIXES = (".pyi", ".h", ".c", ".pyx", ".pxd", ".f", ".a")
+
 
 def _excluded(rel_path):
     parts = rel_path.split(os.sep)
     if any(p == "__pycache__" or p.endswith(".dist-info") or p == ".git"
            for p in parts):
         return True
+    if parts[0] == "libs":
+        # Le filtre ne vise que les librairies : le code du plugin, lui,
+        # garde ses eventuels fichiers de test.
+        if any(p in LIB_EXCLUDE_DIRS for p in parts[1:]):
+            return True
+        if rel_path.endswith(LIB_EXCLUDE_SUFFIXES):
+            return True
     for d in EXCLUDE_DIRS:
         if rel_path == d or rel_path.startswith(d + os.sep):
             return True

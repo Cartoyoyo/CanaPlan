@@ -134,8 +134,18 @@ jobs:
           try:
               resultat = serveur.plugin.upload(xmlrpc.client.Binary(donnees))
           except xmlrpc.client.Fault as e:
-              # Le message peut contenir l'URL, donc les identifiants.
+              # Ne jamais reproduire l'URL : elle porte les identifiants.
               sys.exit(f"::error::refus de plugins.qgis.org : {e.faultString}")
+          except xmlrpc.client.ProtocolError as e:
+              detail = {
+                  401: "identifiants OSGeo refuses",
+                  403: ("compte authentifie mais non autorise pour ce plugin — "
+                        "OSGEO_USERNAME doit etre le mainteneur declare sur "
+                        "plugins.qgis.org, pas le compte GitHub"),
+                  404: "adresse RPC2 introuvable",
+              }.get(e.errcode, "")
+              sys.exit(f"::error::plugins.qgis.org a repondu "
+                       f"{e.errcode} {e.errmsg}. {detail}")
           print(f"Publié : {resultat}")
           PY
 

@@ -10,11 +10,12 @@ assistant_creation_projet.md, uml_structure.mmd / .d2 / .puml,
 icon/fichedemarque.md, symbology-style.db, .gitignore, build_zip.py lui-même)
 et fichiers temporaires (*.pyc, *.tmp).
 
-NB : libs/numpy est EXCLU du paquet. Le plugin insere libs/ en tete du
-sys.path : un numpy embarque masquerait celui de QGIS, et un binaire
-compile pour une seule plateforme casserait le plugin sur les autres.
-QGIS fournit numpy ; a defaut, dxf_postprocess l'installe a la demande sur
-la machine cible.
+NB : le paquet reprend libs/ tel qu'il est sur la machine de build. C'est
+cette installation-la qui est testee et qui tourne, on publie donc la meme.
+Le paquet est par construction lie a la plateforme de build : ne pas le
+reconstruire ailleurs (une CI Linux, par exemple) sans le savoir, car le
+plugin insere libs/ en tete du sys.path et un binaire d'une autre
+plateforme y masquerait le module fonctionnel de QGIS.
 """
 import os
 import sys
@@ -28,12 +29,6 @@ EXCLUDE_DIRS = {
     "images",
     os.path.join("libs", "bin"),
     os.path.join("libs", "share"),
-    # numpy n'est PAS distribue : le plugin fait sys.path.insert(0, libs),
-    # donc un numpy embarque passe avant celui de QGIS. Compile pour une
-    # seule plateforme il casserait ailleurs ; sans binaires il ne sert a
-    # rien. QGIS le fournit, et dxf_postprocess sait l'installer au besoin.
-    os.path.join("libs", "numpy"),
-    os.path.join("libs", "numpy.libs"),
 }
 EXCLUDE_FILES = {
     "audit.md", "amelioration.txt",

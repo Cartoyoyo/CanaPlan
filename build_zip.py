@@ -8,7 +8,7 @@ le workflow de publication (.github), le figeage des librairies
 (requirements-libs.txt), fichiers de travail (audit.md, amelioration.txt, INTERVIEW.md,
 assistant_creation_projet.md, uml_structure.mmd / .d2 / .puml,
 icon/fichedemarque.md, symbology-style.db, .gitignore, build_zip.py lui-même)
-et fichiers temporaires (*.pyc, *.tmp).
+et fichiers temporaires (*.pyc, *.tmp, *.zip).
 
 NB : le paquet reprend libs/ tel qu'il est sur la machine de build. C'est
 cette installation-la qui est testee et qui tourne, on publie donc la meme.
@@ -38,7 +38,10 @@ EXCLUDE_FILES = {
     "symbology-style.db",
     os.path.join("icon", "fichedemarque.md"),
 }
-EXCLUDE_SUFFIXES = (".pyc", ".pyo", ".tmp", ".log")
+# .zip : le paquet est ecrit dans le dossier parcouru par os.walk. Sans cette
+# exclusion, build_zip s'ajoute au ZIP en cours d'ecriture et lit un fichier qui
+# grossit a mesure qu'il l'ecrit — la construction ne se termine jamais.
+EXCLUDE_SUFFIXES = (".pyc", ".pyo", ".tmp", ".log", ".zip")
 
 # Poids mort des librairies : suites de tests, en-tetes de compilation et
 # stubs de typage ne servent jamais a l'execution. Sur les roues Linux que

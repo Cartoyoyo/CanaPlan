@@ -1,11 +1,17 @@
-# Librairies embarquées dans libs/, réinstallées par la CI avant de
-# construire le ZIP de distribution.
+# Librairies dont l'export DXF a besoin. Depuis la 1.7.0 elles ne sont plus
+# embarquées dans le paquet publié : le plugin les installe à la demande dans
+# libs/, sur la machine de l'utilisateur et donc avec la bonne architecture
+# (voir tools/dependances.py, qui reprend cette liste et ces versions).
 #
-#   pip install --target libs -r requirements-libs.txt
+# Pour reconstituer libs/ à la main :
 #
-# libs/ est exclu du dépôt (63 Mo) : ce fichier est la source de vérité de
-# ce que contient le paquet publié. Les versions sont figées pour qu'un ZIP
-# reconstruit six mois plus tard soit identique à celui d'aujourd'hui.
+#   pip install --no-deps --target libs -r requirements-libs.txt
+#
+# --no-deps est indispensable : ezdxf déclare numpy en dépendance dure, or
+# QGIS le fournit déjà et libs/ passe AVANT lui dans le sys.path.
+#
+# Les versions sont figées pour que deux installations faites à six mois
+# d'intervalle se comportent de la même façon.
 #
 # UNIQUEMENT DU PUR PYTHON, volontairement.
 #

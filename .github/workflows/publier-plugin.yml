@@ -60,15 +60,6 @@ jobs:
         run: |
           python -m compileall -q $(git ls-files '*.py' | tr '\n' ' ')
 
-      - name: Installer les librairies embarquées
-        # libs/ est exclu du dépôt : on le reconstruit à l'identique depuis
-        # requirements-libs.txt, qui fige les versions.
-        run: |
-          python -m pip install --upgrade pip
-          pip install --target libs -r requirements-libs.txt
-          echo "Contenu de libs/ :"
-          ls -1 libs
-
       - name: Construire le ZIP
         run: |
           python build_zip.py .
@@ -90,6 +81,14 @@ jobs:
               sys.exit(f"::error::absents du ZIP : {manquants}")
           if any(n.startswith("libs/") or n == "__init__.py" for n in noms):
               sys.exit("::error::le ZIP n'a pas de dossier racine CanaPlan/")
+          # Depuis la 1.7.0 les librairies ne sont plus livrees : le plugin les
+          # installe a la demande sur la machine cible, avec la bonne
+          # architecture. Une roue construite ici (Linux) passerait devant celle
+          # de QGIS dans le sys.path et casserait le plugin sous Windows.
+          embarquees = [n for n in noms if n.startswith("CanaPlan/libs/")]
+          if embarquees:
+              sys.exit(f"::error::{len(embarquees)} fichiers sous libs/ dans le "
+                       f"paquet, ex. {embarquees[:3]}")
           mo = os.path.getsize(chemin) / 1e6
           print(f"{len(noms)} fichiers, {mo:.1f} Mo")
           if mo > 25:

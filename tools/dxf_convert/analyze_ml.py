@@ -1,4 +1,5 @@
 """Dump ALL group codes of the first 3 MULTILEADER entities from GDC.dxf."""
+from .. import errlog
 dxf_path = r"C:\Users\y_laloux\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\cad_to_gis_convert\GDC.dxf"
 
 with open(dxf_path, encoding="utf-8", errors="replace") as fh:
@@ -9,8 +10,8 @@ i = 0
 while i < len(raw_lines) - 1:
     try:
         pairs.append((int(raw_lines[i].strip()), raw_lines[i+1].strip()))
-    except ValueError:
-        pass
+    except ValueError as _err:
+        errlog.ignored(_err, "analyze_ml.<module>:13")
     i += 2
 
 # Find ENTITIES section

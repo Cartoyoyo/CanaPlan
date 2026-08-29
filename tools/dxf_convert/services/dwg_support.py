@@ -2,7 +2,12 @@ from __future__ import annotations
 import os
 import tempfile
 import shutil
-import subprocess
+# Le convertisseur DWG est un executable tiers (ODA File Converter ou
+# dwg2dxf). Il est localise par find_oda()/find_dwg2dxf(), qui verifient
+# avec _is_file() que le chemin designe bien un fichier avant tout appel.
+# Les commandes sont passees en liste, sans shell : aucune valeur ne peut
+# etre interpretee comme une option ou une commande supplementaire.
+import subprocess  # nosec B404
 from typing import Optional, List
 
 # ---------- helpers ----------
@@ -76,7 +81,7 @@ def convert_with_oda(dwg_path: str, out_dir: str, dxf_version: str = "ACAD2013")
         exe, in_folder, out_folder, in_filter, out_version, out_type, recurse,
         os.path.abspath(dwg_path),
     ]
-    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)  # nosec B603
     if res.returncode != 0:
         raise RuntimeError(f"ODA converter failed (code {res.returncode}). Output:\n{res.stdout}")
 
@@ -114,7 +119,7 @@ def convert_with_libredwg(dwg_path: str, out_dir: str) -> str:
         raise RuntimeError("LibreDWG 'dwg2dxf' not found on PATH.")
     out_path = os.path.join(out_dir, os.path.splitext(os.path.basename(dwg_path))[0] + ".dxf")
     cmd = [exe, "-o", out_path, os.path.abspath(dwg_path)]
-    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)  # nosec B603
     if res.returncode != 0 or not os.path.isfile(out_path):
         raise RuntimeError(f"dwg2dxf failed (code {res.returncode}). Output:\n{res.stdout}")
     return out_path

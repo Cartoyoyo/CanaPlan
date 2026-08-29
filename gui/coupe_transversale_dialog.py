@@ -15,6 +15,7 @@ from qgis.PyQt.QtWidgets import (
     QComboBox, QLabel, QFileDialog, QSizePolicy,
 )
 from qgis.core import QgsProject
+from ..tools import errlog
 
 
 # ------------------------------------------------------------------ couleurs
@@ -409,8 +410,8 @@ class CoupeTransversaleDialog(QDialog):
         finally:
             try:
                 os.unlink(tmp_path)
-            except Exception:
-                pass
+            except Exception as _err:
+                errlog.ignored(_err, "coupe_transversale_dialog._render_situation_plan:413")
 
         # Pas d'aspect dans imshow — l'axe gère les proportions
         ax_sit.imshow(arr,

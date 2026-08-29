@@ -14,6 +14,7 @@ from itertools import cycle
 from qgis.core import QgsProject, QgsMessageLog, Qgis
 from qgis.PyQt.QtCore import QSettings, QCoreApplication
 from qgis.PyQt.QtWidgets import QApplication, QMessageBox
+from .... import errlog
 
 
 def myQGIS_VERSION_INT():
@@ -82,8 +83,8 @@ def subLZF(Sonstiges=None):
             ("\t" + Sonstiges if Sonstiges else ""),
             'EZUSoft:Error'
         )
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "fnc4all.subLZF:86")
     addFehler(
         "LZF:" + traceback.format_exc().replace("\n", "\t") +
         ("\t" + Sonstiges if Sonstiges else "")
@@ -108,8 +109,8 @@ def errbox(text, p=None):
     QMessageBox.critical(None, "PlugIn Error", cut4view(su))
     try:
         QgsMessageLog.logMessage(su, 'EZUSoft:Error')
-    except:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "fnc4all.errbox:112")
 
 
 def msgbox(text):
@@ -117,16 +118,16 @@ def msgbox(text):
     QMessageBox.information(None, "PlugIn Hinweis", cut4view(su))
     try:
         QgsMessageLog.logMessage(su, 'EZUSoft:Hinweise')
-    except:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "fnc4all.msgbox:121")
 
 
 def hinweislog(text, p=None):
     su = toUnicode(text)
     try:
         QgsMessageLog.logMessage(su, 'EZUSoft:Comments')
-    except:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "fnc4all.hinweislog:129")
 
 
 def EZUTempClear(All=None):

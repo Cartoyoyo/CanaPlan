@@ -29,6 +29,7 @@ from qgis.PyQt.QtGui import QFont, QColor
 from qgis.PyQt.QtCore import QSizeF, QVariant, QSettings
 
 from ..tools import i18n
+from ..tools import errlog
 
 try:
     from qgis.PyQt.QtCore import QMetaType
@@ -349,8 +350,8 @@ def _make_line_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
     pal_pin.setDataDefinedProperties(pc2)
     try:
         pal_pin.setCallout(_make_callout(dashed=True))
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "etiquettes._make_line_labeling:353")
     rule_pin = QgsRuleBasedLabeling.Rule(pal_pin)
     rule_pin.setFilterExpression(f'"{LBL_X}" IS NOT NULL')
     rule_pin.setDescription(i18n.tr('et_regle_epinglee', role=nom))
@@ -369,8 +370,8 @@ def _line_current_settings(labeling):
             s = rules[0].settings()
             min_scale = s.minimumScale if s.scaleVisibility else 0
             return s.fieldName, s.format().size(), s.format().sizeUnit(), min_scale
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "etiquettes._line_current_settings:373")
     return None
 
 
@@ -458,8 +459,8 @@ def _make_point_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
     try:
         # min_length_mm=0 : le connecteur est tracé quel que soit le zoom.
         pal.setCallout(_make_callout(dashed=False, min_length_mm=0.0))
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "etiquettes._make_point_labeling:462")
 
     _apply_placement_policy(pal, role, min_scale)
     return QgsVectorLayerSimpleLabeling(pal)
@@ -541,8 +542,8 @@ def _clear_legacy_engine_flag():
             return
         settings.setFlag(_LabelEngineSettings.UseAllLabels, False)
         project.setLabelingEngineSettings(settings)
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "etiquettes._clear_legacy_engine_flag:545")
 
 
 def _mutate_pal(labeling, func):
@@ -584,8 +585,8 @@ def set_force_all_labels(enabled: bool, canvas=None, plugin=None):
     """
     try:
         QgsProject.instance().writeEntry(_FORCE_SCOPE, _FORCE_KEY, bool(enabled))
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "etiquettes.set_force_all_labels:588")
     _clear_legacy_engine_flag()
 
     if plugin is not None:

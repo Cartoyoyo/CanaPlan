@@ -1,18 +1,24 @@
+# -*- coding: utf-8 -*-
 # gui/renseignement_dialog.py
 
 from qgis.core import NULL, QgsPointXY
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit,
     QComboBox, QDialogButtonBox, QLabel, QMessageBox, QPushButton,
+    QGroupBox, QFrame, QWidget, QSizePolicy,
 )
 from qgis.PyQt.QtGui import QFont, QRegExpValidator, QKeyEvent
 from qgis.PyQt.QtCore import Qt, QTimer, QEvent, QLocale, QRegExp, pyqtSignal
 
 from ..tools import i18n
+from .quick_config_widgets import NETWORK_COLORS
 
 import re
 
 _NUM_TOKEN_RE = re.compile(r'[+-]?\d*\.?\d+')
+
+# Sépare « Longueur (m) » en libellé + unité, dans toutes les langues.
+_UNIT_RE = re.compile(r'^(.*?)\s*\(([^()]*)\)\s*$')
 
 # label, type, (decimals,) ou liste de suggestions
 FIELD_CONFIG = {
@@ -29,11 +35,32 @@ FIELD_CONFIG = {
     'cote_piquage':  ('col_cote_piquage',  'num', 3),
 }
 
+# Regroupement des champs par rôle : (clé i18n du cadre, champs du cadre).
+# L'ordre de lecture donne l'ordre de saisie (Tab).
+ROLE_SECTIONS = {
+    'regard': [
+        ('rens_sec_identification', ['nom']),
+        ('rens_sec_altimetrie',     ['tn', 'profondeur', 'fe_radier']),
+    ],
+    'tabouret': [
+        ('rens_sec_identification', ['nom']),
+        ('rens_sec_altimetrie',     ['tn', 'profondeur', 'fe_entree']),
+    ],
+    'conduite': [
+        ('rens_sec_caracteristiques', ['diametre', 'materiau']),
+        ('rens_sec_trace',            ['longueur', 'pente']),
+    ],
+    'branchement': [
+        ('rens_sec_caracteristiques', ['diametre', 'materiau']),
+        ('rens_sec_trace',            ['longueur', 'pente', 'cote_piquage']),
+    ],
+}
+
+# Champs saisis pour chaque rôle, à plat — dérivé de ROLE_SECTIONS pour que
+# les deux ne puissent pas diverger.
 ROLE_FIELDS = {
-    'regard':      ['nom', 'tn', 'profondeur', 'fe_radier'],
-    'tabouret':    ['nom', 'tn', 'profondeur', 'fe_entree'],
-    'conduite':    ['diametre', 'materiau', 'longueur', 'pente'],
-    'branchement': ['diametre', 'materiau', 'longueur', 'pente', 'cote_piquage'],
+    role: [name for _, noms in sections for name in noms]
+    for role, sections in ROLE_SECTIONS.items()
 }
 
 # Clés i18n, traduites à l'affichage
@@ -45,6 +72,14 @@ ROLE_LABELS = {
 }
 
 
+def _split_unit(label):
+    """« Longueur (m) » → ('Longueur', 'm'). Sans parenthèses → (label, '')."""
+    m = _UNIT_RE.match(label)
+    if m:
+        return m.group(1), m.group(2)
+    return label, ''
+
+
 class NumericEdit(QLineEdit):
     """QLineEdit numérique : sélection auto au clic, pas de flèches."""
 
@@ -54,6 +89,7 @@ class NumericEdit(QLineEdit):
         super().__init__(parent)
         self._decimals = decimals
         self.setAlignment(Qt.AlignRight)
+        self.setPlaceholderText('—')
         # Accepte chiffres, point, virgule, +, -, espaces — l'évaluation
         # additive est faite dans value(). Permet ex: "1-0.25" → 0.75.
         validator = QRegExpValidator(QRegExp(r'[\d+\-.,\s]*'))
@@ -110,6 +146,7 @@ class RenseignementDialog(QDialog):
         self.couches  = couches
         self.widgets  = {}
         self._updating = False
+        self._accent  = NETWORK_COLORS.get(reseau, '#555555')
 
         self._fe_field = 'fe_radier' if role == 'regard' else 'fe_entree'
 
@@ -117,7 +154,7 @@ class RenseignementDialog(QDialog):
             i18n.tr('rens_titre',
                     type=i18n.tr(ROLE_LABELS.get(role, role)), nom=reseau)
         )
-        self.setMinimumWidth(380)
+        self.setMinimumWidth(420)
         self._build_ui()
 
         if role in ('regard', 'tabouret'):
@@ -127,27 +164,97 @@ class RenseignementDialog(QDialog):
 
     def _build_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        title = QLabel(i18n.tr('rens_sous_titre',
-                       type=i18n.tr(ROLE_LABELS.get(self.role, self.role)),
-                       reseau=self.reseau))
-        font = QFont()
-        font.setBold(True)
-        font.setPointSize(10)
-        title.setFont(font)
-        main_layout.addWidget(title)
+        main_layout.addWidget(self._make_header())
 
-        form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignRight)
-        form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        corps = QWidget()
+        corps_layout = QVBoxLayout(corps)
+        corps_layout.setContentsMargins(14, 12, 14, 12)
+        corps_layout.setSpacing(10)
 
         layer_fields = self.layer.fields()
-        for name in ROLE_FIELDS.get(self.role, []):
+        for cle_section, noms in ROLE_SECTIONS.get(self.role, []):
+            group = self._make_section(cle_section, noms, layer_fields)
+            if group is not None:
+                corps_layout.addWidget(group)
+
+        corps_layout.addStretch()
+        main_layout.addWidget(corps)
+
+        main_layout.addWidget(self._make_separator())
+        main_layout.addWidget(self._make_buttons())
+
+        # Le libellé de l'en-tête suit le nom pendant la saisie.
+        nom_w = self.widgets.get('nom')
+        if isinstance(nom_w, QLineEdit):
+            nom_w.textChanged.connect(lambda _: self._refresh_header())
+
+    def _make_header(self):
+        """Bandeau coloré : type d'ouvrage, nom, pastille du réseau."""
+        header = QFrame()
+        header.setStyleSheet(f"QFrame {{ background-color: {self._accent}; }}")
+
+        lay = QHBoxLayout(header)
+        lay.setContentsMargins(14, 10, 14, 10)
+        lay.setSpacing(10)
+
+        self.lbl_header = QLabel()
+        font = QFont()
+        font.setBold(True)
+        font.setPointSize(11)
+        self.lbl_header.setFont(font)
+        self.lbl_header.setStyleSheet("color: #FFFFFF; background: transparent;")
+        self.lbl_header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        lay.addWidget(self.lbl_header)
+
+        badge = QLabel(self.reseau)
+        badge_font = QFont()
+        badge_font.setBold(True)
+        badge.setFont(badge_font)
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setStyleSheet(
+            "QLabel {"
+            "  background-color: #FFFFFF;"
+            f" color: {self._accent};"
+            "  border-radius: 9px; padding: 2px 10px;"
+            "}"
+        )
+        lay.addWidget(badge, 0, Qt.AlignRight)
+
+        self._refresh_header()
+        return header
+
+    def _refresh_header(self):
+        type_label = i18n.tr(ROLE_LABELS.get(self.role, self.role))
+
+        nom_w = self.widgets.get('nom')
+        nom = nom_w.text().strip() if isinstance(nom_w, QLineEdit) else ''
+        if not nom and self.layer.fields().indexFromName('nom') >= 0:
+            raw = self.feat['nom']
+            if raw is not None and raw != NULL:
+                nom = str(raw).strip()
+        if not nom:
+            nom = f"#{self.feat.id()}"
+
+        self.lbl_header.setText(f"{type_label}  {nom}")
+
+    def _make_section(self, cle_section, noms, layer_fields):
+        """Cadre regroupant les champs présents dans la couche, ou None."""
+        group = QGroupBox(i18n.tr(cle_section))
+        form = QFormLayout(group)
+        form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        form.setHorizontalSpacing(10)
+        form.setVerticalSpacing(7)
+
+        lignes = 0
+        for name in noms:
             if layer_fields.indexFromName(name) < 0:
                 continue
             cle_label, ftype, extra = FIELD_CONFIG[name]
-            label_text = i18n.tr(cle_label)
+            label_text, unite = _split_unit(i18n.tr(cle_label))
             raw_val = self.feat[name]
 
             # Auto-remplissage longueur depuis la géométrie si vide
@@ -160,32 +267,107 @@ class RenseignementDialog(QDialog):
             widget = self._make_widget(ftype, extra, raw_val)
             self.widgets[name] = widget
 
+            extras = []
             if name == 'longueur' and self.role in ('conduite', 'branchement'):
-                row = QHBoxLayout()
-                row.addWidget(widget)
-                btn = QPushButton("↺")
-                btn.setFixedWidth(30)
-                btn.setToolTip(i18n.tr('rens_recalculer'))
-                btn.clicked.connect(self._recalculate_longueur)
-                row.addWidget(btn)
-                form.addRow(label_text, row)
+                extras.append(self._make_action_button(
+                    "↺", i18n.tr('rens_recalculer'),
+                    self._recalculate_longueur, largeur=30))
             elif name == 'pente' and self.role in ('conduite', 'branchement'):
-                row = QHBoxLayout()
-                row.addWidget(widget)
-                btn = QPushButton(i18n.tr('rens_calculer'))
-                btn.setFixedWidth(70)
-                btn.clicked.connect(self._calculate_pente)
-                row.addWidget(btn)
-                form.addRow(label_text, row)
-            else:
-                form.addRow(label_text, widget)
+                extras.append(self._make_action_button(
+                    i18n.tr('rens_calculer'), i18n.tr('rens_calcul_pente'),
+                    self._calculate_pente, largeur=76))
 
-        main_layout.addLayout(form)
+            form.addRow(label_text, self._make_field_row(widget, unite, extras))
+            lignes += 1
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        if lignes == 0:
+            group.deleteLater()
+            return None
+        return group
+
+    def _make_field_row(self, widget, unite, extras):
+        """Champ + suffixe d'unité + boutons d'action, alignés."""
+        row = QWidget()
+        lay = QHBoxLayout(row)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+        lay.addWidget(widget, 1)
+
+        if unite:
+            lbl = QLabel(unite)
+            lbl.setStyleSheet("color: palette(mid);")
+            lbl.setMinimumWidth(42)
+            lay.addWidget(lbl, 0)
+        elif extras:
+            # Réserve la même gouttière pour que les boutons restent alignés
+            spacer = QLabel('')
+            spacer.setMinimumWidth(42)
+            lay.addWidget(spacer, 0)
+
+        for btn in extras:
+            lay.addWidget(btn, 0)
+        return row
+
+    def _make_action_button(self, texte, tooltip, slot, largeur):
+        btn = QPushButton(texte)
+        btn.setFixedWidth(largeur)
+        btn.setToolTip(tooltip)
+        btn.setCursor(Qt.PointingHandCursor)
+        # Sans cela, Entrée dans un champ déclencherait ce bouton au lieu d'OK.
+        btn.setAutoDefault(False)
+        btn.setDefault(False)
+        btn.setStyleSheet(
+            "QPushButton {"
+            f" border: 1px solid {self._accent}; color: {self._accent};"
+            "  background: transparent; border-radius: 3px;"
+            "  padding: 3px 6px; font-weight: bold;"
+            "}"
+            f"QPushButton:hover   {{ background-color: {self._accent}; color: #FFFFFF; }}"
+            f"QPushButton:pressed {{ background-color: {self._accent}; color: #FFFFFF; }}"
+        )
+        btn.clicked.connect(slot)
+        return btn
+
+    def _make_separator(self):
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setFrameShadow(QFrame.Sunken)
+        return sep
+
+    def _make_buttons(self):
+        pied = QWidget()
+        lay = QHBoxLayout(pied)
+        lay.setContentsMargins(14, 10, 14, 12)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Apply | QDialogButtonBox.Cancel
+        )
+
+        btn_ok = buttons.button(QDialogButtonBox.Ok)
+        btn_ok.setDefault(True)
+        btn_ok.setAutoDefault(True)
+        btn_ok.setCursor(Qt.PointingHandCursor)
+        btn_ok.setStyleSheet(
+            "QPushButton {"
+            f" background-color: {self._accent}; color: #FFFFFF;"
+            "  font-weight: bold; border: none; border-radius: 3px;"
+            "  padding: 6px 18px;"
+            "}"
+            "QPushButton:hover   { background-color: palette(highlight); }"
+            "QPushButton:pressed { background-color: palette(dark); }"
+        )
+
+        btn_apply = buttons.button(QDialogButtonBox.Apply)
+        btn_apply.setText(i18n.tr('appliquer'))
+        btn_apply.setAutoDefault(False)
+        btn_apply.clicked.connect(self._apply)
+
+        buttons.button(QDialogButtonBox.Cancel).setAutoDefault(False)
+
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
-        main_layout.addWidget(buttons)
+        lay.addWidget(buttons)
+        return pied
 
     def _make_widget(self, ftype, extra, raw_val):
         if ftype == 'num':
@@ -252,7 +434,7 @@ class RenseignementDialog(QDialog):
             msg.setText(i18n.tr('rens_p_question'))
             btn_fe = msg.addButton(fe_label, QMessageBox.YesRole)
             btn_tn = msg.addButton('TN',     QMessageBox.NoRole)
-            msg.addButton('Aucune',          QMessageBox.RejectRole)
+            msg.addButton(i18n.tr('rens_aucune'), QMessageBox.RejectRole)
             msg.exec_()
             clicked = msg.clickedButton()
             if clicked == btn_fe:
@@ -267,7 +449,8 @@ class RenseignementDialog(QDialog):
 
     # ----------------------------------------------------------------- save
 
-    def _save(self):
+    def _apply(self):
+        """Écrit les valeurs saisies dans la couche, sans fermer la fenêtre."""
         if not self.layer.isEditable():
             self.layer.startEditing()
 
@@ -289,6 +472,15 @@ class RenseignementDialog(QDialog):
             self.layer.changeAttributeValue(fid, idx, val)
 
         self.layer.commitChanges()
+
+        # Recharge l'entité : « Appliquer » puis « OK » doivent repartir de
+        # valeurs à jour, pas d'une référence périmée.
+        fresh = self.layer.getFeature(fid)
+        if fresh.isValid():
+            self.feat = fresh
+
+    def _save(self):
+        self._apply()
         self.accept()
 
     # ----------------------------------------------------------------- longueur géométrique

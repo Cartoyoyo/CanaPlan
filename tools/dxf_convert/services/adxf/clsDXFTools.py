@@ -19,6 +19,7 @@ from .fnc4all import *
 from .fnc4adxf import *
 from .clsDBase import *
 from .TransformTools import *
+from .... import errlog
 
 
 def tr(message):
@@ -99,8 +100,8 @@ def DelShapeDatBlock(shpDat):
         for rest in glob(shpDat[0:-4] + '.*'):
             os.remove(rest)
         return True
-    except OSError:
-        pass
+    except OSError as _err:
+        errlog.ignored(_err, "clsDXFTools.DelShapeDatBlock:103")
 
 
 def DelZielDateien(delDatArr, sOutForm):
@@ -154,6 +155,32 @@ def ProjDaten4Dat(AktDXFDatNam, bCol, bLayer, bZielSave, sOutForm):
     return AktList, AktOpt, ProjektName, Kern
 
 
+def _layer_in_clause(target_layers):
+    """Clause « AND Layer IN (...) » pour l'option -sql d'ogr2ogr.
+
+    Deux niveaux de citation s'empilent ici, et c'est le piege : la clause
+    part dans -sql "select ... where ...", donc entre GUILLEMETS, et les noms
+    de calques y sont entre APOSTROPHES. Doubler les apostrophes (ce que fait
+    la ligne ci-dessous) protege la chaine SQL, mais pas l'option : un nom
+    contenant un guillemet refermerait le -sql et la suite du nom serait lue
+    comme des options ogr2ogr supplementaires.
+
+    Les noms viennent soit du DXF, soit du parametre « layers » saisi a la
+    main dans l'algorithme de traitement — donc d'une source non maitrisee.
+    Le guillemet etant de toute facon interdit dans un nom de calque DXF, on
+    ecarte ces noms au lieu d'essayer de les echapper.
+    """
+    noms = [str(l) for l in target_layers if '"' not in str(l)]
+    ecartes = [str(l) for l in target_layers if '"' in str(l)]
+    if ecartes:
+        addHinweis(tr("Layer name with a quote character ignored: ")
+                   + ", ".join(ecartes))
+    if not noms:
+        return ""
+    in_list = ",".join("'" + n.replace("'", "''") + "'" for n in noms)
+    return " AND Layer IN (" + in_list + ")"
+
+
 def EineDXF(uiParent, mLay_crs, bZielSave, sOutForm, grpProjekt, AktList, Kern, AktOpt,
             DXFDatNam, zielPfadOrDatei, qPrjDatName, sOrgCharSet, bLayer, bFormatText,
             bUseColor4Point, bUseColor4Line, bUseColor4Poly, dblFaktor,
@@ -175,10 +202,7 @@ def EineDXF(uiParent, mLay_crs, bZielSave, sOutForm, grpProjekt, AktList, Kern, 
     myGroups = {}
 
     # Build layers SQL clause
-    layers_sql = ""
-    if target_layers:
-        in_list = ",".join(["'" + l.replace("'", "''") + "'" for l in target_layers])
-        layers_sql = " AND Layer IN (" + in_list + ")"
+    layers_sql = _layer_in_clause(target_layers) if target_layers else ""
 
     if ifAscii(DXFDatNam):
         korrDXFDatNam = DXFDatNam
@@ -228,7 +252,11 @@ def EineDXF(uiParent, mLay_crs, bZielSave, sOutForm, grpProjekt, AktList, Kern, 
         bKonvOK = False
         try:
             if sOutForm == "SHP":
-                opt = ('-skipfailures %s -nlt %s %s -sql "select *, ogr_style from entities where OGR_GEOMETRY %s%s"') % (
+                # SQL du dialecte OGR sur un fichier DXF, pas une base de
+                # donnees : -sql est le seul moyen d'obtenir le pseudo-champ
+                # ogr_style. Seul layers_sql est variable, et il est construit
+                # par _layer_in_clause() qui gere les deux niveaux de citation.
+                opt = ('-skipfailures %s -nlt %s %s -sql "select *, ogr_style from entities where OGR_GEOMETRY %s%s"') % (  # nosec B608
                     AktOpt, v[1], optGCP, v[2], layers_sql)
                 if bGen3D:
                     opt += ' -dim 3 '
@@ -249,7 +277,8 @@ def EineDXF(uiParent, mLay_crs, bZielSave, sOutForm, grpProjekt, AktList, Kern, 
                     opt += '-a_srs "' + mLay_crs.toProj4() + '" '
                 if bRawCode:
                     opt += '--config DXF_INCLUDE_RAW_CODE_VALUES TRUE '
-                opt += ('%s -nlt %s %s -sql "select *, ogr_style from entities where OGR_GEOMETRY %s%s" -nln "%s"') % (
+                # Meme remarque que pour SHP ci-dessus.
+                opt += ('%s -nlt %s %s -sql "select *, ogr_style from entities where OGR_GEOMETRY %s%s" -nln "%s"') % (  # nosec B608
                     AktOpt, v[1], optGCP, v[2], layers_sql, gpkgTable)
                 if bGen3D:
                     opt += ' -dim 3 '
@@ -425,6 +454,6 @@ def EineDXF(uiParent, mLay_crs, bZielSave, sOutForm, grpProjekt, AktList, Kern, 
     uiParent.SetAktionAktSchritt(1)
     try:
         iface.mapCanvas().setRenderFlag(True)
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "clsDXFTools.EineDXF:457")
     return True

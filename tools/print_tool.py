@@ -14,6 +14,7 @@ from qgis.core import (
     QgsWkbTypes, QgsGeometry, QgsRectangle, QgsPointXY,
     QgsProject, QgsMapSettings, QgsMapRendererParallelJob,
 )
+from . import errlog
 
 # États de l'outil
 _STATE_MOVE   = 0   # rectangle suit la souris (libre ou domino)
@@ -778,8 +779,8 @@ class PrintTool(QgsMapTool):
                     # lourd que tout le reste : on veut les voir.
                     try:
                         chrono.log("      source: %s" % lyr.source())
-                    except Exception:
-                        pass
+                    except Exception as _err:
+                        errlog.ignored(_err, "print_tool._generate_pdf:782")
                 else:
                     try:
                         detail = "  %d entites" % lyr.featureCount()
@@ -856,8 +857,8 @@ class PrintTool(QgsMapTool):
                 # est une QImage (renderedImage()), recollée ensuite dans le
                 # QPrinter. Le drapeau ne préservait donc aucun vectoriel mais
                 # privait QGIS de ses raccourcis de rendu.
-            except AttributeError:
-                pass
+            except AttributeError as _err:
+                errlog.ignored(_err, "print_tool._start_render:860")
 
             # Vertices tombant dans le même pixel : inutiles à cette
             # résolution, mais coûteux à parcourir sur les fonds cadastraux.
@@ -871,8 +872,8 @@ class PrintTool(QgsMapTool):
                 simplify.setThreshold(1.0)
                 simplify.setForceLocalOptimization(True)
                 ms.setSimplifyMethod(simplify)
-            except Exception:
-                pass
+            except Exception as _err:
+                errlog.ignored(_err, "print_tool._start_render:875")
             # ParallelJob : les couches d'une même page sont rendues sur
             # plusieurs threads (SequentialJob n'en utilisait qu'un seul).
             job = QgsMapRendererParallelJob(ms)
@@ -1277,7 +1278,9 @@ class PrintTool(QgsMapTool):
         )
         if self.s.get('open_after', True):
             try:
-                os.startfile(pdf_path)
-            except Exception:
-                pass
+                # Ouvre le PDF que le plugin vient d'ecrire, avec le lecteur
+                # associe. Chemin choisi par l'utilisateur au QFileDialog.
+                os.startfile(pdf_path)  # nosec B606
+            except Exception as _err:
+                errlog.ignored(_err, "print_tool._generate_pdf:1282")
 

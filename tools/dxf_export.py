@@ -19,6 +19,7 @@ from qgis.core import (
 )
 
 from . import i18n
+from . import errlog
 
 
 # Préfixe des couches mémoire générées par le plugin (à exclure de l'export)
@@ -122,8 +123,8 @@ def export_dxf(iface, dxf_path, extent, scale, *,
     if hasattr(export, 'setFlags'):
         try:
             export.setFlags(flags)
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError) as _err:
+            errlog.ignored(_err, "dxf_export.export_dxf:126")
 
     f = QFile(dxf_path)
     if not f.open(QIODevice.WriteOnly | QIODevice.Truncate):
@@ -150,9 +151,11 @@ def open_dxf_externally(dxf_path):
         for key in list(os.environ):
             if key.startswith('QT_'):
                 saved[key] = os.environ.pop(key)
-        os.startfile(dxf_path)
-    except Exception:
-        pass
+        # Ouvre le DXF avec l'application associee. Le chemin vient d'un
+        # QFileDialog ou d'un fichier que le plugin vient d'ecrire.
+        os.startfile(dxf_path)  # nosec B606
+    except Exception as _err:
+        errlog.ignored(_err, "dxf_export.open_dxf_externally:155")
     finally:
         for key, val in saved.items():
             os.environ[key] = val

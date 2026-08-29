@@ -9,6 +9,7 @@ from qgis.PyQt.QtGui import QFont, QColor
 from qgis.PyQt.QtCore import Qt
 
 from ..tools import i18n
+from ..tools import errlog
 
 _ROLES   = ('regard', 'tabouret', 'conduite', 'branchement')
 _RESEAUX = ('EU', 'EP')
@@ -83,16 +84,16 @@ def prefs_from_dict(d):
         for role in _ROLES:
             try:
                 prefs['visibility'][reseau][role] = bool(vis[reseau][role])
-            except (KeyError, TypeError):
-                pass
+            except (KeyError, TypeError) as _err:
+                errlog.ignored(_err, "etiquette_affichage_dialog.prefs_from_dict:87")
 
     flds = d.get('fields', {})
     for role, avail in ROLE_FIELDS_AVAIL.items():
         for f, _ in avail:
             try:
                 prefs['fields'][role][f] = bool(flds[role][f])
-            except (KeyError, TypeError):
-                pass
+            except (KeyError, TypeError) as _err:
+                errlog.ignored(_err, "etiquette_affichage_dialog.prefs_from_dict:95")
 
     return prefs
 

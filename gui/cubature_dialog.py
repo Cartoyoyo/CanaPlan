@@ -13,6 +13,7 @@ from qgis.core import QgsProject
 from ..tools import i18n
 from qgis.PyQt.QtCore import Qt, QUrl
 from qgis.PyQt.QtGui import QColor, QDesktopServices
+from ..tools import errlog
 
 
 def _libelle_type(valeur):
@@ -337,8 +338,8 @@ class CubatureDialog(QDialog):
             btn_xlsx = QPushButton(i18n.tr('cb_export_xlsx'))
             btn_xlsx.clicked.connect(self._export_xlsx)
             btn_row.addWidget(btn_xlsx)
-        except ImportError:
-            pass
+        except ImportError as _err:
+            errlog.ignored(_err, "cubature_dialog._build_ui:341")
 
         layout.addLayout(btn_row)
 
@@ -574,9 +575,12 @@ class CubatureDialog(QDialog):
             self._export_pdf_reportlab(path)
         except ImportError:
             try:
-                import subprocess, sys
+                # Installation a la demande de reportlab. argv est entierement
+                # constant : l'interpreteur courant et des litteraux. Pas de
+                # shell, aucune valeur saisie par l'utilisateur.
+                import subprocess, sys  # nosec B404
                 QApplication.setOverrideCursor(Qt.WaitCursor)
-                subprocess.check_call(
+                subprocess.check_call(  # nosec B603
                     [sys.executable, "-m", "pip", "install", "reportlab"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 QApplication.restoreOverrideCursor()

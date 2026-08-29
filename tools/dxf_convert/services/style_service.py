@@ -9,6 +9,7 @@ DXF-faithful styling for QGIS layers.
 from __future__ import annotations
 import colorsys
 from typing import Dict, Optional, Tuple
+from ... import errlog
 
 
 # ---------------------------------------------------------------------------
@@ -136,12 +137,12 @@ def read_dxf_layer_table(dxf_path: str) -> Dict[str, LayerInfo]:
     Tries ezdxf first, then ASCII text parsing."""
     try:
         return _read_via_ezdxf(dxf_path)
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "style_service.read_dxf_layer_table:140")
     try:
         return _read_via_ascii(dxf_path)
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "style_service.read_dxf_layer_table:144")
     return {}
 
 
@@ -183,8 +184,8 @@ def _read_via_ascii(dxf_path: str) -> Dict[str, LayerInfo]:
     while i < len(lines) - 1:
         try:
             pairs.append((int(lines[i].strip()), lines[i + 1].strip()))
-        except ValueError:
-            pass
+        except ValueError as _err:
+            errlog.ignored(_err, "style_service._read_via_ascii:187")
         i += 2
 
     # Locate the LAYER table
@@ -211,8 +212,8 @@ def _read_via_ascii(dxf_path: str) -> Dict[str, LayerInfo]:
                     lineweight=int(cur.get("lineweight", 0)),
                     frozen=bool(int(cur.get("flags", 0)) & 1),
                 )
-            except Exception:
-                pass
+            except Exception as _err:
+                errlog.ignored(_err, "style_service._save:215")
 
     cur: Dict[str, object] = {}
     in_entry = False
@@ -231,15 +232,18 @@ def _read_via_ascii(dxf_path: str) -> Dict[str, LayerInfo]:
                 cur["name"] = val
             elif code == 62:
                 try: cur["color"] = int(val)
-                except ValueError: pass
+                except ValueError as _err:
+                    errlog.ignored(_err, "style_service._read_via_ascii:235")
             elif code == 6:
                 cur["linetype"] = val
             elif code == 370:
                 try: cur["lineweight"] = int(val)
-                except ValueError: pass
+                except ValueError as _err:
+                    errlog.ignored(_err, "style_service._read_via_ascii:241")
             elif code == 70:
                 try: cur["flags"] = int(val)
-                except ValueError: pass
+                except ValueError as _err:
+                    errlog.ignored(_err, "style_service._read_via_ascii:245")
 
     return out
 
@@ -331,8 +335,8 @@ def apply_dxf_style(
         qgs_layer.setRenderer(QgsSingleSymbolRenderer(symbol))
         qgs_layer.triggerRepaint()
 
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "style_service.apply_dxf_style:338")
 
 
 def _sample_color_from_layer(
@@ -351,8 +355,8 @@ def _sample_color_from_layer(
             try:
                 val = int(feat[color_field])
                 counts[val] += 1
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as _err:
+                errlog.ignored(_err, "style_service._sample_color_from_layer:358")
             if sum(counts.values()) >= 100:
                 break
 

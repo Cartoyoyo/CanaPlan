@@ -26,6 +26,7 @@ import traceback
 
 from . import i18n
 from qgis.core import QgsProject, QgsVectorLayer, QgsMessageLog, Qgis
+from . import errlog
 
 _LOG_TAG = "CanaPlan/DXF"
 
@@ -57,19 +58,30 @@ def _install_and_import_ezdxf():
     """Installe ezdxf dans le dossier libs/ du plugin (isolé, sans droits
     admin, sans pollution système) puis l'importe. Lève l'exception si
     l'installation échoue.
+
+    --no-deps est délibéré : ezdxf déclare numpy en dépendance dure, or
+    libs/ passe AVANT le reste du sys.path. Laisser pip tirer numpy ici
+    déposerait, dans libs/, un numpy qui masquerait celui de QGIS — au
+    mieux redondant, au pire construit pour une autre plateforme. On
+    installe donc explicitement les seules dépendances pures de ezdxf et
+    on laisse numpy à QGIS. C'est la même liste que requirements-libs.txt.
     """
     import sys
-    import subprocess
+    import subprocess  # nosec B404
     libs = _plugin_libs_dir()
     cmd = [
         sys.executable, "-m", "pip", "install",
         "--target", libs,
         "--upgrade",
+        "--no-deps",
         "--no-warn-script-location",
-        "ezdxf",
+        "ezdxf", "fontTools", "pyparsing", "typing_extensions",
     ]
     _log(f"Installation ezdxf dans {libs}…", Qgis.Info)
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    # cmd est bati juste au-dessus a partir de sys.executable et de noms de
+    # paquets litteraux ; seul --target pointe vers libs/, un chemin calcule
+    # depuis __file__. Liste d'arguments, sans shell.
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # nosec B603
     if res.returncode != 0:
         raise RuntimeError(
             f"pip install ezdxf a retourné {res.returncode}\n"
@@ -242,7 +254,8 @@ def _build_origin_index_by_name():
             try:
                 pt = geom.asPoint()
                 per_layer[nom] = (float(pt.x()), float(pt.y()))
-            except Exception:
+            except Exception as _err:
+                errlog.ignored(_err, "dxf_postprocess._build_origin_index_by_name:254")
                 continue
         if per_layer:
             entry = {
@@ -344,8 +357,8 @@ def _read_symbol_color(lyr):
         if renderer and hasattr(renderer, 'symbol') and renderer.symbol():
             c = renderer.symbol().color()
             return (c.red(), c.green(), c.blue())
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "dxf_postprocess._read_symbol_color:357")
     return None
 
 
@@ -457,7 +470,8 @@ def _build_point_symbol_index():
                 xy = (float(pt.x()), float(pt.y()))
                 attrs = _feat_attrs(feat, role)
                 features.append((xy, attrs))
-            except Exception:
+            except Exception as _err:
+                errlog.ignored(_err, "dxf_postprocess._build_point_symbol_index:470")
                 continue
         if features:
             index[name.lower()] = {
@@ -703,7 +717,8 @@ def apply_ltscale(dxf_path, export_scale):
             if lt.upper() in lt_names_upper:
                 ent.dxf.ltscale = entity_scale
                 n_modified += 1
-        except Exception:
+        except Exception as _err:
+            errlog.ignored(_err, "dxf_postprocess.apply_ltscale:717")
             continue
 
     try:
@@ -779,7 +794,8 @@ def add_label_decorations(dxf_path):
         try:
             ix = float(mtext.dxf.insert.x)
             iy = float(mtext.dxf.insert.y)
-        except (AttributeError, TypeError, ValueError):
+        except (AttributeError, TypeError, ValueError) as _err:
+            errlog.ignored(_err, "dxf_postprocess.add_label_decorations:794")
             continue
 
         attach = int(getattr(mtext.dxf, 'attachment_point', 7))
@@ -870,8 +886,8 @@ def add_label_decorations(dxf_path):
                     'lineweight': _OUTLINE_LINEWEIGHT,
                 },
             )
-        except Exception:
-            pass
+        except Exception as _err:
+            errlog.ignored(_err, "dxf_postprocess.add_label_decorations:886")
 
         # Callout : feature origine → bord du rectangle
         origin = d['origin']
@@ -889,8 +905,8 @@ def add_label_decorations(dxf_path):
                             'lineweight': _CALLOUT_LINEWEIGHT,
                         },
                     )
-                except Exception:
-                    pass
+                except Exception as _err:
+                    errlog.ignored(_err, "dxf_postprocess.add_label_decorations:905")
 
         # Remplacement du MTEXT par N entités TEXT indépendantes (1 par
         # ligne). Chaque TEXT est positionnée à la coordonnée Y exacte

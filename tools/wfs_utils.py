@@ -14,6 +14,7 @@ import json
 import os
 import ssl
 import tempfile
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
@@ -21,6 +22,7 @@ from qgis.core import (
     QgsTask, QgsApplication, QgsProject,
     QgsCoordinateReferenceSystem, QgsCoordinateTransform,
 )
+from . import errlog
 
 DEFAULT_WFS_URL = "https://data.geopf.fr/wfs/ows"
 _TEMP_SUBDIR = "canaplan"
@@ -49,8 +51,8 @@ def purge_temp_dir():
     for name in os.listdir(d):
         try:
             os.unlink(os.path.join(d, name))
-        except OSError:
-            pass
+        except OSError as _err:
+            errlog.ignored(_err, "wfs_utils.purge_temp_dir:54")
 
 
 def write_geojson(features, prefix):
@@ -85,6 +87,24 @@ def current_bbox_l93(canvas):
 
 # ------------------------------------------------------------------ fetch
 
+_ALLOWED_SCHEMES = ("http", "https")
+
+
+def _check_scheme(url):
+    """Interdit tout ce qui n'est pas http(s).
+
+    urlopen() accepte aussi file: et ftp:. Une URL de service mal renseignee
+    (dans un projet partage, par exemple) ferait alors lire un fichier local
+    au lieu d'appeler le serveur, et son contenu partirait dans une couche.
+    On refuse donc explicitement plutot que de laisser urlopen decider.
+    """
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if scheme not in _ALLOWED_SCHEMES:
+        raise ValueError(
+            f"URL WFS refusee : schema « {scheme or '(aucun)'} » "
+            f"non autorise (attendu : {' ou '.join(_ALLOWED_SCHEMES)})")
+
+
 def _fetch_features(typename, bbox, wfs_url, timeout):
     """GET WFS → (features, insecure).
 
@@ -94,8 +114,9 @@ def _fetch_features(typename, bbox, wfs_url, timeout):
     url = (f"{wfs_url}?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature"
            f"&TYPENAMES={typename}&BBOX={bbox}"
            f"&SRSNAME=EPSG:2154&outputFormat=application/json&COUNT=5000")
+    _check_scheme(url)
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
+        with urllib.request.urlopen(url, timeout=timeout) as r:  # nosec B310
             return json.loads(r.read().decode('utf-8')).get('features', []), False
     except (ssl.SSLError, urllib.error.URLError) as e:
         # URLError peut encapsuler une SSLError (proxy / certificat auto-signé)
@@ -105,7 +126,7 @@ def _fetch_features(typename, bbox, wfs_url, timeout):
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-        with urllib.request.urlopen(url, timeout=timeout, context=ctx) as r:
+        with urllib.request.urlopen(url, timeout=timeout, context=ctx) as r:  # nosec B310
             return json.loads(r.read().decode('utf-8')).get('features', []), True
 
 

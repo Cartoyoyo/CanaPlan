@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QCheckBox, QDialogButtonBox, QFileDialog, QGroupBox,
 )
+from ..tools import errlog
 
 _ACCEPTED_EXT = (".gml", ".xml")
 
@@ -47,8 +48,8 @@ class StarDtDialog(QDialog):
         try:
             from ..tools.projet_bet import project_dir
             proj_dir = project_dir()
-        except Exception:
-            pass
+        except Exception as _err:
+            errlog.ignored(_err, "star_dt_dialog.__init__:51")
         if proj_dir:
             self.out_edit.setText(os.path.join(proj_dir, ""))
         self.out_edit.setAcceptDrops(False)
@@ -82,8 +83,8 @@ class StarDtDialog(QDialog):
         try:
             from ..tools.projet_bet import project_dir
             start_dir = project_dir() or ""
-        except Exception:
-            pass
+        except Exception as _err:
+            errlog.ignored(_err, "star_dt_dialog._browse:86")
         paths, _ = QFileDialog.getOpenFileNames(
             self, i18n.tr('sdt_choisir_fichiers'), start_dir,
             i18n.tr('fic_star_dt'))

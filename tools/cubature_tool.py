@@ -7,6 +7,7 @@ from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QMessageBox
 
 from . import i18n
+from . import errlog
 
 BUFFER_DIST = 3.0  # mètres
 
@@ -246,7 +247,8 @@ class CubatureTool(QgsMapTool):
                         continue
                     try:
                         id_cond_int = int(id_cond)
-                    except (TypeError, ValueError):
+                    except (TypeError, ValueError) as _err:
+                        errlog.ignored(_err, "cubature_tool._compute_axe:250")
                         continue
                     if id_cond_int not in conduit_ids:
                         continue
@@ -280,8 +282,8 @@ class CubatureTool(QgsMapTool):
         if self._dialog is not None:
             try:
                 self._dialog.close()
-            except Exception:
-                pass
+            except Exception as _err:
+                errlog.ignored(_err, "cubature_tool._compute_axe:285")
 
         # Construire le prefix du fichier a partir des regards capturés par réseau
         axe_parts = []
@@ -373,7 +375,8 @@ class CubatureTool(QgsMapTool):
                         continue
                     try:
                         id_cond_int = int(id_cond)
-                    except (TypeError, ValueError):
+                    except (TypeError, ValueError) as _err:
+                        errlog.ignored(_err, "cubature_tool._compute_bfs:378")
                         continue
                     if id_cond_int not in conduit_ids_on_path:
                         continue
@@ -407,8 +410,8 @@ class CubatureTool(QgsMapTool):
         if self._dialog is not None:
             try:
                 self._dialog.close()
-            except Exception:
-                pass
+            except Exception as _err:
+                errlog.ignored(_err, "cubature_tool._compute_bfs:413")
         from .calc_cubature import _nom_regard
         bfs_prefix = f"{_nom_regard(start_feat)}_{_nom_regard(end_feat)}"
         dlg = CubatureDialog(results, config, self.iface.mainWindow(),

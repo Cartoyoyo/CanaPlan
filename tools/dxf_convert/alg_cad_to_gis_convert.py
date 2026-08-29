@@ -2,6 +2,7 @@ import os, shutil
 from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterFile, QgsProcessingParameterString,    QgsProcessingParameterBoolean, QgsProcessingParameterEnum, QgsProcessingParameterNumber,    QgsProcessingParameterFileDestination, QgsProcessingParameterFolderDestination, QgsProcessingOutputHtml,    QgsVectorLayer, QgsProject, QgsProcessingException)
 from .services.dwg_support import dwg_to_temp_dxf_auto
 from .services import deps as _deps
+from .. import errlog
 
 
 def _apply_text_labels(vlayer):
@@ -31,8 +32,8 @@ def _apply_text_labels(vlayer):
 
         sym = QgsMarkerSymbol.createSimple({'color': '0,0,0,0', 'size': '0', 'outline_style': 'no'})
         vlayer.setRenderer(QgsSingleSymbolRenderer(sym))
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "alg_cad_to_gis_convert._apply_text_labels:35")
 
 class AlgCadToGisConvert(QgsProcessingAlgorithm):
     P_INPUT='INPUT'; P_LAYERS='LAYERS'; P_SRC_EPSG='SRC_EPSG'; P_TGT_EPSG='TGT_EPSG'; P_MODE='MODE'; P_MERGE_TOL='MERGE_TOL'    ; P_DRIVER='DRIVER'; P_OUT_GPKG='OUT_GPKG'; P_OUT_FOLDER='OUT_FOLDER'; P_OVERWRITE='OVERWRITE'; P_LOAD='LOAD'; P_DWG_PREFER='DWG_PREFER'; P_DXF_VERSION='DXF_VERSION'

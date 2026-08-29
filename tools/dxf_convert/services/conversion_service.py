@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Tuple, Dict, List, Optional, Callable
 import re
 import pandas as pd
+from ... import errlog
 
 ProgressCB = Optional[Callable[[str], None]]
 
@@ -43,8 +44,8 @@ def _sanitize_fields_for_driver(df, driver: str):
 
     try:
         import geopandas as gpd  
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "conversion_service._sanitize_fields_for_driver:47")
 
     drv = (driver or "").upper()
     geom_col_name = getattr(df, "geometry", None).name if hasattr(df, "geometry") and df.geometry is not None else "geometry"
@@ -92,8 +93,8 @@ def _coerce_paths(src_path, dxf_paths_kw=None) -> List[str]:
                             if p:
                                 out.append(str(p))
                         return
-                except Exception:
-                    pass
+                except Exception as _err:
+                    errlog.ignored(_err, "conversion_service._eat:96")
                 s2 = s.strip("[]").strip().strip("'\"")
                 if s2:
                     out.append(s2)
@@ -150,12 +151,12 @@ def _build_lt_reseau_map(doc) -> Dict[str, str]:
                             reseau = _linetype_reseau(tag.value)
                             if reseau:
                                 break
-                except Exception:
-                    pass
+                except Exception as _err:
+                    errlog.ignored(_err, "conversion_service._build_lt_reseau_map:154")
             if reseau:
                 result[name] = reseau
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "conversion_service._build_lt_reseau_map:158")
     return result
 
 
@@ -271,7 +272,8 @@ def _grid_snap_lines(lines, tol: float):
                 ls2 = LineString(clean)
                 if ls2.length > 0:
                     out.append(ls2)
-        except Exception:
+        except Exception as _err:
+            errlog.ignored(_err, "conversion_service._grid_snap_lines:275")
             continue
     return out
 
@@ -329,7 +331,8 @@ def _merge_lines_edgeminer(lines, tol: float, say=lambda m: None):
                 em.Edge(start=Vec2(coords[0]), end=Vec2(coords[-1]), payload=i)
             )
             coords_map[i] = coords
-        except Exception:
+        except Exception as _err:
+            errlog.ignored(_err, "conversion_service._merge_lines_edgeminer:334")
             continue
 
     if not edge_list:
@@ -368,8 +371,8 @@ def _merge_lines_edgeminer(lines, tol: float, say=lambda m: None):
         if len(chain_pts) >= 2:
             try:
                 merged.append(LineString(chain_pts))
-            except Exception:
-                pass
+            except Exception as _err:
+                errlog.ignored(_err, "conversion_service._merge_lines_edgeminer:374")
 
     if not merged:
         return None
@@ -394,7 +397,8 @@ def _merge_lines_graph(lines, tol: float):
             a = (q(coords[0][0]), q(coords[0][1]))
             b = (q(coords[-1][0]), q(coords[-1][1]))
             endpoints.append((a, b, coords))
-        except Exception:
+        except Exception as _err:
+            errlog.ignored(_err, "conversion_service._merge_lines_graph:400")
             continue
 
     if not endpoints:
@@ -443,7 +447,8 @@ def _merge_lines_graph(lines, tol: float):
                 coords = build_path(node)
                 if coords and len(coords) >= 2:
                     try: merged.append(LineString(coords))
-                    except Exception: pass
+                    except Exception as _err:
+                        errlog.ignored(_err, "conversion_service._merge_lines_graph:450")
 
     for ei, used in enumerate(used_edge):
         if not used:
@@ -468,7 +473,8 @@ def _merge_lines_graph(lines, tol: float):
                     break
             if len(cur_coords) >= 2:
                 try: merged.append(LineString(cur_coords))
-                except Exception: pass
+                except Exception as _err:
+                    errlog.ignored(_err, "conversion_service._merge_lines_graph:476")
 
     if not merged:
         return None
@@ -520,7 +526,8 @@ def _flatten_hatch_rings(e) -> List[List[tuple]]:
             ring=[(pt[0],pt[1],0.0) for pt in p]
             if ring and ring[0]!=ring[-1]: ring.append(ring[0])
             if ring: rings.append(ring)
-    except Exception: pass
+    except Exception as _err:
+        errlog.ignored(_err, "conversion_service._flatten_hatch_rings:529")
     try:
         if not rings:
             for path in e.paths:
@@ -530,7 +537,8 @@ def _flatten_hatch_rings(e) -> List[List[tuple]]:
                         s=edge.start; ring.append((s[0],s[1],0.0))
                 if ring and ring[0]!=ring[-1]: ring.append(ring[0])
                 if ring: rings.append(ring)
-    except Exception: pass
+    except Exception as _err:
+        errlog.ignored(_err, "conversion_service._flatten_hatch_rings:540")
     return rings
 
 
@@ -563,7 +571,8 @@ def _precise_rows_from_entity(e, layer, include_3d, dist) -> List[dict]:
             ring=[(v0.x,v0.y,0.0),(v1.x,v1.y,0.0),(v2.x,v2.y,0.0),(v3.x,v3.y,0.0),(v0.x,v0.y,0.0)]
             gtype,geom=_coords_to_geom(ring)
             if gtype and geom: rows.append({"layer":layer,"geom":gtype,"geometry":geom})
-        except Exception: pass
+        except Exception as _err:
+            errlog.ignored(_err, "conversion_service._precise_rows_from_entity:574")
     elif t in {"TEXT","MTEXT","ATTDEF"}:
         try:
             p=e.dxf.insert
@@ -575,7 +584,8 @@ def _precise_rows_from_entity(e, layer, include_3d, dist) -> List[dict]:
             h=float(getattr(e.dxf,"height",0.0) or 0.0)
             rows.append({"layer":layer+"_texts","geom":"POINT","geometry":_Pt(p.x,p.y),
                          "text_val":str(txt),"txt_rot":rot,"txt_h":h})
-        except Exception: pass
+        except Exception as _err:
+            errlog.ignored(_err, "conversion_service._precise_rows_from_entity:587")
     return rows
 
 
@@ -588,12 +598,14 @@ def _extract_block_meta(e) -> dict:
     try:
         ip=e.dxf.insert
         meta["BLK_X"]=float(getattr(ip,"x",0.0)); meta["BLK_Y"]=float(getattr(ip,"y",0.0)); meta["BLK_Z"]=float(getattr(ip,"z",0.0))
-    except Exception: pass
+    except Exception as _err:
+        errlog.ignored(_err, "conversion_service._extract_block_meta:601")
     for k_src,k_out in [("rotation","BLK_ROT"),("xscale","BLK_SX"),("yscale","BLK_SY"),("zscale","BLK_SZ")]:
         try:
             v=getattr(e.dxf,k_src,None)
             if v is not None: meta[k_out]=float(v)
-        except Exception: pass
+        except Exception as _err:
+            errlog.ignored(_err, "conversion_service._extract_block_meta:607")
     try:
         for a in getattr(e,"attribs",[]) or []:
             try:
@@ -601,8 +613,11 @@ def _extract_block_meta(e) -> dict:
                 if not tag: continue
                 key="ATT_"+re.sub(r"[^0-9A-Za-z_]+","_", tag.upper())
                 meta[key]="" if txt is None else str(txt)
-            except Exception: continue
-    except Exception: pass
+            except Exception as _err:
+                errlog.ignored(_err, "conversion_service._extract_block_meta:616")
+                continue
+    except Exception as _err:
+        errlog.ignored(_err, "conversion_service._extract_block_meta:619")
     return meta
 
 
@@ -628,7 +643,8 @@ def _precise_convert_ezdxf(
     def say(m):
         if on_progress:
             try: on_progress(m)
-            except: pass
+            except Exception as _err:
+                errlog.ignored(_err, "conversion_service.say:646")
 
     sel_layers = set(target_layers) if target_layers else None
     say(f"[convert] srcEPSG={source_epsg} tgtEPSG={target_epsg} bbox={bbox_wgs84} include_3d={include_3d} block_mode={block_mode}")
@@ -674,8 +690,8 @@ def _precise_convert_ezdxf(
                         try:
                             xattrs = _read_bet_xdata(e.get_xdata('CANAPLAN'))
                             meta.update({f"BET_{k}": v for k, v in xattrs.items()})
-                        except Exception:
-                            pass
+                        except Exception as _err:
+                            errlog.ignored(_err, "conversion_service._precise_convert_ezdxf:693")
                     mode = (block_mode or "explode").lower().strip()
 
                     if mode in ("keep-merge", "keep-merge-per"):
@@ -695,8 +711,8 @@ def _precise_convert_ezdxf(
                                 if len(xy) >= 2:
                                     try:
                                         lines.append(LineString(xy)); segs_seen += 1
-                                    except Exception:
-                                        pass
+                                    except Exception as _err:
+                                        errlog.ignored(_err, "conversion_service._push_line_from_pts:714")
                             if segs_seen and segs_seen % 5000 == 0:
                                 say(f"[keep] block={meta.get('block_name','')} collected {segs_seen} segments…")
 
@@ -885,7 +901,8 @@ def _ogr_collect_inserts(dxf_paths, target_layers, on_progress=None):
     def say(m):
         if on_progress:
             try: on_progress(m)
-            except: pass
+            except Exception as _err:
+                errlog.ignored(_err, "conversion_service.say:904")
 
     inserts = []
     try:
@@ -899,8 +916,8 @@ def _ogr_collect_inserts(dxf_paths, target_layers, on_progress=None):
     try:
         gdal.SetConfigOption("DXF_INLINE_BLOCKS", "NO")
         gdal.SetConfigOption("DXF_BLOCK_ATTRIBUTES", "YES")
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "conversion_service._ogr_collect_inserts:919")
 
     for path in dxf_paths:
         ds = ogr.Open(path, 0)
@@ -967,15 +984,16 @@ def _ogr_collect_inserts(dxf_paths, target_layers, on_progress=None):
                     "sz": float(sz) if sz is not None else None,
                     "layer": str(layer),
                 })
-            except Exception:
+            except Exception as _err:
+                errlog.ignored(_err, "conversion_service._ogr_collect_inserts:987")
                 continue
         ds = None
 
     # Restore default (inline again) for later steps
     try:
         gdal.SetConfigOption("DXF_INLINE_BLOCKS", "YES")
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "conversion_service._ogr_collect_inserts:995")
     return inserts
 
 
@@ -987,7 +1005,8 @@ def _assign_block_instance_ids(lines_gdf, inserts, tol_eff, on_progress=None):
     def say(m):
         if on_progress:
             try: on_progress(m)
-            except: pass
+            except Exception as _err:
+                errlog.ignored(_err, "conversion_service.say:1008")
 
     import numpy as np
     import geopandas as gpd
@@ -1035,7 +1054,8 @@ def _assign_block_instance_ids(lines_gdf, inserts, tol_eff, on_progress=None):
                 d = geom.distance(ins_row.geometry)
                 nearest_id[i] = (bname, j)  # (name, local-index in name_groups[name])
                 nearest_dist[i] = d
-        except Exception:
+        except Exception as _err:
+            errlog.ignored(_err, "conversion_service._assign_block_instance_ids:1057")
             continue
 
     # Learn per-name radius; if insufficient samples, fallback to 10 * tol_eff
@@ -1096,14 +1116,15 @@ def _convert_ogr_fallback(
     def say(m):
         if on_progress:
             try: on_progress(m)
-            except: pass
+            except Exception as _err:
+                errlog.ignored(_err, "conversion_service.say:1119")
 
     try:
         from osgeo import ogr, gdal
         try:
             ogr.UseExceptions()
-        except Exception:
-            pass
+        except Exception as _err:
+            errlog.ignored(_err, "conversion_service._convert_ogr_fallback:1126")
     except Exception as ex:
         raise RuntimeError(f"OGR fallback requested but GDAL/OGR is not available: {ex}")
 
@@ -1118,8 +1139,8 @@ def _convert_ogr_fallback(
         gdal.SetConfigOption("DXF_ATTRIBUTES_TO_COPY",
                              "BlockName,BlockRotation,BlockAngle,BlockScale,BlockScaleX,BlockScaleY,BlockScaleZ,"
                              "InsertX,InsertY,InsertZ,InsertionX,InsertionY,InsertionZ")
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "conversion_service._convert_ogr_fallback:1142")
 
     import geopandas as gpd
     from shapely import wkb as _wkb
@@ -1137,12 +1158,12 @@ def _convert_ogr_fallback(
             try:
                 _doc = _ez.readfile(path)
                 lt_reseau_ogr.update(_build_lt_reseau_map(_doc))
-            except Exception:
-                pass
+            except Exception as _err:
+                errlog.ignored(_err, "conversion_service._convert_ogr_fallback:1161")
         if lt_reseau_ogr:
             say(f"[ogr] linetypes EU/EP détectés : {lt_reseau_ogr}")
-    except ImportError:
-        pass
+    except ImportError as _err:
+        errlog.ignored(_err, "conversion_service._convert_ogr_fallback:1165")
 
     # ---------- INSERT pass (NO inline): collect INSERT instances ----------
     say("[ogr] collecting INSERT instances (no-inline pass)…")
@@ -1157,21 +1178,21 @@ def _convert_ogr_fallback(
             say(f"[ogr:error] cannot open: {path}")
             continue
 
-        # Build SQL to restrict to chosen layers
-        sql_layer = None
-        if sel_layers:
-            in_list = ",".join(["'%s'" % l.replace("'", "''") for l in sel_layers])
-            sql = f"SELECT * FROM entities WHERE Layer IN ({in_list})"
-            try:
-                sql_layer = ds.ExecuteSQL(sql)
-            except Exception as ex:
-                say(f"[ogr:warn] SQL failed ({ex}), fallback to full layer scan")
-
-        lyr = sql_layer or ds.GetLayerByName("entities") or (ds.GetLayer(0) if ds.GetLayerCount() else None)
+        lyr = ds.GetLayerByName("entities") or (ds.GetLayer(0) if ds.GetLayerCount() else None)
         if lyr is None:
             say(f"[ogr:warn] no 'entities' layer in: {path}")
-            if sql_layer: ds.ReleaseResultSet(sql_layer)
             ds = None; continue
+
+        # Restrict to chosen layers. Un filtre d'attributs suffit et evite de
+        # passer par ExecuteSQL : pas de jeu de resultats a liberer, et le
+        # filtre porte sur la couche qu'on parcourt deja.
+        if sel_layers:
+            in_list = ",".join("'%s'" % l.replace("'", "''") for l in sel_layers)
+            try:
+                lyr.SetAttributeFilter("Layer IN (%s)" % in_list)
+            except Exception as ex:
+                say(f"[ogr:warn] filter failed ({ex}), fallback to full layer scan")
+                lyr.SetAttributeFilter(None)
 
         defn = lyr.GetLayerDefn()
         field_names = [defn.GetFieldDefn(i).GetName() for i in range(defn.GetFieldCount())]
@@ -1222,8 +1243,8 @@ def _convert_ogr_fallback(
                         continue
                     try:
                         attrs[name] = f.GetField(i)
-                    except Exception:
-                        pass
+                    except Exception as _err:
+                        errlog.ignored(_err, "conversion_service._convert_ogr_fallback:1246")
 
                 # Réseau depuis linetype si détecté
                 lt_name = attrs.get('Linetype') or attrs.get('linetype') or ''
@@ -1245,8 +1266,6 @@ def _convert_ogr_fallback(
                 continue
 
         say(f"[ogr] features total={total}, kept={kept}")
-        if sql_layer:
-            ds.ReleaseResultSet(sql_layer)
         ds = None
 
     if not rows:
@@ -1445,7 +1464,8 @@ def precise_convert(
     if not ez_ok:
         if on_progress:
             try: on_progress("ezdxf not available → OGR fallback (two-pass INSERT + per-instance keep-merge).")
-            except: pass
+            except Exception as _err:
+                errlog.ignored(_err, "conversion_service.precise_convert:1467")
         return _convert_ogr_fallback(
             dxf_paths=dxf_paths,
             source_epsg=s_epsg if s_epsg else 3826,
@@ -1513,7 +1533,8 @@ def write_outputs(
     def say(m):
         if on_progress:
             try: on_progress(m)
-            except Exception: pass
+            except Exception as _err:
+                errlog.ignored(_err, "conversion_service.say:1536")
 
     if not buckets:
         say("[write] empty buckets")
@@ -1529,7 +1550,8 @@ def write_outputs(
             return written
         if overwrite and os.path.exists(gpkg):
             try: os.remove(gpkg)
-            except: pass
+            except Exception as _err:
+                errlog.ignored(_err, "conversion_service.write_outputs:1553")
         for (layer, geom), gdf in buckets.items():
             try:
                 lname = str(layer)
@@ -1555,7 +1577,8 @@ def write_outputs(
         if overwrite:
             for ext in (".shp",".shx",".dbf",".cpg",".prj",".qpj"):
                 try: os.remove(os.path.splitext(fpath)[0]+ext)
-                except: pass
+                except Exception as _err:
+                    errlog.ignored(_err, "conversion_service.write_outputs:1580")
         try:
             gdf = _normalize_bucket_geoms((layer, geom), gdf)
             if gdf.empty:
@@ -1613,8 +1636,8 @@ def write_outputs(
                         w.field(_short(c), "F", 19, 6)
                     else:
                         w.field(_short(c), "C", 254)
-                except Exception:
-                    pass
+                except Exception as _err:
+                    errlog.ignored(_err, "conversion_service.write_outputs:1639")
 
             for i, row in gdf.reset_index(drop=True).iterrows():
                 g = shp_mapping(row.geometry)

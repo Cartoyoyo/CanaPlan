@@ -29,6 +29,7 @@ import math
 
 import sip
 from qgis.core import QgsPointXY, QgsWkbTypes
+from . import errlog
 
 # Marge de sécurité autour du réseau, en MILLIMÈTRES PAPIER et non en
 # pourcentage : ce qu'il faut protéger, ce sont les étiquettes (noms de
@@ -135,7 +136,8 @@ def mesurer_etiquettes(couches, echelle):
             else:
                 # Unités carte : la taille est au sol, on la ramène au papier.
                 haut_mm = fmt.size() * 1000.0 / float(echelle)
-        except Exception:
+        except Exception as _err:
+            errlog.ignored(_err, "cadrage_auto.mesurer_etiquettes:139")
             continue
         if haut_mm <= 0:
             continue
@@ -218,8 +220,8 @@ def collecter_points(couches, pas):
             if pas > 0 and geom.type() == QgsWkbTypes.LineGeometry:
                 try:
                     geom = geom.densifyByDistance(pas)
-                except Exception:
-                    pass
+                except Exception as _err:
+                    errlog.ignored(_err, "cadrage_auto.collecter_points:223")
             for vertex in geom.vertices():
                 pts.append((vertex.x(), vertex.y()))
     return pts

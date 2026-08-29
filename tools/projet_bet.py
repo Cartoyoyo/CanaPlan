@@ -13,6 +13,7 @@ from qgis.core import (QgsProject, QgsVectorLayer, QgsVectorFileWriter,
 from qgis.PyQt.QtCore import QSettings, Qt
 from . import i18n
 from qgis.PyQt.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QProgressDialog, QApplication
+from . import errlog
 
 
 def _copy_to_memory(layer):
@@ -244,8 +245,8 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
         if _mode and _val is not None:
             try:
                 label_size = {'unit': _mode, 'value': float(_val)}
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as _err:
+                errlog.ignored(_err, "projet_bet._do_save:248")
     from ..gui.etiquettes import get_force_all_labels, get_label_display_prefs
     force_all_labels    = get_force_all_labels()
     label_display_prefs = getattr(plugin, '_label_display_prefs', None) or {
@@ -271,8 +272,8 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
         if os.path.exists(_p):
             try:
                 os.remove(_p)
-            except OSError:
-                pass
+            except OSError as _err:
+                errlog.ignored(_err, "projet_bet._do_save:275")
 
     layers_meta = {r: {} for r in _RESEAUX}
     first  = True
@@ -453,8 +454,8 @@ def _remove_temp_gpkg(gpkg_path):
         if os.path.exists(_p):
             try:
                 os.remove(_p)
-            except OSError:
-                pass
+            except OSError as _err:
+                errlog.ignored(_err, "projet_bet._remove_temp_gpkg:457")
 
 
 def save_projet(plugin, iface):
@@ -612,8 +613,8 @@ def load_projet(plugin, iface, bet_path=None):
                 tr  = QgsCoordinateTransform(lyr.crs(), canvas_crs, project)
                 ext = tr.transformBoundingBox(ext)
             combined.combineExtentWith(ext)
-        except Exception:
-            pass
+        except Exception as _err:
+            errlog.ignored(_err, "projet_bet.load_projet:616")
     if not combined.isNull():
         combined.grow(max(combined.width(), combined.height()) * 0.05)
         canvas.setExtent(combined)
@@ -674,8 +675,8 @@ def _load_v2(plugin, iface, bet_path):
         from . import fonds_plan
         with zipfile.ZipFile(bet_path, 'r') as zf:
             fonds_plan.extract_into(zf, tmp_dir)
-    except Exception:
-        pass                      # fonds absents ou illisibles : non bloquant
+    except Exception as _err:
+        errlog.ignored(_err, "projet_bet._load_v2:678")
 
     gpkg_path = os.path.join(tmp_dir, "data.gpkg")
     return gpkg_path, bet_data

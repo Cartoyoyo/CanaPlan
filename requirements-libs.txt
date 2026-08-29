@@ -18,7 +18,7 @@
 # reellement a manquer, dxf_postprocess sait installer les dependances a la
 # demande, sur la machine cible et donc avec la bonne architecture.
 
-ezdxf==1.4.3
-fontTools==4.62.1
+ezdxf==1.4.4
+fontTools==4.63.0
 pyparsing==3.3.2
 typing_extensions

@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, Optional, List, Callable, Iterable
 from shapely.geometry import Point
 from .conversion_service import _make_crs
+from ... import errlog
 
 try:
     import geopandas as gpd
@@ -15,7 +16,8 @@ ProgressCB = Optional[Callable[[str], None]]
 def _say(cb: ProgressCB, msg: str):
     if cb:
         try: cb(msg)
-        except: pass
+        except Exception as _err:
+            errlog.ignored(_err, "augment._say:19")
 
 def _safe_s(val):
     try:
@@ -72,7 +74,8 @@ def _reproject(gdf: "gpd.GeoDataFrame", src_epsg, tgt_epsg) -> "gpd.GeoDataFrame
         tgt_crs = _make_crs(tgt_epsg)
         if tgt_crs != src_crs:
             try: gdf = gdf.to_crs(tgt_crs)
-            except Exception: pass
+            except Exception as _err:
+                errlog.ignored(_err, "augment._reproject:77")
     return gdf
 
 
@@ -94,8 +97,8 @@ def _collect_text_ogr(
 
     try:
         gdal.SetConfigOption("DXF_INLINE_BLOCKS", "YES")
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "augment._collect_text_ogr:100")
 
     ds = ogr.Open(dxf_path, 0)
     if ds is None:
@@ -155,7 +158,8 @@ def _collect_text_ogr(
                 "height": height,
                 "src_layer": layer_name,
             })
-        except Exception:
+        except Exception as _err:
+            errlog.ignored(_err, "augment._collect_text_ogr:161")
             continue
     ds = None
 
@@ -200,8 +204,8 @@ def _collect_attrib_multileader_ascii(
     while i < len(lines) - 1:
         try:
             pairs.append((int(lines[i].strip()), lines[i + 1].strip()))
-        except ValueError:
-            pass
+        except ValueError as _err:
+            errlog.ignored(_err, "augment._collect_attrib_multileader_ascii:207")
         i += 2
 
     # Find ENTITIES section
@@ -269,17 +273,21 @@ def _collect_attrib_multileader_ascii(
             elif code == 10:
                 if not seen_x:
                     try: cur["x"] = float(val); seen_x = True
-                    except ValueError: pass
+                    except ValueError as _err:
+                        errlog.ignored(_err, "augment._collect_attrib_multileader_ascii:276")
             elif code == 20:
                 if not seen_y:
                     try: cur["y"] = float(val); seen_y = True
-                    except ValueError: pass
+                    except ValueError as _err:
+                        errlog.ignored(_err, "augment._collect_attrib_multileader_ascii:281")
             elif code == 40:
                 try: cur["height"] = float(val)
-                except ValueError: pass
+                except ValueError as _err:
+                    errlog.ignored(_err, "augment._collect_attrib_multileader_ascii:285")
             elif code == 50:
                 try: cur["rotation"] = float(val)
-                except ValueError: pass
+                except ValueError as _err:
+                    errlog.ignored(_err, "augment._collect_attrib_multileader_ascii:289")
         elif cur_type == "MULTILEADER":
             if code == 8:
                 cur["layer"] = val
@@ -291,11 +299,13 @@ def _collect_attrib_multileader_ascii(
             elif code == 10:
                 if not seen_x:
                     try: cur["x"] = float(val); seen_x = True
-                    except ValueError: pass
+                    except ValueError as _err:
+                        errlog.ignored(_err, "augment._collect_attrib_multileader_ascii:302")
             elif code == 20:
                 if not seen_y:
                     try: cur["y"] = float(val); seen_y = True
-                    except ValueError: pass
+                    except ValueError as _err:
+                        errlog.ignored(_err, "augment._collect_attrib_multileader_ascii:307")
 
     _say(on_progress, f"[augment:ascii] ATTRIB={len(rows_attrib)}, MULTILEADER={len(rows_leader)}")
 
@@ -393,7 +403,8 @@ def collect_annotations_and_blocks(
                     "height": float(h) if h is not None else None,
                     "style": _safe_s(style), "src_layer": src_layer,
                 })
-            except Exception:
+            except Exception as _err:
+                errlog.ignored(_err, "augment.collect_annotations_and_blocks:406")
                 continue
         _say(on_progress, f"[augment] TEXT/MTEXT: {len(rows_text)}")
         if rows_text:
@@ -426,9 +437,11 @@ def collect_annotations_and_blocks(
                             "height": float(h) if h is not None else None,
                             "tag": tag, "src_layer": attrib_layer,
                         })
-                    except Exception:
+                    except Exception as _err:
+                        errlog.ignored(_err, "augment.collect_annotations_and_blocks:440")
                         continue
-            except Exception:
+            except Exception as _err:
+                errlog.ignored(_err, "augment.collect_annotations_and_blocks:443")
                 continue
         _say(on_progress, f"[augment] ATTRIB: {len(rows_attrib)}")
         if rows_attrib:
@@ -458,7 +471,8 @@ def collect_annotations_and_blocks(
                             ins_pt = getattr(mt, "insert", None)
                             if ins_pt is not None:
                                 try: x, y = float(ins_pt[0]), float(ins_pt[1])
-                                except Exception: pass
+                                except Exception as _err:
+                                    errlog.ignored(_err, "augment.collect_annotations_and_blocks:474")
 
                     if not txt:
                         txt = _safe_s(getattr(ml.dxf, "text", None))
@@ -472,7 +486,8 @@ def collect_annotations_and_blocks(
                         "text": txt, "rotation": 0.0,
                         "height": None, "tag": None, "src_layer": src_layer,
                     })
-                except Exception:
+                except Exception as _err:
+                    errlog.ignored(_err, "augment.collect_annotations_and_blocks:489")
                     continue
         except Exception as ex:
             _say(on_progress, f"[augment] MULTILEADER scan error: {ex}")
@@ -509,8 +524,8 @@ def collect_annotations_and_blocks(
                         tag = _safe_s(getattr(a.dxf, "tag", None))
                         val_a = _safe_s(getattr(a.dxf, "text", None))
                         if tag: row[f"att_{tag}"] = val_a
-                except Exception:
-                    pass
+                except Exception as _err:
+                    errlog.ignored(_err, "augment.collect_annotations_and_blocks:527")
                 if keep_block_transform:
                     try:
                         row.update({
@@ -521,10 +536,11 @@ def collect_annotations_and_blocks(
                             "blk_sy": float(getattr(ins.dxf, "yscale", 1.0) or 1.0),
                             "blk_sz": float(getattr(ins.dxf, "zscale", 1.0) or 1.0),
                         })
-                    except Exception:
-                        pass
+                    except Exception as _err:
+                        errlog.ignored(_err, "augment.collect_annotations_and_blocks:539")
                 rows_blk.append(row)
-            except Exception:
+            except Exception as _err:
+                errlog.ignored(_err, "augment.collect_annotations_and_blocks:542")
                 continue
         if rows_blk:
             gdfb = gpd.GeoDataFrame(rows_blk, geometry="geometry", crs=src_crs)

@@ -14,6 +14,7 @@ from qgis.core import (
 
 from .fnc4all import *
 from .fnc4adxf import *
+from .... import errlog
 
 
 def tr(message):
@@ -31,8 +32,8 @@ def ZahlTextSplit(zt):
             else:
                 z += c
         f = float(z)
-    except:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "clsDBase.ZahlTextSplit:35")
     return f, t
 
 

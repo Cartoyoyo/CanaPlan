@@ -18,6 +18,7 @@ from .fnc4all import (
 )
 from .qt_compat import QGIS_VERSION_INT
 from .clsDXFTools import EineDXF, ProjDaten4Dat
+from .... import errlog
 
 
 class UIAdapter:
@@ -61,8 +62,8 @@ def run_adxf_import(
     def say(s):
         try:
             log_fn(str(s) if s else "")
-        except Exception:
-            pass
+        except Exception as _err:
+            errlog.ignored(_err, "wrapper.say:65")
 
     ui = UIAdapter(say)
 
@@ -128,14 +129,14 @@ def run_adxf_import(
             if os.path.exists(candidate):
                 try:
                     os.remove(candidate)
-                except Exception:
-                    pass
+                except Exception as _err:
+                    errlog.ignored(_err, "wrapper.run_adxf_import:132")
 
         say(f"<b>Engine OGR/GDAL — {out_form} — {os.path.basename(dxf_path)}</b>")
         try:
             iface.mapCanvas().setRenderFlag(False)
-        except Exception:
-            pass
+        except Exception as _err:
+            errlog.ignored(_err, "wrapper.run_adxf_import:138")
 
         grpProjekt = rNode.addGroup(ProjektName)
         grpProjekt.setExpanded(True)
@@ -191,8 +192,8 @@ def run_adxf_import(
             f = base + ext
             if os.path.exists(f):
                 os.remove(f)
-        except Exception:
-            pass
+        except Exception as _err:
+            errlog.ignored(_err, "wrapper.run_adxf_import:195")
 
     say("<b>Done.</b>")
 

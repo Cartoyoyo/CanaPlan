@@ -24,6 +24,7 @@ import os
 from . import i18n
 from qgis.core import (QgsRasterLayer, QgsVectorLayer, QgsLayerTreeLayer,
                        QgsVectorFileWriter, QgsCoordinateTransformContext)
+from . import errlog
 
 # Dossier des fonds à l'intérieur de l'archive .bet
 ARCH_DIR = "fonds"
@@ -86,8 +87,8 @@ def _apply_opacity(layer, opacity):
                 renderer.setOpacity(opacity)
         else:
             layer.setOpacity(opacity)
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "fonds_plan._apply_opacity:90")
 
 
 def collect(project, metier_ids, work_dir):

@@ -2,7 +2,7 @@
 name=CanaPlan – Réseau Assainissement
 description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE).
 icon=icon/icon.png
-version=1.6
+version=1.7.0
 qgisMinimumVersion=3.28
 author=Yoan Laloux
 email=y.laloux@vichy-communaute.fr
@@ -18,6 +18,36 @@ deprecated=False
 about=CanaPlan est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement EU (Eaux Usées) et EP (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement. La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle. Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE).
 
 changelog=
+    1.7.0  Les bibliotheques d'export DXF ne sont plus embarquees. Le paquet
+         passe de 26,8 a 2,7 Mo. La premiere fois que vous demandez un export
+         DXF ou une conversion DXF/DWG, le plugin propose de telecharger
+         ezdxf, fontTools et pyparsing depuis PyPI et de les installer dans
+         son propre dossier, sans droits administrateur : une dizaine de
+         secondes, une seule fois. Tout le reste de CanaPlan — dessin, profils
+         en long, cubatures, coupes, impression PDF, export StaR-Eau, import
+         Star-DT — fonctionne sans elles et ne pose jamais la question. Si
+         l'installation echoue (proxy d'entreprise, par exemple), la fenetre
+         affiche la commande a executer a la main. L'installation est a
+         refaire apres une mise a jour du plugin, QGIS remplacant alors tout
+         son dossier.
+    1.6.2  Paquet allege et durci. Ajout d'un fichier .bandit qui ecarte de
+         l'analyse de securite le dossier libs/ : il ne contient aucune ligne
+         ecrite pour CanaPlan, seulement les versions amont non modifiees
+         d'ezdxf, fontTools, pyparsing et typing_extensions. Le code du plugin
+         reste analyse normalement et ne remonte plus rien.
+         Les librairies embarquees ne contiennent
+         plus que les modules que le plugin atteint reellement : numpy, que
+         QGIS fournit deja, n'est plus embarque (il masquait celui de QGIS
+         dans le sys.path), et les outils autonomes d'ezdxf et fontTools
+         (lignes de commande, visionneuses Qt, chaine de creation de polices)
+         sont ecartes a la construction du paquet. Cote code : les GML
+         Star-DT porteurs d'une declaration DOCTYPE sont refuses avant
+         lecture, les telechargements WFS n'acceptent plus que http et https,
+         un nom de calque contenant un guillemet ne peut plus s'echapper de
+         l'option -sql passee a ogr2ogr, et les erreurs jusqu'ici avalees en
+         silence laissent desormais une trace dans le journal QGIS, onglet
+         « CanaPlan », plafonnee pour ne pas l'inonder. Aucun changement de
+         fonctionnement.
     1.6  Impression repensee. Cadrage automatique des planches : on choisit le
          format et l'echelle, le plugin calcule le decoupage qui couvre tout le
          reseau avec le moins de planches possible, en alignant la plus grande

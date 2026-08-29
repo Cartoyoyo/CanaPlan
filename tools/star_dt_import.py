@@ -22,7 +22,10 @@ Subtilities prises en compte :
 """
 
 import os
-import xml.etree.ElementTree as ET
+# Le durcissement est fait par _reject_doctype() plus bas : sans DOCTYPE,
+# ni entite declaree ni reference externe ne peuvent apparaitre.
+import xml.etree.ElementTree as ET  # nosec B405
+
 from qgis.core import (
     QgsVectorLayer, QgsField, QgsFeature, QgsGeometry,
     QgsPointXY, QgsWkbTypes, QgsProject,
@@ -38,6 +41,54 @@ from qgis.PyQt.QtCore import QVariant
 from qgis.PyQt.QtGui import QColor
 
 from . import i18n
+from . import errlog
+
+
+# ---------------------------------------------------------------- lecture XML
+
+class XmlRefuseError(ValueError):
+    """Le GML contient une declaration DOCTYPE : lecture refusee."""
+
+
+# La declaration DOCTYPE ne peut apparaitre que dans le prologue, avant
+# l'element racine. Lire l'equivalent d'une grosse en-tete suffit donc :
+# au-dela, un DOCTYPE rendrait de toute facon le document mal forme.
+_PROLOGUE_OCTETS = 65536
+
+
+def _reject_doctype(gml_path):
+    """Refuse un GML porteur d'un DOCTYPE.
+
+    Les fichiers sont choisis par l'utilisateur : ils viennent d'un tiers
+    (exports Enedis, echanges DT-DICT) et ne sont donc pas de confiance. Or
+    xml.etree developpe les entites declarees dans le document. Deux abus
+    classiques passent par la :
+
+      - la « bombe a entites » : quelques entites imbriquees se developpent
+        en gigaoctets et figent QGIS ;
+      - l'entite externe (XXE) : <!ENTITY x SYSTEM "file:///..."> fait lire
+        un fichier local dont le contenu se retrouve dans la couche importee.
+
+    Les deux exigent un DOCTYPE. Le refuser ferme les deux d'un coup, et ne
+    coute rien : le GML du standard CNIG se decrit par schema XML, jamais par
+    DTD. On ne peut pas s'appuyer sur les gestionnaires expat (XMLParser en C
+    n'expose plus l'objet parser), et defusedxml declenche dix HIGH a lui seul
+    dans l'analyse du depot QGIS -- d'ou ce controle en amont.
+    """
+    with open(gml_path, "rb") as fh:
+        prologue = fh.read(_PROLOGUE_OCTETS)
+    if b"<!DOCTYPE" in prologue:
+        raise XmlRefuseError(
+            i18n.tr('sdt_err_doctype', fichier=os.path.basename(gml_path)))
+
+
+def _xml_parse(gml_path):
+    """Lit un GML apres controle du prologue."""
+    _reject_doctype(gml_path)
+    # Sans DOCTYPE il n'y a ni entite declaree ni reference externe : c'est
+    # precisement ce que _reject_doctype garantit juste au-dessus.
+    return ET.parse(gml_path)  # nosec B314
+
 
 NS = {
     "star-dt": "http://cnig.gouv.fr/star-dt/core",
@@ -107,7 +158,8 @@ def _coords(text, dim):
     for i in range(0, len(parts) - dim + 1, dim):
         try:
             pts.append(QgsPointXY(float(parts[i]), float(parts[i + 1])))
-        except ValueError:
+        except ValueError as _err:
+            errlog.ignored(_err, "star_dt_import._coords:159")
             continue
     return pts
 
@@ -248,8 +300,9 @@ def scan_star_dt(gml_paths):
     counts = {}
     for gml_path in _as_path_list(gml_paths):
         try:
-            root = ET.parse(gml_path).getroot()
-        except Exception:
+            root = _xml_parse(gml_path).getroot()
+        except Exception as _err:
+            errlog.ignored(_err, "star_dt_import.scan_star_dt:302")
             continue
         for el in _iter_objects(root):
             out_type = _output_type(el)
@@ -296,7 +349,7 @@ def _discover_fields(elements):
 def _extract_file_identifier(gml_path):
     """Extrait le premier identifiant du fichier pour nommer le groupe."""
     try:
-        root = ET.parse(gml_path).getroot()
+        root = _xml_parse(gml_path).getroot()
     except Exception:
         return ""
     for el in _iter_objects(root):
@@ -341,7 +394,7 @@ def import_star_dt(gml_paths, gpkg_path, selected_types=None,
     trees = []
     srs_name = ""
     for gml_path in paths:
-        tree = ET.parse(gml_path)
+        tree = _xml_parse(gml_path)
         trees.append(tree)
         for el in _iter_objects(tree.getroot()):
             key = _output_type(el)
@@ -509,7 +562,8 @@ def _release_gpkg(project, gpkg_path):
     for layer_id, layer in project.mapLayers().items():
         try:
             source = layer.source().split("|")[0]
-        except Exception:
+        except Exception as _err:
+            errlog.ignored(_err, "star_dt_import._release_gpkg:563")
             continue
         if source and _same_file(source, gpkg_path):
             to_remove.append(layer_id)
@@ -530,8 +584,8 @@ def _release_gpkg(project, gpkg_path):
     try:
         from qgis.utils import iface
         iface.mapCanvas().refresh()
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "star_dt_import._release_gpkg:585")
 
 
 def _apply_style(layer, out_type, is_cable=False):
@@ -626,8 +680,8 @@ def _make_labeled_line_symbol(color, width, abbr, has_precision=True):
         try:
             font_marker.setDataDefinedProperty(
                 QgsSymbolLayer.PropertyCharacter, QgsProperty.fromExpression(expr))
-        except Exception:
-            pass  # a defaut, le libelle reste la seule tension
+        except Exception as _err:
+            errlog.ignored(_err, "star_dt_import._make_labeled_line_symbol:681")
 
     sub.changeSymbolLayer(0, font_marker)
     marker_line.setSubSymbol(sub)
@@ -672,8 +726,8 @@ def _apply_labels(layer, out_type):
 
         layer.setLabeling(QgsVectorLayerSimpleLabeling(settings))
         layer.setLabelsEnabled(True)
-    except Exception:
-        pass  # l'etiquetage est un confort : ne jamais faire echouer l'import
+    except Exception as _err:
+        errlog.ignored(_err, "star_dt_import._apply_labels:727")
 
 
 def _get_or_create_group(project, group_name):

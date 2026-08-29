@@ -31,6 +31,7 @@ from qgis.PyQt.QtWidgets import (
 from qgis.core import QgsSettings
 
 from ..tools import stareau_values as sv
+from ..tools import errlog
 
 _SETTINGS_PREFIX = "CanaPlan/stareau/"
 
@@ -430,8 +431,8 @@ class StarEauExportDialog(QDialog):
                 try:
                     signal.connect(self._schedule_check)
                     signals.append(signal)
-                except Exception:
-                    pass
+                except Exception as _err:
+                    errlog.ignored(_err, "stareau_export_dialog._watch_layers:434")
             if signals:
                 self._watched.append((layer, signals))
 
@@ -447,8 +448,8 @@ class StarEauExportDialog(QDialog):
             for signal in signals:
                 try:
                     signal.disconnect(self._schedule_check)
-                except (TypeError, RuntimeError):
-                    pass
+                except (TypeError, RuntimeError) as _err:
+                    errlog.ignored(_err, "stareau_export_dialog._unwatch_layers:451")
         self._watched = []
 
     def changeEvent(self, event):
@@ -685,8 +686,8 @@ class StarEauExportDialog(QDialog):
         value = settings.value(_SETTINGS_PREFIX + "an_service")
         try:
             self.sp_service.setValue(int(value))
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError) as _err:
+            errlog.ignored(_err, "stareau_export_dialog._restore:689")
 
         sensible = settings.value(_SETTINGS_PREFIX + "sensible")
         self.chk_sensible.setChecked(str(sensible).lower() in ("true", "1"))
@@ -695,5 +696,5 @@ class StarEauExportDialog(QDialog):
             try:
                 from ..tools.projet_bet import project_dir
                 self.ed_dir.setText(project_dir())
-            except Exception:
-                pass
+            except Exception as _err:
+                errlog.ignored(_err, "stareau_export_dialog._restore:699")

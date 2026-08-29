@@ -2617,6 +2617,30 @@ TR = {
         'pt': "O comprimento deve ser indicado antes de calcular o declive.",
         'de': "Die Länge muss vor der Gefälleberechnung angegeben werden.",
     },
+    'rens_aucune': {
+        'fr': "Aucune", 'en': "None", 'es': "Ninguna",
+        'pt': "Nenhuma", 'de': "Keine",
+    },
+    # Cadres de regroupement des champs
+    'rens_sec_identification': {
+        'fr': "Identification", 'en': "Identification",
+        'es': "Identificación", 'pt': "Identificação",
+        'de': "Kennzeichnung",
+    },
+    'rens_sec_altimetrie': {
+        'fr': "Altimétrie", 'en': "Levels", 'es': "Altimetría",
+        'pt': "Altimetria", 'de': "Höhenlage",
+    },
+    'rens_sec_caracteristiques': {
+        'fr': "Caractéristiques", 'en': "Characteristics",
+        'es': "Características", 'pt': "Características",
+        'de': "Eigenschaften",
+    },
+    'rens_sec_trace': {
+        'fr': "Tracé et pente", 'en': "Alignment and slope",
+        'es': "Trazado y pendiente", 'pt': "Traçado e declive",
+        'de': "Verlauf und Gefälle",
+    },
 
     # ─────────────────────────────────────────────────────────────────────
     #  Fenêtre Importer Star-DT
@@ -4656,6 +4680,27 @@ TR = {
         'pt': "Erro ao escrever a camada {couche} (código={code}): {detail}",
         'de': "Fehler beim Schreiben des Layers {couche} (Code={code}): {detail}",
     },
+    'sdt_err_doctype': {
+        'fr': "Fichier XML refusé : {fichier} contient une déclaration DOCTYPE. "
+              "Le GML Star-DT n'en comporte jamais ; un DOCTYPE permet des "
+              "constructions qui peuvent figer QGIS ou faire lire un fichier "
+              "local. Vérifiez la provenance du fichier.",
+        'en': "XML file rejected: {fichier} contains a DOCTYPE declaration. "
+              "Star-DT GML never has one; a DOCTYPE allows constructs that can "
+              "freeze QGIS or read a local file. Check where the file came from.",
+        'es': "Archivo XML rechazado: {fichier} contiene una declaración DOCTYPE. "
+              "El GML Star-DT nunca la lleva; un DOCTYPE permite construcciones "
+              "que pueden bloquear QGIS o leer un archivo local. Compruebe la "
+              "procedencia del archivo.",
+        'pt': "Ficheiro XML recusado: {fichier} contém uma declaração DOCTYPE. "
+              "O GML Star-DT nunca a tem; um DOCTYPE permite construções que "
+              "podem bloquear o QGIS ou ler um ficheiro local. Verifique a "
+              "origem do ficheiro.",
+        'de': "XML-Datei abgelehnt: {fichier} enthält eine DOCTYPE-Deklaration. "
+              "Star-DT-GML hat nie eine; ein DOCTYPE erlaubt Konstrukte, die "
+              "QGIS blockieren oder eine lokale Datei auslesen können. Prüfen "
+              "Sie die Herkunft der Datei.",
+    },
     'sdt_err_chargement': {
         'fr': "Impossible de charger {couche} ({nb} entités écrites) — URI : {uri}",
         'en': "Cannot load {couche} ({nb} features written) — URI: {uri}",
@@ -4663,6 +4708,101 @@ TR = {
         'pt': "Impossível carregar {couche} ({nb} entidades escritas) — URI: {uri}",
         'de': "{couche} kann nicht geladen werden ({nb} Objekte geschrieben) — "
               "URI: {uri}",
+    },
+    # ---- Installation des bibliothèques à la demande ----
+    'dep_titre': {
+        'fr': "Bibliothèques nécessaires", 'en': "Required libraries",
+        'es': "Bibliotecas necesarias", 'pt': "Bibliotecas necessárias",
+        'de': "Benötigte Bibliotheken",
+    },
+    'dep_explication': {
+        'fr': "L'export DXF et la conversion DXF/DWG ont besoin de bibliothèques "
+              "que CanaPlan n'embarque pas : {paquets}.\n\nElles se téléchargent "
+              "depuis PyPI et s'installent dans le dossier du plugin, sans droits "
+              "administrateur. Le reste de CanaPlan fonctionne sans elles.",
+        'en': "DXF export and DXF/DWG conversion need libraries that CanaPlan "
+              "does not bundle: {paquets}.\n\nThey are downloaded from PyPI and "
+              "installed inside the plugin folder, without administrator rights. "
+              "The rest of CanaPlan works without them.",
+        'es': "La exportación DXF y la conversión DXF/DWG necesitan bibliotecas "
+              "que CanaPlan no incluye: {paquets}.\n\nSe descargan desde PyPI y se "
+              "instalan en la carpeta del complemento, sin permisos de "
+              "administrador. El resto de CanaPlan funciona sin ellas.",
+        'pt': "A exportação DXF e a conversão DXF/DWG precisam de bibliotecas que "
+              "o CanaPlan não inclui: {paquets}.\n\nSão transferidas do PyPI e "
+              "instaladas na pasta do plugin, sem direitos de administrador. O "
+              "resto do CanaPlan funciona sem elas.",
+        'de': "DXF-Export und DXF/DWG-Konvertierung benötigen Bibliotheken, die "
+              "CanaPlan nicht mitliefert: {paquets}.\n\nSie werden von PyPI "
+              "geladen und im Plugin-Ordner installiert, ohne Administratorrechte. "
+              "Der Rest von CanaPlan funktioniert ohne sie.",
+    },
+    'dep_destination': {
+        'fr': "Destination : {dossier}\nÀ refaire après une mise à jour du plugin.",
+        'en': "Target: {dossier}\nMust be redone after a plugin update.",
+        'es': "Destino: {dossier}\nHay que repetirlo tras actualizar el complemento.",
+        'pt': "Destino: {dossier}\nDeve ser refeito após atualizar o plugin.",
+        'de': "Ziel: {dossier}\nNach einem Plugin-Update erneut nötig.",
+    },
+    'dep_installer': {
+        'fr': "Installer", 'en': "Install", 'es': "Instalar",
+        'pt': "Instalar", 'de': "Installieren",
+    },
+    'dep_plus_tard': {
+        'fr': "Plus tard", 'en': "Later", 'es': "Más tarde",
+        'pt': "Mais tarde", 'de': "Später",
+    },
+    'dep_fermer': {
+        'fr': "Fermer", 'en': "Close", 'es': "Cerrar",
+        'pt': "Fechar", 'de': "Schließen",
+    },
+    'dep_reessayer': {
+        'fr': "Réessayer", 'en': "Retry", 'es': "Reintentar",
+        'pt': "Tentar novamente", 'de': "Erneut versuchen",
+    },
+    'dep_en_cours': {
+        'fr': "Installation en cours… Cela peut prendre une à deux minutes.",
+        'en': "Installing… This can take one or two minutes.",
+        'es': "Instalando… Puede tardar uno o dos minutos.",
+        'pt': "A instalar… Pode demorar um a dois minutos.",
+        'de': "Installation läuft… Das kann ein bis zwei Minuten dauern.",
+    },
+    'dep_succes': {
+        'fr': "Installation terminée. La fonction demandée est disponible.",
+        'en': "Installation complete. The requested feature is available.",
+        'es': "Instalación completada. La función solicitada está disponible.",
+        'pt': "Instalação concluída. A função pedida está disponível.",
+        'de': "Installation abgeschlossen. Die Funktion steht bereit.",
+    },
+    'dep_echec': {
+        'fr': "L'installation a échoué. Détail ci-dessous.",
+        'en': "Installation failed. Details below.",
+        'es': "La instalación ha fallado. Detalles abajo.",
+        'pt': "A instalação falhou. Detalhes abaixo.",
+        'de': "Installation fehlgeschlagen. Details unten.",
+    },
+    'dep_echec_sans_detail': {
+        'fr': "pip s'est terminé sans message, mais les bibliothèques restent "
+              "introuvables.",
+        'en': "pip finished without a message, but the libraries are still missing.",
+        'es': "pip terminó sin mensaje, pero las bibliotecas siguen ausentes.",
+        'pt': "O pip terminou sem mensagem, mas as bibliotecas continuam ausentes.",
+        'de': "pip endete ohne Meldung, die Bibliotheken fehlen weiterhin.",
+    },
+    'dep_commande_manuelle': {
+        'fr': "Commande à exécuter à la main dans l'OSGeo4W Shell :",
+        'en': "Command to run manually in the OSGeo4W Shell:",
+        'es': "Comando para ejecutar manualmente en el OSGeo4W Shell:",
+        'pt': "Comando a executar manualmente na OSGeo4W Shell:",
+        'de': "Befehl zur manuellen Ausführung in der OSGeo4W-Shell:",
+    },
+    'dep_refus': {
+        'fr': "Fonction indisponible tant que les bibliothèques ne sont pas "
+              "installées.",
+        'en': "Feature unavailable until the libraries are installed.",
+        'es': "Función no disponible hasta que se instalen las bibliotecas.",
+        'pt': "Função indisponível enquanto as bibliotecas não forem instaladas.",
+        'de': "Funktion nicht verfügbar, solange die Bibliotheken fehlen.",
     },
     'dxf_ezdxf_manquant': {
         'fr': "ezdxf est requis et son installation automatique a échoué : "

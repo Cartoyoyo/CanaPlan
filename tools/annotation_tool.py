@@ -13,6 +13,7 @@ from qgis.PyQt.QtCore import Qt, QSizeF
 from qgis.PyQt.QtGui import QFont, QColor
 
 from . import i18n
+from . import errlog
 
 _TOL_PX = 20
 
@@ -121,8 +122,8 @@ def make_text_format(vals):
 def _set_alignment(item, alignment):
     try:
         item.setAlignment(alignment)
-    except AttributeError:
-        pass
+    except AttributeError as _err:
+        errlog.ignored(_err, "annotation_tool._set_alignment:125")
 
 
 def _get_alignment(item):

@@ -13,7 +13,7 @@ from qgis.PyQt.QtWidgets import (
     QDoubleSpinBox, QCheckBox, QLabel, QRadioButton,
     QButtonGroup, QFileDialog, QMessageBox, QSizePolicy,
 )
-from qgis.core import QgsSettings
+from qgis.core import QgsSettings, QgsMessageLog, Qgis
 
 try:
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -351,6 +351,11 @@ class CoupeTrancheeComposeeDialog(QDialog):
         # Les tranches suivantes sont collées (espace terrain = 0)
         if self._tranches:
             t['espace_gauche'] = 0.0
+        # Pre-remplissage depuis la config de cubature. `t` part deja de
+        # DEFAULT_TRANCHE : si la config manque ou est illisible, ces valeurs
+        # restent en place et c'est le comportement voulu. On journalise
+        # quand meme, sinon une cle renommee dans config_dialog ferait
+        # silencieusement retomber toutes les tranches sur les defauts.
         try:
             from .config_dialog import get_cubature_config
             cfg = get_cubature_config()
@@ -365,8 +370,10 @@ class CoupeTrancheeComposeeDialog(QDialog):
             t['chaussee_sup']    = cfg.get('chaussee_sup', False)
             t['ep_chaussee_sup'] = cfg.get('ep_chaussee_sup', 0.08)
             t['mat_chaussee_sup']= cfg.get('materiau_chaussee_sup', 'Enrobé')
-        except Exception:
-            pass
+        except Exception as err:
+            QgsMessageLog.logMessage(
+                "Config de cubature illisible, tranche créée avec les valeurs "
+                f"par défaut : {err}", "CanaPlan", Qgis.Warning)
         self._tranches.append(t)
         self._refresh_list()
         self._list.setCurrentRow(len(self._tranches) - 1)

@@ -10,6 +10,7 @@ from qgis.core import (
 )
 
 from .tools import i18n
+from .tools import errlog
 
 SKETCHES_PREFIX = "CanaPlan/"
 
@@ -34,8 +35,8 @@ class ReseauAssainissementPlugin(QObject):
         try:
             from .tools.wfs_utils import purge_temp_dir
             purge_temp_dir()
-        except Exception:
-            pass
+        except Exception as _err:
+            errlog.ignored(_err, "main.initGui:38")
 
 
         # Groupe pour les outils de dessin (non exclusif pour permettre le toggle)
@@ -412,8 +413,8 @@ class ReseauAssainissementPlugin(QObject):
         self._stareau_dlg = None
         try:
             i18n.signaux.langue_changee.disconnect(self._retranslate)
-        except (TypeError, RuntimeError):
-            pass                       # jamais connecté, ou déjà détruit
+        except (TypeError, RuntimeError) as _err:
+            errlog.ignored(_err, "main.unload:416")
         toggle_panel = self.action_dict.get('toggle_panel')
         if toggle_panel is not None:
             self.iface.removeToolBarIcon(toggle_panel)
@@ -428,8 +429,8 @@ class ReseauAssainissementPlugin(QObject):
         try:
             if self.menu is not None and not sip.isdeleted(self.menu):
                 sip.delete(self.menu)
-        except Exception:
-            pass
+        except Exception as _err:
+            errlog.ignored(_err, "main.unload:432")
         self.menu = None
 
     def _cleanup_tools(self):
@@ -1944,6 +1945,15 @@ class ReseauAssainissementPlugin(QObject):
         """
         from qgis.core import QgsRectangle
         from .tools.projet_bet import project_dir
+        from .tools import dependances
+
+        # ezdxf & co. ne sont pas embarques : on propose de les installer au
+        # moment ou l'utilisateur en a besoin, pas au demarrage. S'il refuse,
+        # on renonce a l'export sans toucher au reste du plugin.
+        if not dependances.assurer(self.iface.mainWindow()):
+            self.iface.messageBar().pushInfo("CanaPlan", i18n.tr('dep_refus'))
+            return
+
         from .tools.dxf_export import run_export_dxf_with_ui
 
         canvas = self.iface.mapCanvas()
@@ -1975,6 +1985,12 @@ class ReseauAssainissementPlugin(QObject):
         )
 
     def run_import_dxf(self):
+        # La conversion sait se replier sur OGR sans ezdxf, mais elle y perd
+        # les blocs, les styles et les etiquettes : autant proposer d'abord
+        # l'installation. Un refus laisse quand meme la fenetre s'ouvrir.
+        from .tools import dependances
+        dependances.assurer(self.iface.mainWindow())
+
         from .tools.dxf_convert.ui_dialog import CadToGisDialog
         dlg = CadToGisDialog(self.iface)
         dlg.exec_()

@@ -8,19 +8,20 @@ from qgis.core import QgsVectorLayer, QgsProject
 
 from ...tools import i18n
 from .services.dwg_support import dwg_to_temp_dxf_auto, check_dwg_converter_available, get_converter_help
+from .. import errlog
 
 # OGR fallback imports
 try:
     from osgeo import ogr, gdal, osr
     try:
         ogr.UseExceptions()
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "ui_dialog.<module>:18")
     try:
         gdal.SetConfigOption("DXF_INLINE_BLOCKS", "YES")
         gdal.SetConfigOption("DXF_CLOSED_LINE_AS_POLYGON", "TRUE")
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "ui_dialog.<module>:23")
 except Exception:
     ogr = None
     gdal = None
@@ -44,8 +45,8 @@ def _ogr_list_layers(dxf_path: str):
                 if v:
                     names.append(str(v))
             ds.ReleaseResultSet(res)
-    except Exception:
-        pass
+    except Exception as _err:
+        errlog.ignored(_err, "ui_dialog._ogr_list_layers:48")
     if not names:
         seen = set()
         lyr.ResetReading()
@@ -54,8 +55,8 @@ def _ogr_list_layers(dxf_path: str):
                 v = f.GetField("Layer")
                 if v and v not in seen:
                     seen.add(v); names.append(str(v))
-            except Exception:
-                pass
+            except Exception as _err:
+                errlog.ignored(_err, "ui_dialog._ogr_list_layers:58")
     ds = None
     return sorted(set(names))
 
@@ -87,8 +88,8 @@ class CadToGisDialog(QDialog):
         # Handle QSpinBox
         try:
             return int(widget.value())
-        except Exception:
-            pass
+        except Exception as _err:
+            errlog.ignored(_err, "ui_dialog._parse_epsg:91")
         # Handle QComboBox: prefer userData (preset code), else currentText
         try:
             data = widget.currentData()
@@ -425,8 +426,8 @@ class CadToGisDialog(QDialog):
             try:
             # 滾到最底，確保新訊息可見
                 self.out_html.moveCursor(self.out_html.textCursor().End)
-            except Exception:
-                pass
+            except Exception as _err:
+                errlog.ignored(_err, "ui_dialog.log:429")
         # ★ 關鍵：立即處理事件，讓 UI 不必等任務結束才重畫
             QCoreApplication.processEvents()
 
@@ -483,8 +484,8 @@ class CadToGisDialog(QDialog):
                 self.log("<b>Reading layers via ezdxf ...</b>")
                 doc = ezdxf.readfile(src_for_scan)
                 names = sorted([str(t.dxf.name) for t in doc.layers])
-            except ImportError:
-                pass
+            except ImportError as _err:
+                errlog.ignored(_err, "ui_dialog.scan_layers:487")
             except Exception as e:
                 self.log(f"<i>ezdxf layer scan failed:</i> {e}")
             if not names:
@@ -553,8 +554,8 @@ class CadToGisDialog(QDialog):
             settings.displayAll = True
             layer.setLabeling(QgsVectorLayerSimpleLabeling(settings))
             layer.setLabelsEnabled(True)
-        except Exception:
-            pass
+        except Exception as _err:
+            errlog.ignored(_err, "ui_dialog._setup_qgis_labels:557")
 
     def run_convert(self):
         try:

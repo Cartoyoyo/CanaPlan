@@ -26,6 +26,12 @@ jobs:
   publier:
     runs-on: ubuntu-latest
 
+    # Le token Actions du depot est en lecture seule par defaut : la creation
+    # de la release echouait en 403. On n'ouvre que l'ecriture du contenu,
+    # dont softprops/action-gh-release a besoin, et rien d'autre.
+    permissions:
+      contents: write
+
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4

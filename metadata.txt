@@ -2,7 +2,7 @@
 name=CanaPlan – Réseau Assainissement
 description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE).
 icon=icon/icon.png
-version=1.7.0
+version=1.7.1
 qgisMinimumVersion=3.28
 author=Yoan Laloux
 email=y.laloux@vichy-communaute.fr
@@ -18,6 +18,13 @@ deprecated=False
 about=CanaPlan est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement EU (Eaux Usées) et EP (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement. La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle. Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE).
 
 changelog=
+    1.7.1  Trois scripts de mise au point du parseur DXF partaient par erreur
+         dans le paquet de la 1.7.0. Ils n'etaient importes par aucun module et
+         pointaient en dur vers une machine de developpement, mais l'analyse de
+         securite de plugins.qgis.org y relevait des blocs try/except/pass et
+         des requetes SQL construites par concatenation, ce qui bloquait la
+         validation de la version. Ils sont retires du paquet. Aucun changement
+         de fonctionnement.
     1.7.0  Les bibliotheques d'export DXF ne sont plus embarquees. Le paquet
          passe de 26,8 a 2,7 Mo. La premiere fois que vous demandez un export
          DXF ou une conversion DXF/DWG, le plugin propose de telecharger

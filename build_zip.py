@@ -7,7 +7,8 @@ Exclut du paquet : .git, __pycache__, *.dist-info, libs/bin, libs/share,
 le workflow de publication (.github), le figeage des librairies
 (requirements-libs.txt), fichiers de travail (audit.md, amelioration.txt, INTERVIEW.md,
 assistant_creation_projet.md, uml_structure.mmd / .d2 / .puml,
-icon/fichedemarque.md, symbology-style.db, .gitignore, build_zip.py lui-même)
+icon/fichedemarque.md, symbology-style.db, .gitignore, build_zip.py lui-même,
+les scripts de mise au point tools/dxf_convert/{analyze_dxf,inspect_all,test_parser}.py)
 et fichiers temporaires (*.pyc, *.tmp, *.zip).
 
 NB : le paquet reprend libs/ tel qu'il est sur la machine de build. C'est
@@ -37,6 +38,14 @@ EXCLUDE_FILES = {
     "INTERVIEW.md", "assistant_creation_projet.md",
     "symbology-style.db",
     os.path.join("icon", "fichedemarque.md"),
+    # Scripts de mise au point du parseur DXF : importes par aucun module,
+    # chemins absolus en dur vers une machine de developpement. Livres par
+    # erreur dans la 1.7.0, ils y declenchaient les dix alertes bandit
+    # (B110 try/except/pass, B608 requete SQL construite par concatenation)
+    # qui bloquent la validation sur plugins.qgis.org.
+    os.path.join("tools", "dxf_convert", "analyze_dxf.py"),
+    os.path.join("tools", "dxf_convert", "inspect_all.py"),
+    os.path.join("tools", "dxf_convert", "test_parser.py"),
 }
 # .zip : le paquet est ecrit dans le dossier parcouru par os.walk. Sans cette
 # exclusion, build_zip s'ajoute au ZIP en cours d'ecriture et lit un fichier qui

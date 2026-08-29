@@ -37,12 +37,7 @@ changelog=
          affiche la commande a executer a la main. L'installation est a
          refaire apres une mise a jour du plugin, QGIS remplacant alors tout
          son dossier.
-    1.6.2  Paquet allege et durci. Ajout d'un fichier .bandit qui ecarte de
-         l'analyse de securite le dossier libs/ : il ne contient aucune ligne
-         ecrite pour CanaPlan, seulement les versions amont non modifiees
-         d'ezdxf, fontTools, pyparsing et typing_extensions. Le code du plugin
-         reste analyse normalement et ne remonte plus rien.
-         Les librairies embarquees ne contiennent
+    1.6.2  Paquet allege et durci. Les librairies embarquees ne contiennent
          plus que les modules que le plugin atteint reellement : numpy, que
          QGIS fournit deja, n'est plus embarque (il masquait celui de QGIS
          dans le sys.path), et les outils autonomes d'ezdxf et fontTools

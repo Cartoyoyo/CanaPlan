@@ -1,6 +1,6 @@
 [general]
 name=CanaPlan – Réseau Assainissement
-description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE).
+description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE). [EN] Topological drawing of foul (red) and storm (blue) sewer networks: pipes, service connections, manholes, inspection chambers. Longitudinal profiles, trench volumes, cross sections, multi-sheet PDF printing, DXF export and StaR-Eau (CNIG/ASTEE) GeoPackage export. Scriptable: every tool is callable from Python, and reusable procedures are declared as JSON recipes.
 icon=icon/icon.png
 version=1.9
 qgisMinimumVersion=3.40
@@ -17,6 +17,22 @@ experimental=False
 deprecated=False
 
 about=CanaPlan est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement EU (Eaux Usées) et EP (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement. La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle. Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE).
+    [EN] CanaPlan is a design drawing tool for sanitary and storm sewer
+    networks, used directly inside QGIS on a basemap the plugin loads for you
+    (French address database, cadastral parcels and buildings, IGN aerial
+    imagery, OpenStreetMap, or an existing DXF/DWG drawing). Topology is native:
+    every pipe joins two structures, every service connection re-anchors itself
+    on its parent pipe when that pipe moves, and consistency is checked on save.
+    Slopes are set and corrected with the drawing tools and the bulk entry table
+    (a four-step project wizard, a grouped attribute table). The plugin produces
+    longitudinal profiles (foul, storm or combined), computes trench volumes for
+    excavation and imported backfill, draws cross sections, prints plans as
+    multi-sheet PDF at any orientation with an overview page, and exports a
+    faithful DXF 2018. From the field survey to delivery, a single tool covers
+    the whole chain, including DT-DICT (Star-DT / StaR-Elec) import and a
+    GeoPackage export compliant with the French StaR-Eau V2024 geostandard.
+    Every tool is also callable from Python — see API.md — and recurring
+    procedures can be declared as JSON recipes and replayed in a single call.
 
 changelog=
     1.9  Pilotage par script. Un module de facade, tools/api.py, expose les

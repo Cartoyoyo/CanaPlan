@@ -661,7 +661,7 @@ def _make_labeled_line_symbol(color, width, abbr, has_precision=True):
     marker_line = QgsMarkerLineSymbolLayer()
     marker_line.setInterval(period)
     marker_line.setIntervalUnit(Qgis.RenderUnit.Millimeters)
-    marker_line.setPlacement(QgsMarkerLineSymbolLayer.Interval)
+    marker_line.setPlacement(QgsMarkerLineSymbolLayer.Placement.Interval)
     marker_line.setOffsetAlongLine(_MARKER_DASH + _MARKER_GAP / 2.0)
     marker_line.setOffsetAlongLineUnit(Qgis.RenderUnit.Millimeters)
 

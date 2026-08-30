@@ -1,0 +1,140 @@
+{
+  "nom": "collecteur_de_rue",
+  "resume": "Projet à une adresse, collecteur posé sur l'axe OSM de la rue, branchements aux bâtiments proches, numérotation, cotes, étiquettes, enregistrement et plan PDF. Cotes de chantier (tn, pente, profondeurs) obligatoires : elles changent a chaque affaire.",
+  "parametres": {
+    "adresse": null,
+    "rue": null,
+    "commune": null,
+    "nom_projet": "CanaPlan",
+    "dossier": "~/Documents/CanaPlan",
+    "reseau": "EU",
+    "diametre": 200,
+    "materiau": "PVC",
+    "entraxe_max": 50.0,
+    "tol_axe": 0.5,
+    "distance_max": 8.0,
+    "diametre_branchement": 160,
+    "tn": null,
+    "pente": null,
+    "profondeur_aval": null,
+    "profondeur_tabouret": null,
+    "echelle": 200,
+    "format": "A4",
+    "orientation": "portrait",
+    "etiquettes_branchements": false,
+    "taille_etiquettes_mm": 2.5
+  },
+  "etapes": [
+    {
+      "appel": "nouveau_projet",
+      "args": {
+        "adresse": "$adresse",
+        "dossier": "$dossier",
+        "nom": "$nom_projet"
+      }
+    },
+    {
+      "appel": "attendre_fonds",
+      "args": {
+        "noms": [
+          "PCI - Bati",
+          "PCI - Parcelles"
+        ],
+        "delai": 120
+      }
+    },
+    {
+      "appel": "axe_de_rue",
+      "nomme": "axe",
+      "args": {
+        "nom_voie": "$rue",
+        "commune": "$commune"
+      }
+    },
+    {
+      "appel": "tracer_conduite",
+      "args": {
+        "reseau": "$reseau",
+        "axe": "@axe",
+        "entraxe_max": "$entraxe_max",
+        "tol_axe": "$tol_axe",
+        "vider": true,
+        "diametre": "$diametre",
+        "materiau": "$materiau"
+      }
+    },
+    {
+      "appel": "creer_branchements",
+      "args": {
+        "reseau": "$reseau",
+        "distance_max": "$distance_max",
+        "vider": true,
+        "diametre": "$diametre_branchement",
+        "materiau": "$materiau"
+      }
+    },
+    {
+      "appel": "renumeroter",
+      "nomme": "num",
+      "args": {
+        "reseau": "$reseau",
+        "depart": 1
+      }
+    },
+    {
+      "appel": "caler_cotes",
+      "args": {
+        "reseau": "$reseau",
+        "tn": "$tn",
+        "pente": "$pente",
+        "ancrage": [
+          "@num.regards[-1]",
+          "$profondeur_aval"
+        ],
+        "tabourets": {
+          "tn": "$tn",
+          "profondeur": "$profondeur_tabouret"
+        }
+      }
+    },
+    {
+      "appel": "controler_branchements",
+      "args": {
+        "reseau": "$reseau"
+      }
+    },
+    {
+      "appel": "etiquettes",
+      "args": {
+        "reseau": "$reseau",
+        "forcer_toutes": true,
+        "visibilite": {
+          "branchement": "$etiquettes_branchements"
+        },
+        "taille": "$taille_etiquettes_mm",
+        "unite": "mm",
+        "echelle": "$echelle"
+      }
+    },
+    {
+      "appel": "verifier",
+      "args": {
+        "reseau": "$reseau"
+      }
+    },
+    {
+      "appel": "enregistrer"
+    },
+    {
+      "appel": "exporter_async",
+      "args": {
+        "dossier": "$dossier",
+        "pdf_complet": true,
+        "echelle": "$echelle",
+        "format": "$format",
+        "orientation": "$orientation",
+        "cadrage": "auto"
+      }
+    }
+  ]
+}

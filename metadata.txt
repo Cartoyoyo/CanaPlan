@@ -2,7 +2,7 @@
 name=CanaPlan – Réseau Assainissement
 description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE).
 icon=icon/icon.png
-version=1.8
+version=1.9
 qgisMinimumVersion=3.40
 qgisMaximumVersion=4.99
 author=Yoan Laloux
@@ -19,6 +19,45 @@ deprecated=False
 about=CanaPlan est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement EU (Eaux Usées) et EP (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement. La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle. Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE).
 
 changelog=
+    1.9  Pilotage par script. Un module de facade, tools/api.py, expose les
+         outils du plugin en verbes appelables depuis la console Python de
+         QGIS, un script ou un agent : creer le projet, tracer le collecteur
+         sur l'axe d'une rue, poser les branchements, renumeroter, caler les
+         cotes, etiqueter, exporter. Il n'instancie aucune fenetre, impose les
+         tolerances de snap en metres au lieu des pixels dependant du zoom, et
+         rend a chaque appel un dictionnaire serialisable. Aucune logique
+         metier n'y est reecrite : tout est delegue aux outils existants, pour
+         que le resultat soit identique au geste manuel. La reference tient
+         dans API.md.
+         Suites et recettes. Une recette est une procedure de travail rangee
+         dans un fichier JSON — ses etapes, ses parametres et leurs valeurs par
+         defaut — que l'on rejoue en un appel. Trois sont livrees :
+         collecteur_de_rue (projet, reseau, branchements, cotes, plan),
+         recaler_cotes et livraison. Deux substitutions suffisent a tout
+         enchainer : $parametre pour une valeur d'appel, @etape pour le
+         resultat d'une etape precedente — ce dernier permet a l'axe de rue,
+         un QgsGeometry, de passer d'une etape a la suivante sans jamais
+         quitter QGIS. enregistrer_recette() ecrit une procedure eprouvee dans
+         le profil, sans toucher au code. Le meme chantier demandait neuf
+         minutes en pilotage pas a pas ; il en demande vingt-trois secondes.
+         Numerotation des planches. Le plan d'ensemble numerotait les cadres
+         par cheminement geometrique, de la planche la plus a l'ouest puis de
+         proche en proche : sur un reseau qui serpente, les numeros sautaient
+         d'un bout du chantier a l'autre. Ils suivent desormais le collecteur,
+         de l'aval vers l'amont. Le sens ne se devine pas de la geometrie, les
+         troncons etant traces dans l'ordre des clics : il se lit dans les
+         cotes, l'aval etant l'extremite dont le regard a le fil d'eau le plus
+         bas. Repli sur l'ancien cheminement tant que le reseau n'est pas cote.
+         Taille des etiquettes. Elle s'exprime desormais en millimetres de
+         papier, convertis en unites carte d'apres l'echelle du plan : 2,5 mm
+         au 1/200 font 0,50 m au sol. Le reglage natif, 2 unites carte, donnait
+         10 mm de texte sur une feuille au 1/200.
+         Reseau. Les requetes a la Base Adresse Nationale et a Overpass passent
+         par la pile reseau de QGIS et non plus par urllib : le plugin herite
+         du proxy, des certificats et des delais configures dans QGIS.
+         Une enumeration non qualifiee restait dans l'import Star-DT,
+         QgsMarkerLineSymbolLayer.Interval, qui plantait sous QGIS 4 ; les
+         replis Qt5 de la couche de compatibilite DXF passent par getattr.
     1.8  Compatibilite QGIS 4 / Qt 6. Le plugin tourne desormais sur QGIS 4
          comme sur QGIS 3.40+ : tous les enumeres Qt et QGIS sont ecrits sous
          leur forme qualifiee (Qt.AlignmentFlag.AlignCenter et non

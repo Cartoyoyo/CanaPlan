@@ -1,0 +1,56 @@
+{
+  "nom": "livraison",
+  "resume": "Étiquettes forcées, vérification avant livraison, enregistrement du .bet et export du PDF complet en asynchrone. Le ticket est dans la dernière étape.",
+  "parametres": {
+    "reseau": "EU",
+    "dossier": "~/Documents/CanaPlan",
+    "echelle": 200,
+    "format": "A4",
+    "orientation": "portrait",
+    "fonds_wms": true,
+    "etiquettes_branchements": false,
+    "taille_etiquettes_mm": 2.5
+  },
+  "etapes": [
+    {
+      "appel": "styles",
+      "args": {
+        "reseau": "$reseau"
+      }
+    },
+    {
+      "appel": "etiquettes",
+      "args": {
+        "reseau": "$reseau",
+        "forcer_toutes": true,
+        "taille": "$taille_etiquettes_mm",
+        "unite": "mm",
+        "visibilite": {
+          "branchement": "$etiquettes_branchements"
+        },
+        "echelle": "$echelle"
+      }
+    },
+    {
+      "appel": "verifier",
+      "args": {
+        "reseau": "$reseau"
+      }
+    },
+    {
+      "appel": "enregistrer"
+    },
+    {
+      "appel": "exporter_async",
+      "args": {
+        "dossier": "$dossier",
+        "pdf_complet": true,
+        "fonds_wms": "$fonds_wms",
+        "echelle": "$echelle",
+        "format": "$format",
+        "orientation": "$orientation",
+        "cadrage": "auto"
+      }
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "nom": "recaler_cotes",
+  "resume": "Renumérote de l'amont vers l'aval, repose TN, profondeurs et fils d'eau sur un réseau déjà tracé, contrôle les branchements et vérifie le renseignement. Cotes de chantier (tn, pente, profondeurs) obligatoires : elles changent a chaque affaire.",
+  "parametres": {
+    "reseau": "EU",
+    "tn": null,
+    "pente": null,
+    "profondeur_aval": null,
+    "profondeur_tabouret": null,
+    "renumeroter": true
+  },
+  "etapes": [
+    {
+      "appel": "renumeroter",
+      "nomme": "num",
+      "si": "$renumeroter",
+      "args": {
+        "reseau": "$reseau",
+        "depart": 1
+      }
+    },
+    {
+      "appel": "caler_cotes",
+      "args": {
+        "reseau": "$reseau",
+        "tn": "$tn",
+        "pente": "$pente",
+        "ancrage": [
+          "@num.regards[-1]",
+          "$profondeur_aval"
+        ],
+        "tabourets": {
+          "tn": "$tn",
+          "profondeur": "$profondeur_tabouret"
+        }
+      }
+    },
+    {
+      "appel": "controler_branchements",
+      "args": {
+        "reseau": "$reseau"
+      }
+    },
+    {
+      "appel": "verifier",
+      "args": {
+        "reseau": "$reseau"
+      }
+    }
+  ]
+}

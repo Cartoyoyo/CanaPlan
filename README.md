@@ -13,7 +13,7 @@
 **Plugin QGIS de dessin topologique de réseaux d'assainissement — EU / EP, du tracé terrain à la livraison StaR-Eau**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.40%2B%20%7C%204.x-green?logo=qgis&logoColor=white)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-1.8-blue)](#-changelog)
+[![Version](https://img.shields.io/badge/version-1.9-blue)](#-changelog)
 [![Qt](https://img.shields.io/badge/Qt-5%20%7C%206-brightgreen?logo=qt&logoColor=white)](https://qgis.org)
 [![StaR-Eau](https://img.shields.io/badge/StaR--Eau-V2024%20CNIG%2FASTEE-orange)](#-export-star-eau-cnig--astee-v2024)
 [![Langues](https://img.shields.io/badge/langues-FR%20%7C%20EN%20%7C%20ES%20%7C%20PT%20%7C%20DE-purple)](#-langues--languages)
@@ -45,6 +45,7 @@ Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne 
 - [📥 Import Star-DT / StaR-Elec](#-import-star-dt--star-elec-dt-dict)
 - [📤 Export StaR-Eau](#-export-star-eau-cnig--astee-v2024)
 - [📦 Format de projet .bet](#-format-de-projet-bet)
+- [🤖 Pilotage par script](#-pilotage-par-script)
 - [🚀 Installation](#-installation)
 - [🌳 Structure du projet](#-structure-du-projet)
 - [📜 Changelog](#-changelog)
@@ -226,6 +227,14 @@ etiquettes*, et suit le projet `.bet`.
 | **Annotation texte** | Pose un texte libre sur la carte (mainAnnotationLayer du projet). Clic sur zone vide = creation, clic sur annotation existante = edition. Police, taille, couleur, gras / italique / souligne, alignement gauche / centre / droite, cadre optionnel (rempli ou non, couleurs de fond/bordure independantes), transparence reglable. Taille liee a l'echelle configuree pour les etiquettes, en **metres** (RenderMapUnits) : l'annotation suit le zoom comme les conduites, ne grossit plus relativement au plan au dezoom. Bouton **Appliquer** pour previsualiser les changements sans fermer la fenetre. |
 | **Copier / coller** | `Ctrl + clic` sur une annotation = duplication immediate avec leger decalage. `Ctrl + C` (curseur sur l'annotation) = copie dans un presse-papier interne au plugin. `Ctrl + V` puis clic = collage au point clique. `Echap` annule un coller en attente. |
 | **Figer en map units** | Fonction `freeze_annotations_to_map_units(canvas)` exposable dans la console Python : convertit toutes les annotations existantes (qui seraient en pt) vers map units, calcule a la vue courante du canvas — regle la vue sur 1:200 avant de lancer pour avoir une taille coherente. |
+
+### 🤖 Pilotage par script
+
+- **Facade `tools/api.py`** : les outils du plugin en verbes appelables depuis
+  la console Python, un script ou un agent — sans ouvrir de fenetre, avec des
+  tolerances de snap en metres et des retours serialisables.
+- **Recettes** : une procedure de travail rangee dans un fichier JSON, rejouee
+  en un appel. Trois livrees, et `enregistrer_recette()` pour les siennes.
 
 ### 💾 Gestion de projet
 
@@ -859,6 +868,76 @@ La compatibilite ascendante est assuree avec le format v1 (JSON brut + GPKG exte
 
 ---
 
+## 🤖 Pilotage par script
+
+Les outils de CanaPlan sont faits pour une souris : des `QgsMapTool` nourris par
+des clics, des `QDialog` qui rendent des dictionnaires. Le module
+**`tools/api.py`** les expose en verbes appelables depuis la console Python de
+QGIS, un script, un serveur MCP ou un agent.
+
+```python
+from CanaPlan.tools import api
+
+api.aide()                                   # sommaire des verbes disponibles
+api.nouveau_projet(adresse="Rue Julien Charpentier, 03250 Châtel-Montagne")
+api.attendre_fonds(["PCI - Bati"])           # le WFS est asynchrone
+axe = api.axe_de_rue("Rue Julien Charpentier", "Châtel-Montagne")
+api.tracer_conduite("EU", axe=axe, entraxe_max=50, diametre=200, materiau="PVC")
+api.creer_branchements("EU", distance_max=8)
+api.renumeroter("EU")
+api.caler_cotes("EU", tn=100, pente=1.0, ancrage=("REU07", 2.50),
+                tabourets={"tn": 100, "profondeur": 0.50})
+api.exporter_async(echelle=200, format="A4", orientation="portrait")
+api.fermer()
+```
+
+Trois partis pris, qui font toute la différence avec un pilotage naïf :
+
+- **aucune fenêtre n'est instanciée** — les boîtes de dialogue sont neutralisées
+  et leurs messages remontés dans le résultat, sous la clé `messages` ;
+- **les tolérances de snap sont en mètres**, pas en pixels : le zoom cesse d'être
+  un paramètre caché qui fusionnerait deux ouvrages voisins ;
+- **aucune logique métier n'est réécrite.** Tout est délégué aux outils
+  existants, pour que le résultat soit identique au geste manuel — snapping,
+  topologie et valeurs par défaut compris.
+
+### 🧾 Recettes
+
+Ce qui coûte, dans un pilotage distant, ce n'est pas le calcul — les verbes
+rendent la main en moins d'une seconde — c'est l'aller-retour. Une **recette**
+est une procédure de travail rangée dans un fichier JSON : ses étapes, ses
+paramètres et leurs valeurs par défaut. On la rejoue en un appel.
+
+```python
+api.recettes()                               # les procédures enregistrées
+api.recette("collecteur_de_rue",
+            adresse="Rue Julien Charpentier, 03250 Châtel-Montagne",
+            rue="Rue Julien Charpentier", commune="Châtel-Montagne",
+            tn=100, pente=1.0, profondeur_aval=2.50, profondeur_tabouret=0.50)
+```
+
+| Recette livrée | Ce qu'elle fait |
+|---|---|
+| `collecteur_de_rue` | Projet à une adresse, collecteur sur l'axe OSM, branchements, numérotation, cotes, étiquettes, enregistrement, plan PDF |
+| `recaler_cotes` | Renumérote et repose TN, profondeurs et fils d'eau sur un réseau déjà tracé, puis contrôle |
+| `livraison` | Styles, étiquettes, vérification, enregistrement, export PDF complet |
+
+Deux substitutions suffisent à tout enchaîner : `"$parametre"` pour une valeur
+d'appel, `"@etape.chemin"` pour le résultat d'une étape précédente. La seconde
+règle un problème que rien d'autre ne règle : l'axe de rue est un
+`QgsGeometry`, qui ne franchit aucun protocole — dans une recette il ne quitte
+jamais QGIS.
+
+Les cotes de chantier — TN, pente, profondeurs — n'ont volontairement **aucune
+valeur par défaut** : elles changent à chaque affaire, et l'appel qui les omet
+est refusé avant la première étape. `enregistrer_recette()` range une séquence
+éprouvée dans le profil QGIS, sans toucher au code du plugin.
+
+> Référence complète des verbes, de leurs arguments et de leurs retours :
+> **[API.md](API.md)**.
+
+---
+
 ## 🚀 Installation
 
 1. Téléchargez ou clonez ce dépôt :
@@ -945,6 +1024,7 @@ From field survey to delivery, one tool covers the whole chain: Star-DT / StaR-E
 - **Labels:** fixed point size or scaled to a printing scale, with a zoom-out threshold, per-network and per-type visibility, and a choice of displayed fields.
 - **Renumbering** of manholes and inspection chambers along a chain, with configurable prefixes and starting numbers.
 - **Multi-sheet printing:** place sheets on the map, aim each one with the mouse, then export a PDF with an optional overview page, or a DXF 2018 plan.
+- **Scripting API** (`tools/api.py`): every tool as a callable verb from the Python console, a script or an agent — no dialogs, snapping tolerances in metres, serialisable results. Reusable procedures are declared as JSON **recipes** and replayed in a single call. See [API.md](API.md).
 - **StaR-Eau V2024 export** to GeoPackage, with a compliance check that lists blocking issues before writing.
 - **Star-DT / StaR-Elec (DT-DICT) import** and DXF/DWG import into GeoPackage.
 
@@ -1131,6 +1211,7 @@ CanaPlan/
 │   ├── stareau_export_dialog.py    # Dialogue d'export StaR-Eau (5 onglets + controle)
 │   ├── about_dialog.py             # Dialogue « A propos » (lit metadata.txt)
 │   └── config_dialog.py            # Dialogue de configuration (reseaux, couches, cubature, remblai)
+├── API.md                          # Reference du module de pilotage par script
 ├── tools/
 │   ├── __init__.py                 # Utilitaire partage layer_ok()
 │   ├── i18n.py                     # Table de traduction FR/EN/ES/PT/DE et resolution de la langue
@@ -1150,7 +1231,9 @@ CanaPlan/
 │   ├── cubature_tool.py            # Selection BFS/axe pour cubature/remblai tranchees
 │   ├── calc_cubature.py            # Calcul cubature (volumes, BFS, remblai par couche)
 │   ├── print_tool.py               # Impression PDF multi-planches (pose manuelle ou cadrage automatique)
-│   ├── cadrage_auto.py             # Decoupage automatique en planches : couverture minimale, orientation, ordre, marge etiquettes
+│   ├── api.py                      # Facade de pilotage : verbes metier sans fenetre, suites et recettes
+│   ├── recettes/                   # Procedures rejouables (JSON) : collecteur_de_rue, recaler_cotes, livraison
+│   ├── cadrage_auto.py             # Decoupage automatique en planches : couverture minimale, ordre aval-amont, marge etiquettes
 │   ├── coupe_type.py               # Coupe type EU/EP calculee sur les statistiques du reseau (sans troncon designe)
 │   ├── coupe_transversale_tool.py  # Outil de trace de l'axe de coupe (EU+EP ou mono-reseau)
 │   ├── annotation_tool.py          # Outil d'annotation texte (clic / ctrl+clic / ctrl+c-v)
@@ -1180,6 +1263,7 @@ CanaPlan/
 
 | Version | Notes |
 |---------|-------|
+| **1.9** | **Pilotage par script** (`tools/api.py`) et **recettes** rejouables — numérotation des planches suivant le collecteur, de l'aval vers l'amont — taille des étiquettes en millimètres de papier — requêtes BAN et Overpass par la pile réseau de QGIS |
 | **1.8** | Compatibilité **QGIS 4 / Qt 6** — bouton **PDF complet** dans la fenêtre d'export — profils en long toujours orientés regard le plus profond à gauche — seuil de dézoom des étiquettes déduit de l'échelle cible |
 | **1.7.1** | Retrait du paquet des scripts de mise au point du parseur DXF, qui bloquaient la validation de sécurité de plugins.qgis.org |
 | **1.7** | Librairies DXF installées à la demande depuis PyPI : le paquet passe de 26,8 à 2,7 Mo |
@@ -1194,6 +1278,51 @@ CanaPlan/
 
 <details>
 <summary>Détail complet des versions</summary>
+
+### 1.9
+
+- **Pilotage par script.** Un module de façade, `tools/api.py`, expose les
+  outils du plugin en verbes appelables depuis la console Python de QGIS, un
+  script ou un agent : créer le projet, tracer le collecteur sur l'axe d'une
+  rue, poser les branchements, renuméroter, caler les cotes, étiqueter,
+  exporter. Il n'instancie aucune fenêtre, impose les tolérances de snap en
+  mètres au lieu des pixels dépendant du zoom, et rend à chaque appel un
+  dictionnaire sérialisable. Aucune logique métier n'y est réécrite : tout est
+  délégué aux outils existants, pour que le résultat soit identique au geste
+  manuel. Référence dans [API.md](API.md).
+
+- **Suites et recettes.** Une recette est une procédure de travail rangée dans
+  un fichier JSON — ses étapes, ses paramètres et leurs valeurs par défaut —
+  que l'on rejoue en un appel. Trois sont livrées : `collecteur_de_rue`,
+  `recaler_cotes` et `livraison`. Deux substitutions suffisent à tout
+  enchaîner : `$parametre` pour une valeur d'appel, `@etape` pour le résultat
+  d'une étape précédente — ce dernier permet à l'axe de rue, un `QgsGeometry`,
+  de passer d'une étape à la suivante sans jamais quitter QGIS.
+  `enregistrer_recette()` range une procédure éprouvée dans le profil, sans
+  toucher au code. Le même chantier demandait neuf minutes en pilotage pas à
+  pas ; il en demande vingt-trois secondes.
+
+- **Numérotation des planches.** Le plan d'ensemble numérotait les cadres par
+  cheminement géométrique — la planche la plus à l'ouest, puis de proche en
+  proche : sur un réseau qui serpente, les numéros sautaient d'un bout du
+  chantier à l'autre. Ils suivent désormais le collecteur, **de l'aval vers
+  l'amont**. Le sens ne se devine pas de la géométrie, les tronçons étant
+  tracés dans l'ordre des clics : il se lit dans les cotes, l'aval étant
+  l'extrémité dont le regard a le fil d'eau le plus bas. Repli sur l'ancien
+  cheminement tant que le réseau n'est pas coté.
+
+- **Taille des étiquettes.** Elle s'exprime désormais en **millimètres de
+  papier**, convertis en unités carte d'après l'échelle du plan : 2,5 mm au
+  1/200 font 0,50 m au sol. Le réglage natif, 2 unités carte, donnait 10 mm de
+  texte sur une feuille au 1/200.
+
+- **Réseau.** Les requêtes à la Base Adresse Nationale et à Overpass passent
+  par la pile réseau de QGIS et non plus par `urllib` : le plugin hérite du
+  proxy, des certificats et des délais configurés dans QGIS.
+
+- **QGIS 4.** Une énumération non qualifiée restait dans l'import Star-DT,
+  `QgsMarkerLineSymbolLayer.Interval`, qui plantait sous QGIS 4 ; les replis
+  Qt5 de la couche de compatibilité DXF passent par `getattr`.
 
 ### 1.8
 

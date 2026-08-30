@@ -28,7 +28,7 @@ centre de la zone carte, exactement comme dans _generate_pdf().
 import math
 
 from qgis.PyQt import sip
-from qgis.core import Qgis, QgsPointXY, QgsWkbTypes
+from qgis.core import Qgis, QgsGeometry, QgsPointXY, QgsWkbTypes
 from . import errlog
 
 # Marge de sécurité autour du réseau, en MILLIMÈTRES PAPIER et non en
@@ -282,20 +282,117 @@ def _compter(points_uv, a0, w_u, b0, h_u):
     return n
 
 
-def ordonner_planches(planches):
-    """Renumérote les planches selon un cheminement de proche en proche.
+def _nombre(valeur):
+    """Attribut numérique en float, ou None : un champ vide remonte un QVariant."""
+    try:
+        if valeur is None or (hasattr(valeur, "isNull") and valeur.isNull()):
+            return None
+        return float(valeur)
+    except (TypeError, ValueError):
+        return None
+
+
+def _collecteur(couches):
+    """Le collecteur principal, orienté de l'AVAL vers l'AMONT.
+
+    Un dossier de plans se lit dans le sens de l'écoulement inverse : on part
+    du point de rejet et on remonte. L'orientation ne se devine pas de la
+    géométrie — les tronçons sont tracés dans l'ordre où l'opérateur a
+    cliqué — elle se lit dans les cotes : des deux extrémités, l'aval est
+    celle dont le regard a le fil d'eau le plus bas.
+
+    Rend `None` si le réseau n'est pas coté, ou si les conduites ne forment
+    pas une chaîne : l'appelant retombe alors sur le cheminement géométrique.
+    """
+    conduites, regards = [], []
+    for couche in _couches_valides(couches):
+        nom = (couche.name() or "").lower()
+        if nom.startswith("conduite") and couche.featureCount():
+            conduites.append(couche)
+        elif nom.startswith("regard") and couche.featureCount():
+            regards.append(couche)
+    if not conduites:
+        return None
+    # Un projet peut porter EU et EP : le collecteur de référence est l'EU,
+    # sauf s'il n'y en a pas.
+    conduites.sort(key=lambda c: 0 if (c.name() or "").upper().endswith("EU") else 1)
+    couche = conduites[0]
+
+    geoms = [f.geometry() for f in couche.getFeatures()
+             if f.geometry() is not None and not f.geometry().isEmpty()]
+    if not geoms:
+        return None
+    try:
+        fusion = QgsGeometry.unaryUnion(geoms).mergeLines()
+    except Exception as _err:
+        errlog.ignored(_err, "cadrage_auto._collecteur:union")
+        return None
+    if fusion is None or fusion.isEmpty():
+        return None
+    # Un réseau ramifié rend plusieurs brins : le collecteur est le plus long.
+    parties = fusion.asGeometryCollection() or [fusion]
+    ligne = max(parties, key=lambda g: g.length())
+    sommets = ligne.asPolyline()
+    if len(sommets) < 2:
+        return None
+
+    depart, arrivee = QgsPointXY(sommets[0]), QgsPointXY(sommets[-1])
+    fe_depart = fe_arrivee = None
+    for couche_r in regards:
+        for feat in couche_r.getFeatures():
+            geom = feat.geometry()
+            if geom is None or geom.isEmpty():
+                continue
+            point = QgsPointXY(geom.asPoint())
+            fe = _nombre(feat["fe_radier"]) if "fe_radier" in \
+                [ch.name() for ch in couche_r.fields()] else None
+            if fe is None:
+                continue
+            if point.distance(depart) < 0.5:
+                fe_depart = fe
+            elif point.distance(arrivee) < 0.5:
+                fe_arrivee = fe
+    if fe_depart is None or fe_arrivee is None:
+        return None
+    if fe_depart > fe_arrivee:
+        # Le début de la géométrie est en amont : on retourne la ligne.
+        ligne = QgsGeometry.fromPolylineXY([QgsPointXY(p) for p in reversed(sommets)])
+    return ligne
+
+
+def ordonner_planches(planches, collecteur=None):
+    """Renumérote les planches dans l'ordre où on lit le dossier.
 
     Le glouton attaque à chaque tour par l'élément non couvert le plus
     excentré : excellent pour couvrir, mais l'ordre obtenu saute d'un bout du
     chantier à l'autre. Or les planches sont numérotées dans l'ordre de la
-    liste, et on lit un dossier de plans en suivant le terrain.
+    liste.
 
-    On repart donc de la planche la plus à l'ouest — le sens de lecture
-    habituel — puis on enchaîne à chaque fois la plus proche encore libre.
+    Avec `collecteur` — la conduite principale orientée de l'aval vers
+    l'amont — chaque planche est classée sur son abscisse le long du réseau :
+    la feuille 1 est celle du point de rejet, et les numéros remontent
+    l'écoulement sans jamais revenir en arrière. C'est l'ordre dans lequel un
+    dossier d'assainissement se lit et se vérifie sur le terrain.
+
+    Sans collecteur — réseau non coté, conduites en plusieurs morceaux — on
+    retombe sur le cheminement géométrique : la plus à l'ouest, puis de
+    proche en proche.
     """
-    if len(planches) < 3:
+    if len(planches) < 2:
         return planches
 
+    if collecteur is not None:
+        try:
+            classees = sorted(
+                planches,
+                key=lambda pl: collecteur.lineLocatePoint(
+                    QgsGeometry.fromPointXY(pl[0])))
+            return classees
+        except Exception as _err:
+            errlog.ignored(_err, "cadrage_auto.ordonner_planches:abscisse")
+
+    if len(planches) < 3:
+        return planches
     reste = list(planches)
     # La plus à l'ouest, et à égalité la plus au nord.
     depart = min(reste, key=lambda pl: (pl[0].x(), -pl[0].y()))
@@ -501,6 +598,8 @@ def calculer_planches(couches, w_mm, h_mm, echelle, max_planches=200,
             reste = [p for p in restants if p != (px, py)]
         restants = reste
 
-    # L'ordre d'abord — le cheminement definit qui touche qui — puis le sens
-    # de lecture, qui se propage de proche en proche le long de ce chemin.
-    return harmoniser_orientations(ordonner_planches(planches), carto_h_m)
+    # L'ordre d'abord — il definit qui touche qui — puis le sens de lecture,
+    # qui se propage de proche en proche le long de ce chemin. La numerotation
+    # suit le collecteur, de l'aval vers l'amont, quand le reseau est cote.
+    return harmoniser_orientations(
+        ordonner_planches(planches, _collecteur(couches)), carto_h_m)

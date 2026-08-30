@@ -1,4 +1,4 @@
-from qgis.core import QgsPointXY, QgsWkbTypes
+from qgis.core import Qgis, QgsPointXY, QgsWkbTypes
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
@@ -52,7 +52,7 @@ class _PrefixDialog(QDialog):
         note.setWordWrap(True)
         layout.addWidget(note)
 
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
@@ -102,11 +102,11 @@ class RenommerTool(QgsMapTool):
 
     def activate(self):
         super().activate()
-        self.canvas.setCursor(Qt.CrossCursor)
+        self.canvas.setCursor(Qt.CursorShape.CrossCursor)
         self.iface.messageBar().pushMessage(
             i18n.tr('ot_titre_renum', reseau=self.reseau),
             i18n.tr('ot_aide_renum'),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     def deactivate(self):
@@ -126,7 +126,7 @@ class RenommerTool(QgsMapTool):
             self._clear_band('_hover_band')
 
     def canvasReleaseEvent(self, event):
-        if event.button() != Qt.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
             return
         feat = self._nearest_regard(self.toMapCoordinates(event.pos()))
         if feat is None:
@@ -142,7 +142,7 @@ class RenommerTool(QgsMapTool):
             self._reset()
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self._reset()
 
     # ------------------------------------------------------------------ renommage
@@ -161,7 +161,7 @@ class RenommerTool(QgsMapTool):
         defaults = _DEFAULTS.get(self.reseau, _DEFAULTS['EU'])
         dlg = _PrefixDialog(defaults['regard'], defaults['tabouret'],
                             self.iface.mainWindow())
-        if dlg.exec_() != QDialog.Accepted:
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
         reg_prefix  = dlg.regard_prefix
@@ -253,10 +253,10 @@ class RenommerTool(QgsMapTool):
         return best
 
     def _make_pt_band(self, color):
-        rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
         rb.setColor(color)
         rb.setIconSize(14)
-        rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+        rb.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
         return rb
 
     def _clear_band(self, attr):

@@ -18,8 +18,7 @@ puis on écrit la figure : aucune duplication du code de rendu.
 import os
 from collections import Counter
 
-import sip
-
+from qgis.PyQt import sip
 from . import i18n
 from .graph_utils import _to_float, QGIS_NULL
 

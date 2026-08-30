@@ -240,12 +240,12 @@ class CubatureDialog(QDialog):
         self.setWindowTitle(i18n.tr('cb_titre'))
         self.setWindowFlags(
             self.windowFlags()
-            | Qt.WindowMinimizeButtonHint
-            | Qt.WindowMaximizeButtonHint
-            | Qt.WindowSystemMenuHint
+            | Qt.WindowType.WindowMinimizeButtonHint
+            | Qt.WindowType.WindowMaximizeButtonHint
+            | Qt.WindowType.WindowSystemMenuHint
         )
         self.setMinimumSize(1000, 450)
-        self.setAttribute(Qt.WA_DeleteOnClose, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
         self._build_ui()
         self._update_info_label()
@@ -308,10 +308,10 @@ class CubatureDialog(QDialog):
         self.table.setColumnCount(len(self._COLUMNS))
         self.table.setHorizontalHeaderLabels(self._column_labels())
         self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.table.setAlternatingRowColors(True)
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         layout.addWidget(self.table, 1)
 
         # Total
@@ -426,7 +426,7 @@ class CubatureDialog(QDialog):
                 cell.setFont(font)
                 cell.setBackground(color_lighter)
                 if text:
-                    cell.setTextAlignment(Qt.AlignCenter)
+                    cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(row, col, cell)
             row += 1
 
@@ -475,7 +475,7 @@ class CubatureDialog(QDialog):
         grey = data.get('err_debut') or data.get('err_fin')
         for col, val in enumerate(vals):
             item = QTableWidgetItem(val)
-            item.setTextAlignment(Qt.AlignCenter if col >= 7 else Qt.AlignLeft | Qt.AlignVCenter)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter if col >= 7 else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             if grey:
                 item.setForeground(QColor('#999999'))
             self.table.setItem(row, col, item)
@@ -579,7 +579,7 @@ class CubatureDialog(QDialog):
                 # constant : l'interpreteur courant et des litteraux. Pas de
                 # shell, aucune valeur saisie par l'utilisateur.
                 import subprocess, sys  # nosec B404
-                QApplication.setOverrideCursor(Qt.WaitCursor)
+                QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
                 subprocess.check_call(  # nosec B603
                     [sys.executable, "-m", "pip", "install", "reportlab"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -1794,7 +1794,7 @@ class CubatureOptionsDialog(QDialog):
         layout.addWidget(group_mode)
 
         # ── Boutons ──────────────────────────────────────────────
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         btns.accepted.connect(self._validate_and_accept)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)

@@ -3,6 +3,7 @@
 import math
 
 from qgis.core import (
+    Qgis,
     QgsPointXY, QgsGeometry, QgsRectangle, QgsWkbTypes, QgsProject
 )
 from qgis.gui import QgsMapTool, QgsRubberBand
@@ -91,12 +92,12 @@ class MoveTool(QgsMapTool):
 
     def activate(self):
         super().activate()
-        self.canvas.setCursor(Qt.CrossCursor)
+        self.canvas.setCursor(Qt.CursorShape.CrossCursor)
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             i18n.tr('move'),
             i18n.tr('ot_aide_move'),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     def deactivate(self):
@@ -141,7 +142,7 @@ class MoveTool(QgsMapTool):
             self._update_hover(event.pos())
 
     def canvasReleaseEvent(self, event):
-        if event.button() != Qt.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
             return
         pt = self.toMapCoordinates(event.pos())
 
@@ -164,7 +165,7 @@ class MoveTool(QgsMapTool):
                 self._start_label_move()
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self._reset()
 
     # ------------------------------------------------------------------ hover
@@ -222,10 +223,10 @@ class MoveTool(QgsMapTool):
                 self._hover_piquage = piq
                 pt0 = QgsPointXY(piq[0].geometry().asPolyline()[0])
                 self._hover_piquage_band = QgsRubberBand(
-                    self.canvas, QgsWkbTypes.PointGeometry)
+                    self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
                 self._hover_piquage_band.setColor(QColor(255, 165, 0))
                 self._hover_piquage_band.setIconSize(16)
-                self._hover_piquage_band.setIcon(QgsRubberBand.ICON_X)
+                self._hover_piquage_band.setIcon(QgsRubberBand.IconType.ICON_X)
                 self._hover_piquage_band.setToGeometry(
                     QgsGeometry.fromPointXY(pt0), None)
             return
@@ -275,15 +276,15 @@ class MoveTool(QgsMapTool):
         return best
 
     def _make_geom_band(self, feat, layer):
-        rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
         rb.setToGeometry(feat.geometry(), layer)
         rb.setColor(QColor(255, 165, 0))
         rb.setIconSize(14)
-        rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+        rb.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
         return rb
 
     def _make_label_band(self, lbl):
-        rb = QgsRubberBand(self.canvas, QgsWkbTypes.PolygonGeometry)
+        rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PolygonGeometry)
         rb.setToGeometry(QgsGeometry.fromRect(lbl.labelRect), None)
         rb.setColor(QColor(255, 165, 0, 60))
         rb.setStrokeColor(QColor(255, 165, 0, 255))
@@ -314,10 +315,10 @@ class MoveTool(QgsMapTool):
         self._mode = 'geom'
         self._clear_geom_hover()
 
-        self._preview = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        self._preview = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
         self._preview.setColor(QColor(0, 200, 0))
         self._preview.setIconSize(12)
-        self._preview.setIcon(QgsRubberBand.ICON_CIRCLE)
+        self._preview.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
         self._preview.setToGeometry(
             QgsGeometry.fromPointXY(QgsPointXY(self._orig_pt)), None)
 
@@ -353,7 +354,7 @@ class MoveTool(QgsMapTool):
                 endpoints.append(len(line) - 1)
             if not endpoints:
                 continue
-            rb = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+            rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
             rb.setColor(QColor(255, 165, 0, 220))
             rb.setWidth(2)
             rb.setToGeometry(QgsGeometry.fromPolylineXY(line), None)
@@ -398,7 +399,7 @@ class MoveTool(QgsMapTool):
         cx = (lbl.labelRect.xMinimum() + lbl.labelRect.xMaximum()) / 2
         cy = (lbl.labelRect.yMinimum() + lbl.labelRect.yMaximum()) / 2
 
-        self._preview = QgsRubberBand(self.canvas, QgsWkbTypes.PolygonGeometry)
+        self._preview = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PolygonGeometry)
         self._preview.setToGeometry(
             QgsGeometry.fromRect(
                 QgsRectangle(cx - hw, cy - hh, cx + hw, cy + hh)), None)
@@ -537,11 +538,11 @@ class MoveTool(QgsMapTool):
 
     def _make_ann_band(self, item):
         pt = item.point()
-        rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
         rb.setToGeometry(QgsGeometry.fromPointXY(QgsPointXY(pt.x(), pt.y())), None)
         rb.setColor(QColor(255, 165, 0))
         rb.setIconSize(14)
-        rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+        rb.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
         return rb
 
     def _clear_annotation_hover(self):
@@ -563,10 +564,10 @@ class MoveTool(QgsMapTool):
         self._mode = 'annotation'
         self._clear_annotation_hover()
 
-        self._preview = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        self._preview = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
         self._preview.setColor(QColor(0, 200, 0))
         self._preview.setIconSize(12)
-        self._preview.setIcon(QgsRubberBand.ICON_CIRCLE)
+        self._preview.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
         self._preview.setToGeometry(
             QgsGeometry.fromPointXY(self._sel_ann_orig_pt), None)
 
@@ -777,21 +778,21 @@ class MoveTool(QgsMapTool):
         self._mode = 'piquage'
         self._clear_piquage_hover()
 
-        self._piquage_snap_band = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self._piquage_snap_band = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
         self._piquage_snap_band.setColor(QColor(0, 200, 0))
         self._piquage_snap_band.setWidth(2)
 
-        self._piquage_line_prev = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self._piquage_line_prev = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
         col = QColor(200, 80, 0) if reseau == 'EU' else QColor(0, 80, 200)
         self._piquage_line_prev.setColor(col)
         self._piquage_line_prev.setWidth(2)
-        self._piquage_line_prev.setLineStyle(Qt.DotLine)
+        self._piquage_line_prev.setLineStyle(Qt.PenStyle.DotLine)
 
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             i18n.tr('ot_titre_move_piquage', reseau=reseau),
             i18n.tr('ot_aide_move_cible'),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     def _update_piquage_snap(self, cursor_pt):
@@ -800,7 +801,7 @@ class MoveTool(QgsMapTool):
         if not _ok(cond_layer):
             return
 
-        self._piquage_snap_band.reset(QgsWkbTypes.LineGeometry)
+        self._piquage_snap_band.reset(QgsWkbTypes.GeometryType.LineGeometry)
         snap_pt   = None
         snap_cond = None
 
@@ -828,7 +829,7 @@ class MoveTool(QgsMapTool):
 
         if snap_pt is None:
             if self._piquage_line_prev:
-                self._piquage_line_prev.reset(QgsWkbTypes.LineGeometry)
+                self._piquage_line_prev.reset(QgsWkbTypes.GeometryType.LineGeometry)
             return
 
         # Croix verte au point snappé

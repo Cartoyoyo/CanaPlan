@@ -27,16 +27,16 @@ class WelcomeDialog(QDialog):
         font.setPointSize(14)
         font.setBold(True)
         title.setFont(font)
-        title.setAlignment(Qt.AlignCenter)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
         sub = QLabel(i18n.tr('acc_question'))
-        sub.setAlignment(Qt.AlignCenter)
+        sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(sub)
 
         sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setFrameShadow(QFrame.Sunken)
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(sep)
 
         btn_new = QPushButton(i18n.tr('acc_assistant'))

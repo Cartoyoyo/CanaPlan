@@ -34,7 +34,7 @@ class ExportDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(i18n.tr('exp_titre'))
         self.setMinimumWidth(500)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(6)
@@ -57,8 +57,8 @@ class ExportDialog(QDialog):
         self._bloc_dossier(layout, default_dir)
         layout.addWidget(_hsep())
 
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.button(QDialogButtonBox.Ok).setText(i18n.tr('exp_bouton'))
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btns.button(QDialogButtonBox.StandardButton.Ok).setText(i18n.tr('exp_bouton'))
         btns.accepted.connect(self._on_accept)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
@@ -173,40 +173,59 @@ class ExportDialog(QDialog):
         self.cb_coupe_ep.toggled.connect(self._sync_coupe_box)
         layout.addWidget(self._coupe_box)
 
-    def _bloc_tout_en_un(self, layout):
-        """Raccourci « tout en un », dans le coin haut droit de la fenêtre.
+    _STYLE_RACCOURCI = (
+        "QPushButton {{"
+        "  background-color: {fond}; color: #FFFFFF;"
+        "  font-weight: bold; border: none; border-radius: 3px;"
+        "  padding: 6px 14px;"
+        "}}"
+        "QPushButton:hover  {{ background-color: {survol}; }}"
+        "QPushButton:pressed{{ background-color: {appui}; }}"
+    )
 
-        Il ignore délibérément les cases cochées plus bas : c'est un bouton de
-        sortie de secours, pas une option supplémentaire. Le coin, à l'écart
-        de la colonne d'options, et la couleur pleine disent l'un comme
-        l'autre qu'il ne se combine avec rien.
+    def _bloc_tout_en_un(self, layout):
+        """Raccourcis « tout en un », dans le coin haut droit de la fenêtre.
+
+        Ils ignorent délibérément les cases cochées plus bas : ce sont des
+        boutons de sortie de secours, pas des options supplémentaires. Le
+        coin, à l'écart de la colonne d'options, et la couleur pleine disent
+        l'un comme l'autre qu'ils ne se combinent avec rien.
+
+        Deux sorties pour le même contenu : l'archive ZIP garde les pièces
+        séparées et rééditables (DXF, XLSX), le PDF complet les assemble en un
+        seul document à faire circuler. Deux couleurs distinctes, parce que le
+        résultat n'est pas du tout le même.
         """
         self._tout_en_un = False
+        self._pdf_complet = False
+
+        btn_pdf = QPushButton(i18n.tr('exp_pdf_complet'))
+        btn_pdf.setToolTip("%s\n\n%s" % (i18n.tr('exp_pdf_complet_resume'),
+                                         i18n.tr('exp_pdf_complet_note')))
+        btn_pdf.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_pdf.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        btn_pdf.setStyleSheet(self._STYLE_RACCOURCI.format(
+            fond="#6A1B9A", survol="#7E24B0", appui="#4E1273"))
+        btn_pdf.clicked.connect(self._on_pdf_complet)
 
         btn_zip = QPushButton(i18n.tr('exp_tout_en_un'))
         # Le résumé d'abord : c'est ce qu'on veut lire en survolant, le détail
         # des cas particuliers vient après.
         btn_zip.setToolTip("%s\n\n%s" % (i18n.tr('exp_tout_en_un_resume'),
                                          i18n.tr('exp_tout_en_un_note')))
-        btn_zip.setCursor(Qt.PointingHandCursor)
+        btn_zip.setCursor(Qt.CursorShape.PointingHandCursor)
         # Le bouton garde la largeur de son libellé, quelle que soit la place
         # laissée par le ressort : dans un coin, un bouton étiré n'en est plus
         # un. La hauteur suit le thème, la traduction la largeur.
-        btn_zip.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        btn_zip.setStyleSheet(
-            "QPushButton {"
-            "  background-color: #CC0000; color: #FFFFFF;"
-            "  font-weight: bold; border: none; border-radius: 3px;"
-            "  padding: 6px 14px;"
-            "}"
-            "QPushButton:hover  { background-color: #E01010; }"
-            "QPushButton:pressed{ background-color: #A30000; }"
-        )
+        btn_zip.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        btn_zip.setStyleSheet(self._STYLE_RACCOURCI.format(
+            fond="#CC0000", survol="#E01010", appui="#A30000"))
         btn_zip.clicked.connect(self._on_tout_en_un)
 
         coin = QHBoxLayout()
         coin.setContentsMargins(0, 0, 0, 0)
-        coin.addStretch()          # pousse le bouton dans le coin droit
+        coin.addStretch()          # pousse les boutons dans le coin droit
+        coin.addWidget(btn_pdf)
         coin.addWidget(btn_zip)
         layout.addLayout(coin)
 
@@ -267,6 +286,11 @@ class ExportDialog(QDialog):
         # fenêtre reste ouverte et un nouveau clic sur Exporter ne doit pas
         # partir en mode tout en un.
         self._tout_en_un = self._on_accept()
+
+    def _on_pdf_complet(self):
+        # Même précaution que ci-dessus. Les deux raccourcis partagent la
+        # chaîne de production : c'est le drapeau qui décide de la sortie.
+        self._pdf_complet = self._on_accept()
 
     # ------------------------------------------------------------------ lignes
 
@@ -340,6 +364,7 @@ class ExportDialog(QDialog):
             'coupe_papier':          self.coupe_papier.currentData(),
             'coupe_fichier':         self.coupe_fichier.currentText().lower(),
             'tout_en_un':            self._tout_en_un,
+            'pdf_complet':           self._pdf_complet,
             'output_dir':            self.dir_edit.text().strip(),
         }
 
@@ -372,13 +397,13 @@ def _libelle_papier(cle):
 
 def _vsep():
     sep = QFrame()
-    sep.setFrameShape(QFrame.VLine)
-    sep.setFrameShadow(QFrame.Sunken)
+    sep.setFrameShape(QFrame.Shape.VLine)
+    sep.setFrameShadow(QFrame.Shadow.Sunken)
     return sep
 
 
 def _hsep():
     sep = QFrame()
-    sep.setFrameShape(QFrame.HLine)
-    sep.setFrameShadow(QFrame.Sunken)
+    sep.setFrameShape(QFrame.Shape.HLine)
+    sep.setFrameShadow(QFrame.Shadow.Sunken)
     return sep

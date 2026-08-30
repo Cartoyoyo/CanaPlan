@@ -32,6 +32,14 @@ REQUIS = (
     ("typing_extensions", "typing_extensions"),
 )
 
+# Assemblage du PDF complet. Séparé de REQUIS : celui qui n'exporte jamais en
+# DXF n'a aucune raison de se voir proposer ezdxf pour fusionner des PDF, et
+# réciproquement. QGIS fournit déjà pypdf dans plusieurs de ses versions —
+# le cas courant est donc qu'il n'y ait rien à installer.
+REQUIS_PDF = (
+    ("pypdf", "pypdf==6.9.1"),
+)
+
 
 def libs_dir():
     """`<plugin>/libs`, créé au besoin et placé en tête du sys.path."""
@@ -43,11 +51,11 @@ def libs_dir():
     return libs
 
 
-def manquants():
-    """Spécifications pip des bibliothèques absentes, dans l'ordre de REQUIS."""
+def manquants(requis=None):
+    """Spécifications pip des bibliothèques absentes, dans l'ordre donné."""
     libs_dir()
     absents = []
-    for module, spec in REQUIS:
+    for module, spec in (requis or REQUIS):
         try:
             __import__(module)
         except Exception:
@@ -58,8 +66,8 @@ def manquants():
     return absents
 
 
-def tout_est_la():
-    return not manquants()
+def tout_est_la(requis=None):
+    return not manquants(requis)
 
 
 def interpreteur_python():
@@ -153,16 +161,20 @@ def installer(paquets, timeout=600):
     return True, sortie.strip()
 
 
-def assurer(parent=None):
+def assurer(parent=None, requis=None):
     """Garantit la présence des bibliothèques. Retourne True si on peut continuer.
 
     Appelée juste avant une fonction qui en dépend. Si tout est là, ne fait
     rien et ne montre rien. Sinon, propose l'installation ; l'utilisateur
     peut refuser, et la fonction appelante doit alors renoncer.
+
+    `requis` restreint la vérification à un sous-ensemble (REQUIS_PDF pour
+    l'assemblage du PDF complet) : chaque fonction ne réclame que ce dont
+    elle a besoin.
     """
-    if tout_est_la():
+    if tout_est_la(requis):
         return True
     from ..gui.dependances_dialog import DependancesDialog
-    dlg = DependancesDialog(manquants(), parent)
-    dlg.exec_()
-    return tout_est_la()
+    dlg = DependancesDialog(manquants(requis), parent)
+    dlg.exec()
+    return tout_est_la(requis)

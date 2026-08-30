@@ -3,8 +3,8 @@
 de l'assistant de création de projet.
 
 Implémentation en widget composite (QLineEdit + QListWidget empilés dans le
-même layout), pas en popup flottant Qt.Popup : un QListWidget top-level en
-Qt.Popup vole le focus du QLineEdit dès son affichage, ce qui déclenche
+même layout), pas en popup flottant Qt.WindowType.Popup : un QListWidget top-level en
+Qt.WindowType.Popup vole le focus du QLineEdit dès son affichage, ce qui déclenche
 focusOutEvent et referme la liste avant que l'utilisateur ait pu la voir.
 """
 
@@ -64,13 +64,13 @@ class BanSearchWidget(QWidget):
             if res.get('postcode'):
                 label = f"{label} ({res['postcode']})"
             item = QListWidgetItem(label)
-            item.setData(Qt.UserRole, res)
+            item.setData(Qt.ItemDataRole.UserRole, res)
             self._list.addItem(item)
 
         self._list.show()
 
     def _on_item_clicked(self, item):
-        res = item.data(Qt.UserRole)
+        res = item.data(Qt.ItemDataRole.UserRole)
         self._list.hide()
         self._edit.setText(res['label'])
         self.address_picked.emit(res['lon'], res['lat'], res['label'])

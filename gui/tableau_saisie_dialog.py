@@ -123,10 +123,10 @@ class TableauSaisieDialog(QDialog):
         self._chain_conduites = []    # fid de la conduite de chaque tronçon
 
         self.setWindowTitle(i18n.tr('ts_titre'))
-        self.setAttribute(Qt.WA_DeleteOnClose, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
         self.setWindowFlags(self.windowFlags()
-                             | Qt.WindowMaximizeButtonHint
-                             | Qt.WindowMinimizeButtonHint)
+                             | Qt.WindowType.WindowMaximizeButtonHint
+                             | Qt.WindowType.WindowMinimizeButtonHint)
         self.resize(1350, 600)
         self._build_ui()
         self._set_mini_map_layers()
@@ -137,7 +137,7 @@ class TableauSaisieDialog(QDialog):
     def _build_ui(self):
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
 
         left_widget = QWidget()
         layout = QVBoxLayout(left_widget)
@@ -171,11 +171,11 @@ class TableauSaisieDialog(QDialog):
         for role in ('regard', 'tabouret', 'conduite', 'branchement'):
             table = QTableWidget()
             table.setAlternatingRowColors(True)
-            table.setSelectionBehavior(QAbstractItemView.SelectItems)
-            table.setSelectionMode(QAbstractItemView.ExtendedSelection)
-            table.setEditTriggers(QAbstractItemView.DoubleClicked
-                                   | QAbstractItemView.EditKeyPressed
-                                   | QAbstractItemView.AnyKeyPressed)
+            table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
+            table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+            table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked
+                                   | QAbstractItemView.EditTrigger.EditKeyPressed
+                                   | QAbstractItemView.EditTrigger.AnyKeyPressed)
             if role == 'conduite':
                 table.itemChanged.connect(self._handle_conduite_edit)
             elif role == 'branchement':
@@ -229,6 +229,8 @@ class TableauSaisieDialog(QDialog):
         btn_close.clicked.connect(self.accept)
         bottom.addWidget(btn_close)
         layout.addLayout(bottom)
+
+        self.finished.connect(self._deselect_all)
 
         splitter.addWidget(left_widget)
 
@@ -357,8 +359,8 @@ class TableauSaisieDialog(QDialog):
                         nom_aval = aval_ref[3]
 
             item0 = QTableWidgetItem(f"{nom_amont} → {nom_aval}")
-            item0.setFlags(item0.flags() & ~Qt.ItemIsEditable)
-            item0.setData(Qt.UserRole, fid)
+            item0.setFlags(item0.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            item0.setData(Qt.ItemDataRole.UserRole, fid)
             table.setItem(row, 0, item0)
 
             longueur = _fnum(feat['longueur'])
@@ -367,7 +369,7 @@ class TableauSaisieDialog(QDialog):
                 self._write_attr(layer, fid, 'longueur', round(longueur, 2),
                                   role='conduite', record_undo=False)
             it_long = self._make_item(longueur, 2, fid, 'longueur')
-            it_long.setFlags(it_long.flags() & ~Qt.ItemIsEditable)
+            it_long.setFlags(it_long.flags() & ~Qt.ItemFlag.ItemIsEditable)
             it_long.setForeground(_COLOR_DERIVED)
             it_long.setToolTip(i18n.tr('ts_longueur_tip'))
             table.setItem(row, 1, it_long)
@@ -396,7 +398,7 @@ class TableauSaisieDialog(QDialog):
             fe_amont_val = _fnum(amont_ref[2]) if amont_ref else None
             it_fea = self._make_item(fe_amont_val, 3, fid, '__fe_amont')
             if amont_ref is None:
-                it_fea.setFlags(it_fea.flags() & ~Qt.ItemIsEditable)
+                it_fea.setFlags(it_fea.flags() & ~Qt.ItemFlag.ItemIsEditable)
             it_fea.setForeground(_COLOR_DERIVED)
             table.setItem(row, 4, it_fea)
 
@@ -412,7 +414,7 @@ class TableauSaisieDialog(QDialog):
 
             it_feav = self._make_item(fe_aval_val, 3, fid, '__fe_aval')
             if aval_ref is None:
-                it_feav.setFlags(it_feav.flags() & ~Qt.ItemIsEditable)
+                it_feav.setFlags(it_feav.flags() & ~Qt.ItemFlag.ItemIsEditable)
             it_feav.setForeground(_COLOR_DERIVED)
             table.setItem(row, 6, it_feav)
 
@@ -496,8 +498,8 @@ class TableauSaisieDialog(QDialog):
                 self._branch_by_cond.setdefault(cond_fid, []).append(fid)
 
             item0 = QTableWidgetItem(f"{nom_dep} → {nom_arr}")
-            item0.setFlags(item0.flags() & ~Qt.ItemIsEditable)
-            item0.setData(Qt.UserRole, fid)
+            item0.setFlags(item0.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            item0.setData(Qt.ItemDataRole.UserRole, fid)
             table.setItem(row, 0, item0)
 
             longueur = _fnum(feat['longueur'])
@@ -506,7 +508,7 @@ class TableauSaisieDialog(QDialog):
                 self._write_attr(layer, fid, 'longueur', round(longueur, 2),
                                   role='branchement', record_undo=False)
             it_long = self._make_item(longueur, 2, fid, 'longueur')
-            it_long.setFlags(it_long.flags() & ~Qt.ItemIsEditable)
+            it_long.setFlags(it_long.flags() & ~Qt.ItemFlag.ItemIsEditable)
             it_long.setForeground(_COLOR_DERIVED)
             it_long.setToolTip(i18n.tr('ts_longueur_tip'))
             table.setItem(row, 1, it_long)
@@ -554,7 +556,7 @@ class TableauSaisieDialog(QDialog):
 
             it_fe = self._make_item(fe_tab_val, 3, fid, '__fe_tabouret')
             if tab_ref is None:
-                it_fe.setFlags(it_fe.flags() & ~Qt.ItemIsEditable)
+                it_fe.setFlags(it_fe.flags() & ~Qt.ItemFlag.ItemIsEditable)
             it_fe.setForeground(_COLOR_DERIVED)
             table.setItem(row, 6, it_fe)
 
@@ -583,13 +585,13 @@ class TableauSaisieDialog(QDialog):
         else:
             val = raw_val if isinstance(raw_val, (int, float)) else _fnum(raw_val)
             item = QTableWidgetItem(_fmt(val, decimals))
-            item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             if val is None:
                 item.setForeground(_COLOR_MISSING)
-        item.setFlags(item.flags() | Qt.ItemIsEditable)
-        item.setData(Qt.UserRole, fid)
-        item.setData(Qt.UserRole + 1, fname)
-        item.setData(Qt.UserRole + 2, decimals)
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+        item.setData(Qt.ItemDataRole.UserRole, fid)
+        item.setData(Qt.ItemDataRole.UserRole + 1, fname)
+        item.setData(Qt.ItemDataRole.UserRole + 2, decimals)
         return item
 
     def _find_ouvrage(self, regard_layer, tabouret_layer, point):
@@ -655,9 +657,9 @@ class TableauSaisieDialog(QDialog):
     def _handle_cell_edit(self, role, item):
         if self._updating:
             return
-        fid = item.data(Qt.UserRole)
-        fname = item.data(Qt.UserRole + 1)
-        decimals = item.data(Qt.UserRole + 2)
+        fid = item.data(Qt.ItemDataRole.UserRole)
+        fname = item.data(Qt.ItemDataRole.UserRole + 1)
+        decimals = item.data(Qt.ItemDataRole.UserRole + 2)
         if fid is None or fname is None:
             return
 
@@ -687,9 +689,9 @@ class TableauSaisieDialog(QDialog):
         Matériau est un combo à part)."""
         if self._updating:
             return
-        fid = item.data(Qt.UserRole)
-        fname = item.data(Qt.UserRole + 1)
-        decimals = item.data(Qt.UserRole + 2)
+        fid = item.data(Qt.ItemDataRole.UserRole)
+        fname = item.data(Qt.ItemDataRole.UserRole + 1)
+        decimals = item.data(Qt.ItemDataRole.UserRole + 2)
         if fid is None or fname is None:
             return
 
@@ -751,7 +753,7 @@ class TableauSaisieDialog(QDialog):
             return
 
         layer = self.couches[self.reseau][role]
-        fid = tn_it.data(Qt.UserRole)
+        fid = tn_it.data(Qt.ItemDataRole.UserRole)
 
         self._updating = True
         try:
@@ -793,11 +795,11 @@ class TableauSaisieDialog(QDialog):
         flags = pente_item.flags()
         mode = st['mode']
         if mode == 'fe':
-            pente_item.setFlags(flags & ~Qt.ItemIsEditable)
+            pente_item.setFlags(flags & ~Qt.ItemFlag.ItemIsEditable)
             pente_item.setBackground(QColor(240, 240, 240))
             pente_item.setForeground(_COLOR_DERIVED)
         else:
-            pente_item.setFlags(flags | Qt.ItemIsEditable)
+            pente_item.setFlags(flags | Qt.ItemFlag.ItemIsEditable)
             pente_item.setBackground(QColor(255, 247, 205))
             pente_item.setForeground(QColor(0, 0, 0))
         st['sens_btn'].setText(self._COND_MODE_LABELS[mode])
@@ -927,9 +929,9 @@ class TableauSaisieDialog(QDialog):
         Cote piquage, ou directement FE tabouret."""
         if self._updating:
             return
-        fid = item.data(Qt.UserRole)
-        fname = item.data(Qt.UserRole + 1)
-        decimals = item.data(Qt.UserRole + 2)
+        fid = item.data(Qt.ItemDataRole.UserRole)
+        fname = item.data(Qt.ItemDataRole.UserRole + 1)
+        decimals = item.data(Qt.ItemDataRole.UserRole + 2)
         if fid is None or fname is None:
             return
 
@@ -989,11 +991,11 @@ class TableauSaisieDialog(QDialog):
         flags = pente_item.flags()
         mode = st['mode']
         if mode == 'fe':
-            pente_item.setFlags(flags & ~Qt.ItemIsEditable)
+            pente_item.setFlags(flags & ~Qt.ItemFlag.ItemIsEditable)
             pente_item.setBackground(QColor(240, 240, 240))
             pente_item.setForeground(_COLOR_DERIVED)
         else:
-            pente_item.setFlags(flags | Qt.ItemIsEditable)
+            pente_item.setFlags(flags | Qt.ItemFlag.ItemIsEditable)
             pente_item.setBackground(QColor(255, 247, 205))
             pente_item.setForeground(QColor(0, 0, 0))
         st['sens_btn'].setText(self._BRANCH_MODE_LABELS[mode])
@@ -1149,7 +1151,7 @@ class TableauSaisieDialog(QDialog):
     # ------------------------------------------------------------------ sélection multiple / édition groupée
 
     def _on_selection_changed(self, table):
-        items = [it for it in table.selectedItems() if it.flags() & Qt.ItemIsEditable]
+        items = [it for it in table.selectedItems() if it.flags() & Qt.ItemFlag.ItemIsEditable]
         if len(items) > 1:
             self._batch_items = items
             self._batch_table = table
@@ -1228,6 +1230,14 @@ class TableauSaisieDialog(QDialog):
 
     # ------------------------------------------------------------------ lien carte
 
+    def _deselect_all(self, *_args):
+        """Vide la sélection carte laissée par le tableau (EU et EP) à la
+        fermeture de la fenêtre, quel que soit le réseau affiché au moment
+        de la fermeture."""
+        for couches_reseau in self.couches.values():
+            for layer in couches_reseau.values():
+                layer.removeSelection()
+
     def _select_feature(self, role, fid):
         layer = self.couches[self.reseau][role]
         layer.removeSelection()
@@ -1244,7 +1254,7 @@ class TableauSaisieDialog(QDialog):
         return QgsRectangle(geom.boundingBox())
 
     def _zoom_to_item(self, role, item):
-        fid = item.data(Qt.UserRole)
+        fid = item.data(Qt.ItemDataRole.UserRole)
         if fid is None:
             return
         self._select_feature(role, fid)
@@ -1300,7 +1310,7 @@ class TableauSaisieDialog(QDialog):
         items = table.selectedItems()
         if not items:
             return
-        fid = items[0].data(Qt.UserRole)
+        fid = items[0].data(Qt.ItemDataRole.UserRole)
         if table is getattr(self, 'chain_table', None):
             row = items[0].row()
             if not self._chain_nodes or row >= len(self._chain_nodes):
@@ -1406,7 +1416,7 @@ class TableauSaisieDialog(QDialog):
                 if col >= table.columnCount():
                     continue
                 it = table.item(row, col)
-                if it is None or not (it.flags() & Qt.ItemIsEditable):
+                if it is None or not (it.flags() & Qt.ItemFlag.ItemIsEditable):
                     continue
                 it.setText(value.strip())
                 touched.append(it)
@@ -1445,7 +1455,7 @@ class TableauSaisieDialog(QDialog):
         else:
             item = self._item_registry.get((role, fid, fname))
             if item is not None:
-                decimals = item.data(Qt.UserRole + 2)
+                decimals = item.data(Qt.ItemDataRole.UserRole + 2)
                 self._updating = True
                 if decimals is None:
                     item.setText('' if value in (None, NULL) else str(value))
@@ -1520,10 +1530,10 @@ class TableauSaisieDialog(QDialog):
         self.chain_table.setToolTip(
             i18n.tr('ts_aide_tableau'))
         self.chain_table.setAlternatingRowColors(True)
-        self.chain_table.setSelectionBehavior(QAbstractItemView.SelectItems)
-        self.chain_table.setEditTriggers(QAbstractItemView.DoubleClicked
-                                          | QAbstractItemView.EditKeyPressed
-                                          | QAbstractItemView.AnyKeyPressed)
+        self.chain_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
+        self.chain_table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked
+                                          | QAbstractItemView.EditTrigger.EditKeyPressed
+                                          | QAbstractItemView.EditTrigger.AnyKeyPressed)
         self.chain_table.itemChanged.connect(self._handle_chain_edit)
         self.chain_table.itemSelectionChanged.connect(
             lambda: self._update_mini_map(self.chain_table))
@@ -1796,13 +1806,13 @@ class TableauSaisieDialog(QDialog):
             })
 
             it0 = QTableWidgetItem(_sval(feat['nom'], f"#{fid}"))
-            it0.setFlags(it0.flags() & ~Qt.ItemIsEditable)
-            it0.setData(Qt.UserRole, fid)
+            it0.setFlags(it0.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            it0.setData(Qt.ItemDataRole.UserRole, fid)
             table.setItem(i, 0, it0)
 
             it1 = QTableWidgetItem('Regard' if role == 'regard' else 'Tabouret')
-            it1.setFlags(it1.flags() & ~Qt.ItemIsEditable)
-            it1.setData(Qt.UserRole, fid)
+            it1.setFlags(it1.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            it1.setData(Qt.ItemDataRole.UserRole, fid)
             table.setItem(i, 1, it1)
 
             table.setItem(i, 2, self._make_item(tn, 3, fid, 'tn'))
@@ -1810,9 +1820,9 @@ class TableauSaisieDialog(QDialog):
             table.setItem(i, 4, self._make_item(fe, 3, fid, fe_field))
 
             it_cum = QTableWidgetItem(_fmt(cum, 2))
-            it_cum.setFlags(it_cum.flags() & ~Qt.ItemIsEditable)
+            it_cum.setFlags(it_cum.flags() & ~Qt.ItemFlag.ItemIsEditable)
             it_cum.setForeground(_COLOR_DERIVED)
-            it_cum.setData(Qt.UserRole, fid)
+            it_cum.setData(Qt.ItemDataRole.UserRole, fid)
             table.setItem(i, 5, it_cum)
 
         n = len(self._chain_nodes)
@@ -1823,13 +1833,13 @@ class TableauSaisieDialog(QDialog):
             if fe_a is not None and fe_b is not None and longueur:
                 pente = (fe_a - fe_b) / longueur * 100
             it_pente = QTableWidgetItem(_fmt(pente, 3))
-            it_pente.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            it_pente.setFlags(it_pente.flags() | Qt.ItemIsEditable)
+            it_pente.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            it_pente.setFlags(it_pente.flags() | Qt.ItemFlag.ItemIsEditable)
             it_pente.setForeground(_COLOR_MISSING if pente is None else QColor(0, 0, 0))
             table.setItem(i, 6, it_pente)
 
         it_last = QTableWidgetItem('')
-        it_last.setFlags(it_last.flags() & ~Qt.ItemIsEditable)
+        it_last.setFlags(it_last.flags() & ~Qt.ItemFlag.ItemIsEditable)
         table.setItem(n - 1, 6, it_last)
 
         table.blockSignals(False)
@@ -1851,8 +1861,8 @@ class TableauSaisieDialog(QDialog):
             return
 
         role, fid = self._chain_nodes[row]
-        fname = item.data(Qt.UserRole + 1)
-        decimals = item.data(Qt.UserRole + 2)
+        fname = item.data(Qt.ItemDataRole.UserRole + 1)
+        decimals = item.data(Qt.ItemDataRole.UserRole + 2)
         value = _parse_num(item.text())
         self._updating = True
         item.setText(_fmt(value, decimals))
@@ -2059,13 +2069,13 @@ class TableauSaisieDialog(QDialog):
     # ------------------------------------------------------------------ raccourcis clavier
 
     def keyPressEvent(self, event):
-        if event.matches(QKeySequence.Undo):
+        if event.matches(QKeySequence.StandardKey.Undo):
             self._undo()
             return
-        if event.matches(QKeySequence.Copy):
+        if event.matches(QKeySequence.StandardKey.Copy):
             self._copy_selection()
             return
-        if event.matches(QKeySequence.Paste):
+        if event.matches(QKeySequence.StandardKey.Paste):
             self._paste_selection()
             return
         super().keyPressEvent(event)

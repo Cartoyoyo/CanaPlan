@@ -31,7 +31,7 @@ from . import errlog
 _LOG_TAG = "CanaPlan/DXF"
 
 
-def _log(msg, level=Qgis.Info):
+def _log(msg, level=Qgis.MessageLevel.Info):
     QgsMessageLog.logMessage(msg, _LOG_TAG, level)
 
 
@@ -77,7 +77,7 @@ def _install_and_import_ezdxf():
         "--no-warn-script-location",
         "ezdxf", "fontTools", "pyparsing", "typing_extensions",
     ]
-    _log(f"Installation ezdxf dans {libs}…", Qgis.Info)
+    _log(f"Installation ezdxf dans {libs}…", Qgis.MessageLevel.Info)
     # cmd est bati juste au-dessus a partir de sys.executable et de noms de
     # paquets litteraux ; seul --target pointe vers libs/, un chemin calcule
     # depuis __file__. Liste d'arguments, sans shell.
@@ -199,7 +199,7 @@ def _read_layer_padding(lyr, fallback=0.4):
     lu depuis QgsTextBackgroundSettings. Fallback si lecture impossible.
     """
     try:
-        from qgis.core import QgsUnitTypes, QgsTextBackgroundSettings
+        from qgis.core import QgsTextBackgroundSettings
         labeling = lyr.labeling()
         if labeling is None:
             return fallback
@@ -211,7 +211,7 @@ def _read_layer_padding(lyr, fallback=0.4):
         unit = bg.sizeUnit()
         # On considère la moyenne X/Y comme padding uniforme
         avg = (size.width() + size.height()) / 2.0
-        if unit == QgsUnitTypes.RenderMapUnits:
+        if unit == Qgis.RenderUnit.MapUnits:
             return float(avg)
         # Si l'unité est mm/points/pixels, on ne peut pas convertir sans
         # connaître le DPI/échelle ; on laisse le fallback.
@@ -503,7 +503,7 @@ def _ensure_symbol_block(doc, role, reseau, rgb):
         try:
             doc.blocks.delete_block(block_name, safe=False)
         except Exception as exc:
-            _log(f"Impossible de supprimer {block_name} : {exc}", Qgis.Warning)
+            _log(f"Impossible de supprimer {block_name} : {exc}", Qgis.MessageLevel.Warning)
             return doc.blocks[block_name], block_name
 
     r, g, b = rgb
@@ -519,13 +519,13 @@ def _ensure_symbol_block(doc, role, reseau, rgb):
             ep.add_arc(center=(0, 0), radius=_REGARD_RADIUS,
                        start_angle=0, end_angle=360, ccw=True)
         except Exception as exc:
-            _log(f"Bloc {block_name} HATCH : {exc}", Qgis.Warning)
+            _log(f"Bloc {block_name} HATCH : {exc}", Qgis.MessageLevel.Warning)
         try:
             blk.add_circle((0, 0), _REGARD_RADIUS,
                            dxfattribs={'true_color': rgb_int,
                                        'lineweight': _SYM_LINEWEIGHT})
         except Exception as exc:
-            _log(f"Bloc {block_name} CIRCLE : {exc}", Qgis.Warning)
+            _log(f"Bloc {block_name} CIRCLE : {exc}", Qgis.MessageLevel.Warning)
     else:
         # Carré plein : HATCH + LWPOLYLINE, centré sur (0,0)
         h = _TABOURET_HALF
@@ -535,13 +535,13 @@ def _ensure_symbol_block(doc, role, reseau, rgb):
             hatch.set_solid_fill()
             hatch.paths.add_polyline_path(pts, is_closed=True)
         except Exception as exc:
-            _log(f"Bloc {block_name} HATCH : {exc}", Qgis.Warning)
+            _log(f"Bloc {block_name} HATCH : {exc}", Qgis.MessageLevel.Warning)
         try:
             blk.add_lwpolyline(pts, close=True,
                                dxfattribs={'true_color': rgb_int,
                                            'lineweight': _SYM_LINEWEIGHT})
         except Exception as exc:
-            _log(f"Bloc {block_name} LWPOLYLINE : {exc}", Qgis.Warning)
+            _log(f"Bloc {block_name} LWPOLYLINE : {exc}", Qgis.MessageLevel.Warning)
 
     # ATTDEFs invisibles (flags=1) — valeurs renseignées par add_auto_attribs()
     for tag, _field in _ATTDEF_FIELDS.get(role, []):
@@ -549,7 +549,7 @@ def _ensure_symbol_block(doc, role, reseau, rgb):
             blk.add_attdef(tag, (0, 0),
                            dxfattribs={'height': 0.25, 'flags': 1, 'prompt': tag})
         except Exception as exc:
-            _log(f"Bloc {block_name} ATTDEF {tag} : {exc}", Qgis.Warning)
+            _log(f"Bloc {block_name} ATTDEF {tag} : {exc}", Qgis.MessageLevel.Warning)
 
     _log(f"Bloc {block_name} créé ({len(_ATTDEF_FIELDS.get(role, []))} ATTDEFs).")
     return blk, block_name
@@ -580,7 +580,7 @@ def add_point_symbols(dxf_path):
     sym_index = _build_point_symbol_index()
     if not sym_index:
         _log("Aucune couche regard_*/tabouret_* visible → aucun symbole ponctuel.",
-             Qgis.Warning)
+             Qgis.MessageLevel.Warning)
         return 0
 
     doc = ezdxf.readfile(dxf_path)
@@ -630,7 +630,7 @@ def add_point_symbols(dxf_path):
                         ref.set_xdata(_XDATA_APPID, _attrs_to_xdata(attrs))
                     except Exception as exc:
                         _log(f"XDATA {block_name} ({x:.1f},{y:.1f}) : {exc}",
-                             Qgis.Warning)
+                             Qgis.MessageLevel.Warning)
                 # ATTRIB : attributs visibles au double-clic dans AutoCAD Map
                 if attdef_map and attrs:
                     try:
@@ -645,11 +645,11 @@ def add_point_symbols(dxf_path):
                         ref.add_auto_attribs(attrib_values)
                     except Exception as exc:
                         _log(f"ATTRIB {block_name} ({x:.1f},{y:.1f}) : {exc}",
-                             Qgis.Warning)
+                             Qgis.MessageLevel.Warning)
                 n_written += 1
             except Exception as exc:
                 _log(f"INSERT {block_name} ({x:.1f},{y:.1f}) : {exc}",
-                     Qgis.Warning)
+                     Qgis.MessageLevel.Warning)
 
     doc.saveas(dxf_path)
     _log(f"add_point_symbols : {n_written} INSERT écrits "
@@ -674,17 +674,17 @@ def apply_ltscale(dxf_path, export_scale):
     try:
         import ezdxf
     except ImportError:
-        _log("apply_ltscale : ezdxf absent, ltscale ignoré.", Qgis.Warning)
+        _log("apply_ltscale : ezdxf absent, ltscale ignoré.", Qgis.MessageLevel.Warning)
         return 0
 
     if not os.path.exists(dxf_path):
-        _log(f"apply_ltscale : fichier absent {dxf_path}", Qgis.Warning)
+        _log(f"apply_ltscale : fichier absent {dxf_path}", Qgis.MessageLevel.Warning)
         return 0
 
     try:
         doc = ezdxf.readfile(dxf_path)
     except Exception as exc:
-        _log(f"apply_ltscale lecture : {exc}", Qgis.Warning)
+        _log(f"apply_ltscale lecture : {exc}", Qgis.MessageLevel.Warning)
         return 0
 
     # ── Import local pour réutiliser _build_lt_reseau_map sans dépendance circulaire
@@ -696,14 +696,14 @@ def apply_ltscale(dxf_path, export_scale):
 
     if not lt_reseau:
         _log("apply_ltscale : aucun linetype EU/EP détecté — pas de modification.",
-             Qgis.Info)
+             Qgis.MessageLevel.Info)
         return 0
 
     # Header global : $LTSCALE = 1.0 (neutre ; per-entity fait le travail fin)
     try:
         doc.header['$LTSCALE'] = 1.0
     except Exception as exc:
-        _log(f"apply_ltscale $LTSCALE header : {exc}", Qgis.Warning)
+        _log(f"apply_ltscale $LTSCALE header : {exc}", Qgis.MessageLevel.Warning)
 
     # Valeur per-entity : calibrée pour coordonnées en mètres (Lambert 93)
     entity_scale = max(0.01, float(export_scale) / 1000.0)
@@ -726,7 +726,7 @@ def apply_ltscale(dxf_path, export_scale):
         _log(f"apply_ltscale : {n_modified} entité(s) → ltscale={entity_scale:.4f} "
              f"(scale={export_scale}).")
     except Exception as exc:
-        _log(f"apply_ltscale sauvegarde : {exc}", Qgis.Warning)
+        _log(f"apply_ltscale sauvegarde : {exc}", Qgis.MessageLevel.Warning)
         return 0
 
     return n_modified
@@ -741,13 +741,13 @@ def add_label_decorations(dxf_path):
     try:
         import ezdxf
     except ImportError:
-        _log("ezdxf absent — tentative d'installation via pip…", Qgis.Info)
+        _log("ezdxf absent — tentative d'installation via pip…", Qgis.MessageLevel.Info)
         try:
             ezdxf = _install_and_import_ezdxf()
-            _log("ezdxf installé avec succès.", Qgis.Info)
+            _log("ezdxf installé avec succès.", Qgis.MessageLevel.Info)
         except Exception as exc:
             _log(f"Installation ezdxf échouée : {exc}\n{traceback.format_exc()}",
-                 Qgis.Critical)
+                 Qgis.MessageLevel.Critical)
             raise RuntimeError(
                 i18n.tr('dxf_ezdxf_manquant', detail=exc)
             ) from exc
@@ -762,7 +762,7 @@ def add_label_decorations(dxf_path):
          f"{[(k, len(v)) for k, v in origin_index.items() if k == k.lower() or True][:6]}")
     if not origin_index:
         _log("Aucune couche regard_*/tabouret_* visible avec champ 'nom' — "
-             "rien à décorer.", Qgis.Warning)
+             "rien à décorer.", Qgis.MessageLevel.Warning)
         return 0
 
     doc = ezdxf.readfile(dxf_path)
@@ -774,7 +774,7 @@ def add_label_decorations(dxf_path):
             doc.styles.add(_BET_TEXT_STYLE, font=_BET_TEXT_FONT)
         except Exception as exc:
             _log(f"Création style « {_BET_TEXT_STYLE} » échouée : {exc} "
-                 "— fallback STANDARD (txt.shx, plus large)", Qgis.Warning)
+                 "— fallback STANDARD (txt.shx, plus large)", Qgis.MessageLevel.Warning)
 
     # Collecte des MTEXT à décorer (modification pendant itération interdite)
     to_decorate = []
@@ -873,7 +873,7 @@ def add_label_decorations(dxf_path):
             hatch.paths.add_polyline_path(rect_pts, is_closed=True)
             hatch.set_solid_fill(color=_FILL_COLOR_ACI)
         except Exception as exc:
-            _log(f"HATCH échoué : {exc}", Qgis.Warning)
+            _log(f"HATCH échoué : {exc}", Qgis.MessageLevel.Warning)
 
         # Contour
         try:
@@ -956,7 +956,7 @@ def add_label_decorations(dxf_path):
                 line_added = True
             except Exception as exc:
                 _log(f"Ajout TEXT « {line_text[:30]} » échoué : {exc}",
-                     Qgis.Warning)
+                     Qgis.MessageLevel.Warning)
 
         if line_added:
             n_decorated += 1

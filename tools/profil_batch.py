@@ -3,10 +3,10 @@
 
 from collections import deque
 
-import sip
+from qgis.PyQt import sip
 from qgis.core import QgsPointXY, QgsGeometry
 
-from .graph_utils import _to_float, QGIS_NULL, build_graph
+from .graph_utils import _to_float, QGIS_NULL, build_graph, bfs
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -85,6 +85,19 @@ def _main_trunk_chain(couches):
     regards = [regard_by_id[rid] for rid in r_ids if rid in regard_by_id]
     if len(regards) < 2 or not c_feats:
         return None, None
+
+    # Le regard le plus profond doit toujours apparaître à gauche du
+    # profil : si c'est celui de fin, on refait le même BFS dans l'autre
+    # sens (et non une simple inversion des listes, pour ne pas décaler
+    # les piquages qui restent mesurés depuis le début de leur conduite).
+    prof_first = _fval(regards[0], 'profondeur')
+    prof_last  = _fval(regards[-1], 'profondeur')
+    if prof_last is not None and (prof_first is None or prof_last > prof_first):
+        r_ids_rev, c_feats_rev = bfs(graph, r_ids[-1], r_ids[0])
+        if r_ids_rev is not None:
+            r_ids, c_feats = r_ids_rev, c_feats_rev
+            regards = [regard_by_id[rid] for rid in r_ids if rid in regard_by_id]
+
     return regards, c_feats
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import colorsys
 from typing import Dict, Optional, Tuple
 from ... import errlog
+from qgis.core import Qgis
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +265,7 @@ def apply_dxf_style(
         from qgis.core import (
             QgsSingleSymbolRenderer, QgsSymbol,
             QgsSimpleLineSymbolLayer, QgsSimpleFillSymbolLayer,
-            QgsUnitTypes, QgsWkbTypes,
+            QgsWkbTypes,
         )
         from qgis.PyQt.QtGui import QColor
     except Exception:
@@ -306,28 +307,28 @@ def apply_dxf_style(
 
         symbol.setColor(qcolor)
 
-        if geom_type == QgsWkbTypes.LineGeometry:
+        if geom_type == QgsWkbTypes.GeometryType.LineGeometry:
             # Walk symbol layers to reach the SimpleLineSymbolLayer
             for idx in range(symbol.symbolLayerCount()):
                 sl = symbol.symbolLayer(idx)
                 if isinstance(sl, QgsSimpleLineSymbolLayer):
                     sl.setColor(qcolor)
                     sl.setWidth(lw_mm)
-                    sl.setWidthUnit(QgsUnitTypes.RenderMillimeters)
+                    sl.setWidthUnit(Qgis.RenderUnit.Millimeters)
                     if dash:
                         sl.setUseCustomDashPattern(True)
                         sl.setCustomDashVector(dash)
-                        sl.setCustomDashPatternUnit(QgsUnitTypes.RenderMillimeters)
+                        sl.setCustomDashPatternUnit(Qgis.RenderUnit.Millimeters)
                     break
 
-        elif geom_type == QgsWkbTypes.PolygonGeometry:
+        elif geom_type == QgsWkbTypes.GeometryType.PolygonGeometry:
             for idx in range(symbol.symbolLayerCount()):
                 sl = symbol.symbolLayer(idx)
                 if isinstance(sl, QgsSimpleFillSymbolLayer):
                     sl.setStrokeColor(qcolor)
                     sl.setFillColor(QColor(qcolor.red(), qcolor.green(), qcolor.blue(), 40))
                     sl.setStrokeWidth(lw_mm)
-                    sl.setStrokeWidthUnit(QgsUnitTypes.RenderMillimeters)
+                    sl.setStrokeWidthUnit(Qgis.RenderUnit.Millimeters)
                     break
 
         # Point/annotation: color already set via symbol.setColor()

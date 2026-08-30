@@ -27,8 +27,8 @@ centre de la zone carte, exactement comme dans _generate_pdf().
 """
 import math
 
-import sip
-from qgis.core import QgsPointXY, QgsWkbTypes
+from qgis.PyQt import sip
+from qgis.core import Qgis, QgsPointXY, QgsWkbTypes
 from . import errlog
 
 # Marge de sécurité autour du réseau, en MILLIMÈTRES PAPIER et non en
@@ -115,7 +115,7 @@ def mesurer_etiquettes(couches, echelle):
     étiquette de regard tient facilement sur quarante millimètres.
     """
     from qgis.core import (QgsExpression, QgsExpressionContext,
-                           QgsExpressionContextUtils, QgsUnitTypes)
+                           QgsExpressionContextUtils)
     from ..gui.etiquettes import pal_settings
 
     larg_max = 0.0
@@ -131,7 +131,7 @@ def mesurer_etiquettes(couches, echelle):
 
         try:
             fmt = pal.format()
-            if fmt.sizeUnit() == QgsUnitTypes.RenderPoints:
+            if fmt.sizeUnit() == Qgis.RenderUnit.Points:
                 haut_mm = fmt.size() * 25.4 / 72.0
             else:
                 # Unités carte : la taille est au sol, on la ramène au papier.
@@ -217,7 +217,7 @@ def collecter_points(couches, pas):
             geom = feat.geometry()
             if geom is None or geom.isEmpty():
                 continue
-            if pas > 0 and geom.type() == QgsWkbTypes.LineGeometry:
+            if pas > 0 and geom.type() == QgsWkbTypes.GeometryType.LineGeometry:
                 try:
                     geom = geom.densifyByDistance(pas)
                 except Exception as _err:

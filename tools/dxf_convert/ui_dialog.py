@@ -2,9 +2,11 @@
 
 import os, shutil, traceback
 from qgis.PyQt.QtWidgets import (QDialog, QFileDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QComboBox, QDoubleSpinBox, QSpinBox, QCheckBox, QWidget, QTextBrowser, QGridLayout, QListWidget, QListWidgetItem)
+    QComboBox, QDoubleSpinBox, QSpinBox, QCheckBox, QWidget, QTextBrowser, QGridLayout, QListWidget, QListWidgetItem,
+    QAbstractItemView)
 from qgis.PyQt.QtCore import Qt, QCoreApplication
-from qgis.core import QgsVectorLayer, QgsProject
+from qgis.PyQt.QtGui import QTextCursor
+from qgis.core import Qgis, QgsVectorLayer, QgsProject
 
 from ...tools import i18n
 from .services.dwg_support import dwg_to_temp_dxf_auto, check_dwg_converter_available, get_converter_help
@@ -155,9 +157,10 @@ class CadToGisDialog(QDialog):
         grid.addWidget(wrap2, 1, 1, 1, 2)
 
         # Row 2: Layer preview list
-        grid.addWidget(QLabel(i18n.tr('dx_apercu_calques')), 2, 0, Qt.AlignTop)
+        grid.addWidget(QLabel(i18n.tr('dx_apercu_calques')), 2, 0, Qt.AlignmentFlag.AlignTop)
         self.layer_list = QListWidget()
-        self.layer_list.setSelectionMode(self.layer_list.MultiSelection)
+        self.layer_list.setSelectionMode(
+            QAbstractItemView.SelectionMode.MultiSelection)
         self.layer_list.itemSelectionChanged.connect(self.sync_layers_csv_from_preview)
         self.layer_list.itemChanged.connect(self.sync_layers_csv_from_preview)
         grid.addWidget(self.layer_list, 2, 1, 1, 2)
@@ -227,7 +230,7 @@ class CadToGisDialog(QDialog):
         grid.addWidget(self.dxf_version, 11, 1, 1, 2)
 
         # Row 12: Options
-        grid.addWidget(QLabel(i18n.tr('dx_options')), 12, 0, Qt.AlignTop)
+        grid.addWidget(QLabel(i18n.tr('dx_options')), 12, 0, Qt.AlignmentFlag.AlignTop)
         options_wrap = QWidget(); fl = QVBoxLayout(options_wrap); fl.setContentsMargins(0,0,0,0)
         self.chk_overwrite = QCheckBox(i18n.tr('dx_ecraser')); self.chk_overwrite.setChecked(False)
         self.chk_text_attrs = QCheckBox(i18n.tr('dx_format_texte')); self.chk_text_attrs.setChecked(True)
@@ -425,7 +428,7 @@ class CadToGisDialog(QDialog):
             self.out_html.append(msg.replace("\n","<br>"))
             try:
             # 滾到最底，確保新訊息可見
-                self.out_html.moveCursor(self.out_html.textCursor().End)
+                self.out_html.moveCursor(QTextCursor.MoveOperation.End)
             except Exception as _err:
                 errlog.ignored(_err, "ui_dialog.log:429")
         # ★ 關鍵：立即處理事件，讓 UI 不必等任務結束才重畫
@@ -435,7 +438,7 @@ class CadToGisDialog(QDialog):
         names = set()
         for i in range(self.layer_list.count()):
             it = self.layer_list.item(i)
-            if it.checkState() == Qt.Checked or it.isSelected():
+            if it.checkState() == Qt.CheckState.Checked or it.isSelected():
                 names.add(it.text())
         self.layers_edit.setText(", ".join(sorted(names)))
 
@@ -444,7 +447,7 @@ class CadToGisDialog(QDialog):
         for i in range(self.layer_list.count()):
             it = self.layer_list.item(i)
             it.setSelected(True)
-            it.setCheckState(Qt.Checked)
+            it.setCheckState(Qt.CheckState.Checked)
         self.layer_list.blockSignals(False)
         self.sync_layers_csv_from_preview()
 
@@ -453,7 +456,7 @@ class CadToGisDialog(QDialog):
         for i in range(self.layer_list.count()):
             it = self.layer_list.item(i)
             it.setSelected(False)
-            it.setCheckState(Qt.Unchecked)
+            it.setCheckState(Qt.CheckState.Unchecked)
         self.layer_list.blockSignals(False)
         self.sync_layers_csv_from_preview()
 
@@ -496,7 +499,7 @@ class CadToGisDialog(QDialog):
                 self.log("<i>No layers found.</i>")
             else:
                 for nm in names:
-                    it = QListWidgetItem(nm); it.setCheckState(Qt.Unchecked)
+                    it = QListWidgetItem(nm); it.setCheckState(Qt.CheckState.Unchecked)
                     self.layer_list.addItem(it)
                 self.log(f"Found {len(names)} layer(s).")
 
@@ -537,7 +540,7 @@ class CadToGisDialog(QDialog):
             settings = QgsPalLayerSettings()
             settings.fieldName = text_field
             settings.enabled = True
-            settings.placement = QgsPalLayerSettings.OverPoint
+            settings.placement = Qgis.LabelPlacement.OverPoint
 
             fmt = QgsTextFormat()
             fmt.setFont(QFont("Arial", 7))
@@ -547,7 +550,7 @@ class CadToGisDialog(QDialog):
 
             if "rotation" in field_lower:
                 dp = settings.dataDefinedProperties()
-                dp.setProperty(QgsPalLayerSettings.LabelRotation,
+                dp.setProperty(QgsPalLayerSettings.Property.LabelRotation,
                                QgsProperty.fromField(field_lower["rotation"]))
                 settings.setDataDefinedProperties(dp)
 

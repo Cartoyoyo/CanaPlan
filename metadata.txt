@@ -2,8 +2,9 @@
 name=CanaPlan – Réseau Assainissement
 description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE).
 icon=icon/icon.png
-version=1.7.1
-qgisMinimumVersion=3.28
+version=1.8
+qgisMinimumVersion=3.40
+qgisMaximumVersion=4.99
 author=Yoan Laloux
 email=y.laloux@vichy-communaute.fr
 linkedin=https://www.linkedin.com/in/ylaloux/
@@ -18,6 +19,44 @@ deprecated=False
 about=CanaPlan est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement EU (Eaux Usées) et EP (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement. La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle. Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE).
 
 changelog=
+    1.8  Compatibilite QGIS 4 / Qt 6. Le plugin tourne desormais sur QGIS 4
+         comme sur QGIS 3.40+ : tous les enumeres Qt et QGIS sont ecrits sous
+         leur forme qualifiee (Qt.AlignmentFlag.AlignCenter et non
+         Qt.AlignCenter), que PyQt6 est seul a accepter ; les niveaux de la
+         barre de messages passent de leurs valeurs numeriques a
+         Qgis.MessageLevel ; QgsUnitTypes, deprecie, cede la place a
+         Qgis.RenderUnit ; les appels a QMouseEvent.globalPos(), supprime en
+         Qt 6, sont remplaces par QCursor.pos(). Les 85 modules du plugin
+         s'importent sans erreur sous QGIS 4.2.1. metadata.txt declare
+         qgisMinimumVersion=3.40 et qgisMaximumVersion=4.99.
+         Nouveau bouton « PDF complet » dans la fenetre d'export, a cote de
+         « Toutes les pieces (ZIP) » : le meme contenu, mais assemble en un
+         seul document a faire circuler — plan, puis profils EU/EP, puis
+         coupes types, puis cubature. Le DXF et le classeur XLSX ne sont pas
+         produits, ne s'assemblant pas dans un PDF. L'assemblage utilise
+         pypdf, verifie et propose a l'installation avant de produire quoi que
+         ce soit, et non apres avoir fait poser les feuilles du plan ; QGIS le
+         fournit deja dans plusieurs de ses versions, le cas courant est donc
+         qu'il n'y ait rien a installer. Le compte rendu de fin d'export, ZIP
+         comme PDF, propose desormais d'ouvrir le dossier de sortie.
+         Profils en long : le regard le plus profond est toujours place a
+         gauche, quel que soit l'ordre dans lequel on clique le depart et
+         l'arrivee, et quel que soit le sens trouve par le parcours
+         automatique du collecteur principal.
+         Etiquettes : le seuil de dezoom se deduit desormais de l'echelle
+         d'impression cible et non de la limite de lisibilite du texte. Il
+         valait 1/1667 pour une cible au 1/150, si bas que les etiquettes
+         disparaissaient des qu'on s'ecartait de l'echelle du plan ; il passe
+         a dix fois l'echelle cible, plafonne a 1/2000.
+         Materiau « Recycle » ajoute aux remblais, dans la configuration
+         rapide, la coupe transversale et la coupe de tranchee composee.
+         Assistant de creation de projet : le recapitulatif, qui empile six
+         blocs, devient defilant et ne deborde plus de l'ecran ; la fenetre
+         s'ouvre a la taille disponible.
+         Tableau de saisie : la selection laissee sur la carte est videe a la
+         fermeture, sur les deux reseaux.
+         Paquet : analyze_ml.py, dernier script de mise au point du parseur
+         DXF encore livre, rejoint les trois autres retires en 1.7.1.
     1.7.1  Trois scripts de mise au point du parseur DXF partaient par erreur
          dans le paquet de la 1.7.0. Ils n'etaient importes par aucun module et
          pointaient en dur vers une machine de developpement, mais l'analyse de

@@ -2019,6 +2019,11 @@ TR = {
         'es': "Carpeta: {chemin}", 'pt': "Pasta: {chemin}",
         'de': "Ordner: {chemin}",
     },
+    'msg_ouvrir_dossier': {
+        'fr': "Ouvrir le dossier", 'en': "Open folder",
+        'es': "Abrir la carpeta", 'pt': "Abrir a pasta",
+        'de': "Ordner öffnen",
+    },
     'msg_crs_non_metrique': {
         'fr': "Le CRS du projet ({crs}) n'est pas en mètres.\nLes dimensions "
               "des planches risquent d'être incorrectes.\nRecommandé : "
@@ -2296,6 +2301,102 @@ TR = {
         'es': "No se pudo crear el archivo: {erreur}",
         'pt': "Não foi possível criar o arquivo: {erreur}",
         'de': "Archiv konnte nicht erstellt werden: {erreur}",
+    },
+    # -- PDF complet -------------------------------------------------------
+    'exp_pdf_complet': {
+        'fr': "PDF complet", 'en': "Complete PDF",
+        'es': "PDF completo", 'pt': "PDF completo",
+        'de': "Gesamt-PDF",
+    },
+    'exp_pdf_complet_resume': {
+        'fr': "Plan, profils EU/EP, coupes types et cubature réunis dans un "
+              "seul document PDF.",
+        'en': "Map, EU/EP profiles, typical sections and earthworks gathered "
+              "in a single PDF document.",
+        'es': "Plano, perfiles EU/EP, secciones tipo y cubicación reunidos en "
+              "un solo documento PDF.",
+        'pt': "Planta, perfis EU/EP, secções tipo e cubagem reunidos num único "
+              "documento PDF.",
+        'de': "Plan, EU/EP-Längsschnitte, Regelquerschnitte und Massen in "
+              "einem einzigen PDF-Dokument.",
+    },
+    'exp_pdf_complet_note': {
+        'fr': "Même contenu que « Toutes les pièces », mais assemblé en un "
+              "seul PDF au lieu d'une archive : plan, puis profils, puis "
+              "coupes types, puis cubature. Le DXF et le classeur XLSX ne sont "
+              "pas produits — ils ne s'assemblent pas dans un PDF. Les cases "
+              "ci-dessus sont ignorées. Le cadrage du plan reste à poser sur "
+              "la carte : le document est assemblé ensuite.",
+        'en': "Same content as “All documents”, assembled into a single PDF "
+              "instead of an archive: map, then profiles, then typical "
+              "sections, then earthworks. The DXF and the XLSX workbook are "
+              "not produced — they cannot be merged into a PDF. The boxes "
+              "above are ignored. The map framing is still placed on the "
+              "canvas: the document is assembled afterwards.",
+        'es': "Mismo contenido que «Todos los documentos», pero reunido en un "
+              "solo PDF en lugar de un archivo: plano, perfiles, secciones "
+              "tipo y cubicación. No se generan el DXF ni el libro XLSX, que "
+              "no pueden integrarse en un PDF. Las casillas anteriores se "
+              "ignoran. El encuadre del plano sigue colocándose en el mapa: "
+              "el documento se monta después.",
+        'pt': "Mesmo conteúdo que «Todos os documentos», mas reunido num único "
+              "PDF em vez de um arquivo: planta, perfis, secções tipo e "
+              "cubagem. O DXF e o livro XLSX não são produzidos — não podem "
+              "ser integrados num PDF. As caixas acima são ignoradas. O "
+              "enquadramento da planta continua a ser colocado no mapa: o "
+              "documento é montado a seguir.",
+        'de': "Gleicher Inhalt wie „Alle Unterlagen“, jedoch zu einem einzigen "
+              "PDF zusammengefügt statt zu einem Archiv: Plan, dann "
+              "Längsschnitte, dann Regelquerschnitte, dann Massen. DXF und "
+              "XLSX-Arbeitsmappe werden nicht erzeugt — sie lassen sich nicht "
+              "in ein PDF einfügen. Die Kästchen oben werden ignoriert. Der "
+              "Planausschnitt wird weiterhin auf der Karte gesetzt: das "
+              "Dokument wird danach zusammengefügt.",
+    },
+    'msg_pdf_complet': {
+        'fr': "PDF complet", 'en': "Complete PDF",
+        'es': "PDF completo", 'pt': "PDF completo",
+        'de': "Gesamt-PDF",
+    },
+    'msg_pdf_complet_pose': {
+        'fr': "Sorties automatiques écrites. Posez maintenant le cadrage du "
+              "plan : le PDF complet sera assemblé ensuite.",
+        'en': "Automatic outputs written. Now place the map framing: the "
+              "complete PDF will be assembled afterwards.",
+        'es': "Salidas automáticas escritas. Coloque ahora el encuadre del "
+              "plano: el PDF completo se montará después.",
+        'pt': "Saídas automáticas escritas. Coloque agora o enquadramento da "
+              "planta: o PDF completo será montado a seguir.",
+        'de': "Automatische Ausgaben geschrieben. Setzen Sie nun den "
+              "Planausschnitt: das Gesamt-PDF wird danach zusammengefügt.",
+    },
+    'msg_pdf_ok': {
+        'fr': "PDF complet créé : {fichier} ({nb} pages)",
+        'en': "Complete PDF created: {fichier} ({nb} pages)",
+        'es': "PDF completo creado: {fichier} ({nb} páginas)",
+        'pt': "PDF completo criado: {fichier} ({nb} páginas)",
+        'de': "Gesamt-PDF erstellt: {fichier} ({nb} Seiten)",
+    },
+    'msg_pdf_ordre': {
+        'fr': "Ordre d'assemblage : {pieces}",
+        'en': "Assembly order: {pieces}",
+        'es': "Orden de montaje: {pieces}",
+        'pt': "Ordem de montagem: {pieces}",
+        'de': "Reihenfolge: {pieces}",
+    },
+    'msg_pdf_vide': {
+        'fr': "Aucun PDF n'a pu être produit : document non créé.",
+        'en': "No PDF could be produced: document not created.",
+        'es': "No se pudo producir ningún PDF: documento no creado.",
+        'pt': "Nenhum PDF pôde ser produzido: documento não criado.",
+        'de': "Es konnte kein PDF erzeugt werden: Dokument nicht erstellt.",
+    },
+    'msg_pdf_erreur': {
+        'fr': "Assemblage du PDF impossible : {erreur}",
+        'en': "Could not assemble the PDF: {erreur}",
+        'es': "No se pudo montar el PDF: {erreur}",
+        'pt': "Não foi possível montar o PDF: {erreur}",
+        'de': "PDF konnte nicht zusammengefügt werden: {erreur}",
     },
     # -- Cadrage des planches (fenetre d'impression) ------------------------
     'pd_cadrage': {

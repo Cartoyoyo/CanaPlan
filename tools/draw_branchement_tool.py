@@ -3,13 +3,14 @@
 import math
 
 from qgis.core import (
+    Qgis,
     QgsPointXY, QgsGeometry, QgsFeature, QgsWkbTypes,
     QgsVectorLayer, QgsProject, QgsDistanceArea
 )
 from qgis.gui import QgsMapToolEmitPoint, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import QMessageBox, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QToolTip
-from qgis.PyQt.QtGui import QColor
+from qgis.PyQt.QtGui import QColor, QCursor
 
 from . import i18n
 
@@ -46,44 +47,44 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         self.pk_debut = None        # pk du point de piquage
 
         # Rubber band pour le tracé temporaire
-        self.rubber = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self.rubber = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
         color = QColor(255, 0, 0) if reseau == "EU" else QColor(0, 0, 255)
         self.rubber.setColor(color)
         self.rubber.setWidth(2)
 
         # Indicateur de snap : croix au point projeté
-        self.snap_cross = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self.snap_cross = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
         self.snap_cross.setColor(QColor(0, 200, 0))
         self.snap_cross.setWidth(2)
 
         # Indicateur de snap : traits perpendiculaires sur la conduite
-        self.snap_ticks = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self.snap_ticks = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
         self.snap_ticks.setColor(QColor(0, 200, 0))
         self.snap_ticks.setWidth(2)
 
         # Surlignage orange de la conduite ciblée
-        self.highlight_band = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self.highlight_band = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
         self.highlight_band.setColor(QColor(255, 140, 0))
         self.highlight_band.setWidth(4)
 
     def activate(self):
         super().activate()
-        self.canvas.setCursor(Qt.CrossCursor)
+        self.canvas.setCursor(Qt.CursorShape.CrossCursor)
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             f"Branchement {self.reseau}",
             i18n.tr('ot_aide_branchement'),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     def deactivate(self):
         from qgis.utils import iface
         iface.messageBar().clearWidgets()
         QToolTip.hideText()
-        self.rubber.reset(QgsWkbTypes.LineGeometry)
-        self.snap_cross.reset(QgsWkbTypes.LineGeometry)
-        self.snap_ticks.reset(QgsWkbTypes.LineGeometry)
-        self.highlight_band.reset(QgsWkbTypes.LineGeometry)
+        self.rubber.reset(QgsWkbTypes.GeometryType.LineGeometry)
+        self.snap_cross.reset(QgsWkbTypes.GeometryType.LineGeometry)
+        self.snap_ticks.reset(QgsWkbTypes.GeometryType.LineGeometry)
+        self.highlight_band.reset(QgsWkbTypes.GeometryType.LineGeometry)
         self.points = []
         super().deactivate()
 
@@ -97,14 +98,14 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
                 pk, total_len = pk_info
                 texte = (f"{pk:.2f} m / {total_len - pk:.2f} m"
                           .replace('.', ','))
-                QToolTip.showText(event.globalPos(), texte, self.canvas)
+                QToolTip.showText(QCursor.pos(), texte, self.canvas)
             else:
                 QToolTip.hideText()
         else:
             # Tracé en cours : masquer les indicateurs et mettre à jour le rubber band
-            self.snap_cross.reset(QgsWkbTypes.LineGeometry)
-            self.snap_ticks.reset(QgsWkbTypes.LineGeometry)
-            self.highlight_band.reset(QgsWkbTypes.LineGeometry)
+            self.snap_cross.reset(QgsWkbTypes.GeometryType.LineGeometry)
+            self.snap_ticks.reset(QgsWkbTypes.GeometryType.LineGeometry)
+            self.highlight_band.reset(QgsWkbTypes.GeometryType.LineGeometry)
             temp_points = self.snapped_points.copy()
             temp_points.append(point)
             self.rubber.setToGeometry(QgsGeometry.fromPolylineXY(temp_points), None)
@@ -123,7 +124,7 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
                 deviation_sommet = 180.0 - angle_sommet
                 texte += f"  ·  {angle_sommet:.0f}° / {deviation_sommet:.0f}°"
 
-            QToolTip.showText(event.globalPos(), texte, self.canvas)
+            QToolTip.showText(QCursor.pos(), texte, self.canvas)
 
     @staticmethod
     def _compute_angle(p_prev, p_vertex, p_next):
@@ -173,9 +174,9 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         return math.degrees(math.acos(cos_a))
 
     def _update_snap_indicator(self, cursor_point):
-        self.snap_cross.reset(QgsWkbTypes.LineGeometry)
-        self.snap_ticks.reset(QgsWkbTypes.LineGeometry)
-        self.highlight_band.reset(QgsWkbTypes.LineGeometry)
+        self.snap_cross.reset(QgsWkbTypes.GeometryType.LineGeometry)
+        self.snap_ticks.reset(QgsWkbTypes.GeometryType.LineGeometry)
+        self.highlight_band.reset(QgsWkbTypes.GeometryType.LineGeometry)
 
         detect_tol = 200 * self.canvas.mapUnitsPerPixel()
         regard_tol  =  10 * self.canvas.mapUnitsPerPixel()
@@ -251,7 +252,7 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         point = self.toMapCoordinates(event.pos())
 
         # Clic droit : ajouter le point final et terminer
-        if event.button() == Qt.RightButton:
+        if event.button() == Qt.MouseButton.RightButton:
             if len(self.points) == 0:
                 return
             self.points.append(point)
@@ -259,7 +260,7 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
             self._finish()
             return
 
-        if event.button() != Qt.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
             return
 
         if len(self.points) == 0:
@@ -283,18 +284,18 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
             self.rubber.addPoint(point)
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self._cancel()
-        elif event.key() in (Qt.Key_Return, Qt.Key_Enter):
+        elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self._finish()
 
     def _reset(self):
         """Réinitialise l'état pour un nouveau tracé (outil reste actif)."""
         QToolTip.hideText()
-        self.rubber.reset(QgsWkbTypes.LineGeometry)
-        self.snap_cross.reset(QgsWkbTypes.LineGeometry)
-        self.snap_ticks.reset(QgsWkbTypes.LineGeometry)
-        self.highlight_band.reset(QgsWkbTypes.LineGeometry)
+        self.rubber.reset(QgsWkbTypes.GeometryType.LineGeometry)
+        self.snap_cross.reset(QgsWkbTypes.GeometryType.LineGeometry)
+        self.snap_ticks.reset(QgsWkbTypes.GeometryType.LineGeometry)
+        self.highlight_band.reset(QgsWkbTypes.GeometryType.LineGeometry)
         self.points = []
         self.snapped_points = []
         self.id_conduite = None
@@ -420,12 +421,12 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         layout.addRow(i18n.tr('ot_lbl_tn'), tn_edit)
         layout.addRow(i18n.tr('ot_lbl_fe_radier'), fe_edit)
         layout.addRow(i18n.tr('ot_lbl_diametre'), diam_edit)
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(dlg.accept)
         buttons.rejected.connect(dlg.reject)
         layout.addRow(buttons)
 
-        if dlg.exec_() == QDialog.Accepted:
+        if dlg.exec() == QDialog.DialogCode.Accepted:
             try:
                 tn = float(tn_edit.text())
                 fe = float(fe_edit.text())

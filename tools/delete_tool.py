@@ -3,6 +3,7 @@
 import math
 
 from qgis.core import (
+    Qgis,
     QgsPointXY, QgsGeometry, QgsWkbTypes, QgsRectangle, QgsProject,
     QgsFeatureRequest,
 )
@@ -55,12 +56,12 @@ class DeleteTool(QgsMapTool):
 
     def activate(self):
         super().activate()
-        self.canvas.setCursor(Qt.CrossCursor)
+        self.canvas.setCursor(Qt.CursorShape.CrossCursor)
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             "Effacer",
             i18n.tr('ot_aide_effacer'),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     def deactivate(self):
@@ -77,7 +78,7 @@ class DeleteTool(QgsMapTool):
     # ------------------------------------------------------------------ événements
 
     def canvasPressEvent(self, event):
-        if event.button() != Qt.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
             return
         self._press_px = event.pos()
         self._dragging = False
@@ -93,7 +94,7 @@ class DeleteTool(QgsMapTool):
                 start = self.toMapCoordinates(self._press_px)
                 self._lasso_pts = [start]
                 self._clear_lasso()
-                self._lasso = QgsRubberBand(self.canvas, QgsWkbTypes.PolygonGeometry)
+                self._lasso = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PolygonGeometry)
                 self._lasso.setColor(QColor(30, 120, 255, 50))
                 self._lasso.setStrokeColor(QColor(30, 120, 255, 200))
                 self._lasso.setWidth(2)
@@ -107,7 +108,7 @@ class DeleteTool(QgsMapTool):
             self._update_hover(event.pos())
 
     def canvasReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             if self._dragging:
                 # Fin du lasso
                 self._dragging = False
@@ -126,7 +127,7 @@ class DeleteTool(QgsMapTool):
                     self._erase_label()
             self._press_px = None
 
-        elif event.button() == Qt.RightButton:
+        elif event.button() == Qt.MouseButton.RightButton:
             self._confirm_and_delete_lasso()
 
     # ------------------------------------------------------------------ survol
@@ -144,12 +145,12 @@ class DeleteTool(QgsMapTool):
                 self._clear_annotation_hover()
                 self._clear_hover()
                 pt = ann[1].point()
-                rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+                rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
                 rb.setToGeometry(
                     QgsGeometry.fromPointXY(QgsPointXY(pt.x(), pt.y())), None)
                 rb.setColor(QColor(255, 60, 60))
                 rb.setIconSize(14)
-                rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+                rb.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
                 self._hover_annotation = ann
                 self._hover_annotation_band = rb
             return
@@ -239,7 +240,7 @@ class DeleteTool(QgsMapTool):
         return best
 
     def _make_label_band(self, label_rect):
-        rb = QgsRubberBand(self.canvas, QgsWkbTypes.PolygonGeometry)
+        rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PolygonGeometry)
         rb.setToGeometry(QgsGeometry.fromRect(label_rect), None)
         rb.setColor(QColor(255, 165, 0, 60))
         rb.setStrokeColor(QColor(255, 165, 0, 255))
@@ -255,12 +256,12 @@ class DeleteTool(QgsMapTool):
     def _make_hover_band(self, feat, layer):
         geom = feat.geometry()
         gtype = layer.geometryType()
-        if gtype == QgsWkbTypes.PointGeometry:
-            rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        if gtype == QgsWkbTypes.GeometryType.PointGeometry:
+            rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
             rb.setToGeometry(geom, layer)
             rb.setColor(QColor(255, 165, 0))
             rb.setIconSize(14)
-            rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+            rb.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
         else:
             rb = QgsRubberBand(self.canvas, gtype)
             rb.setToGeometry(geom, layer)
@@ -283,7 +284,7 @@ class DeleteTool(QgsMapTool):
         if QMessageBox.question(
                 None, i18n.tr('ot_effacer_etiquette'),
                 i18n.tr('ot_supprimer_etiquette_q', nom=nom),
-                QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
         from ..gui.etiquettes import LBL_X, LBL_Y, LBL_VISIBLE, LBL_ROT
         fields = layer.fields()
@@ -351,7 +352,7 @@ class DeleteTool(QgsMapTool):
                if total > 1 else i18n.tr('ot_suppr_simple', type=type_txt))
 
         if QMessageBox.question(None, i18n.tr('ot_confirmer_suppression'), msg,
-                                QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
 
         self._clear_hover()
@@ -435,7 +436,7 @@ class DeleteTool(QgsMapTool):
         if QMessageBox.question(
                 None, i18n.tr('ot_confirmer_suppression'),
                 i18n.tr('ot_supprimer_selection_q', nb=total),
-                QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
 
         for lyr, fids in to_delete.values():
@@ -463,7 +464,7 @@ class DeleteTool(QgsMapTool):
         if QMessageBox.question(
                 None, i18n.tr('ot_effacer_annotation'),
                 i18n.tr('ot_supprimer_annotation_q', nom=preview),
-                QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
         ann_layer = QgsProject.instance().mainAnnotationLayer()
         ann_layer.removeItem(item_id)

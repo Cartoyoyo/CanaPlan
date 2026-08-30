@@ -10,8 +10,10 @@ from qgis.PyQt.QtCore import Qt
 from ..tools import i18n
 from qgis.PyQt.QtGui import QFont
 
-# Taille cible sur papier : 2.5 mm — convertit en unités carte (mètres L93)
-_TARGET_MM = 2.5
+# Taille cible sur papier, en mm — convertit en unités carte (mètres L93).
+# Définie dans etiquettes.py, d'où part aussi le calcul du seuil de dézoom :
+# les deux doivent impérativement utiliser la même valeur.
+from .etiquettes import LABEL_TARGET_MM as _TARGET_MM
 # None = entrée personnalisée
 _SCALES = [
     ("1 / 150",   150),
@@ -101,7 +103,7 @@ class EtiquetteTailleDialog(QDialog):
         form_sc.addRow("", self._custom_widget)
 
         self.lbl_mu = QLabel()
-        self.lbl_mu.setAlignment(Qt.AlignRight)
+        self.lbl_mu.setAlignment(Qt.AlignmentFlag.AlignRight)
         form_sc.addRow(self.lbl_mu)
 
         note_sc = QLabel(
@@ -134,7 +136,7 @@ class EtiquetteTailleDialog(QDialog):
         layout.addWidget(grp_min)
 
         # ── Boutons ───────────────────────────────────────────────────────
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)

@@ -13,7 +13,6 @@ from qgis.core import (
     QgsField,
     QgsSimpleLineCallout,
     QgsLineSymbol,
-    QgsUnitTypes,
     QgsProject,
 )
 
@@ -26,18 +25,13 @@ except ImportError:
     except ImportError:
         _LabelEngineSettings = None
 from qgis.PyQt.QtGui import QFont, QColor
-from qgis.PyQt.QtCore import QSizeF, QVariant, QSettings
+from qgis.PyQt.QtCore import QSizeF, QMetaType, QSettings
 
 from ..tools import i18n
 from ..tools import errlog
 
-try:
-    from qgis.PyQt.QtCore import QMetaType
-    _DOUBLE = QMetaType.Type.Double
-    _INT = QMetaType.Type.Int
-except (ImportError, AttributeError):
-    _DOUBLE = QVariant.Double
-    _INT = QVariant.Int
+_DOUBLE = QMetaType.Type.Double
+_INT = QMetaType.Type.Int
 
 # Taille du texte en unités carte (mètres pour Lambert 93).
 # À 1:500 → 4 mm, à 1:200 → 10 mm, à 1:1000 → 2 mm.
@@ -64,10 +58,25 @@ LABEL_OFFSET_MAP_UNITS = 1.5
 # après 50 mm — le rappel apparaîtrait et disparaîtrait selon l'échelle.
 CALLOUT_MIN_LENGTH_MM = 1.5
 
-# Plafond absolu de dézoom, utilisé quand le seuil ne peut pas être déduit
-# de la taille du texte (mode « points », où le texte garde la même taille
-# à l'écran et ne devient donc jamais illisible).
+# Plafond absolu de dézoom : quelle que soit la taille des étiquettes, elles
+# sont masquées au-delà de 1:2000. Le plan sert alors à se repérer, pas à
+# lire des valeurs. Sert aussi de seuil unique en mode « points », où le
+# texte ne devient jamais illisible avec le zoom.
 LABEL_MIN_SCALE = 2000
+
+# Hauteur visée pour le texte sur le papier, en millimètres. C'est la
+# constante qui relie l'échelle cible choisie par l'utilisateur à la taille
+# des étiquettes en unités carte : au 1:E, un texte de 2,5 mm sur le papier
+# mesure 2,5 × E / 1000 mètres sur le terrain.
+# EtiquetteTailleDialog l'importe d'ici : les deux calculs, celui de la
+# taille et celui du seuil de dézoom, doivent partir de la même valeur.
+LABEL_TARGET_MM = 2.5
+
+# Facteur de dézoom toléré au-delà de l'échelle cible avant de masquer les
+# étiquettes. À 1, elles disparaîtraient dès qu'on s'éloigne de l'échelle
+# d'impression — inutilisable pour se déplacer sur le plan. À 10, on garde
+# de la marge pour naviguer, et le plafond ci-dessus prend vite le relais.
+LABEL_ZOOM_FACTOR = 10
 
 # Hauteur de texte en dessous de laquelle une étiquette n'est plus lisible,
 # en millimètres papier. Sert à déduire le seuil de dézoom par défaut.
@@ -90,13 +99,29 @@ MIN_READABLE_MM = 1.5
 
 
 def default_min_scale(size, unit):
-    """Seuil de dézoom déduit de la taille du texte (0 = aucun seuil).
+    """Seuil de dézoom déduit de l'échelle cible (0 = aucun seuil).
 
-    En unités carte, le texte rétrécit avec le zoom : on coupe dès qu'il
-    passe sous MIN_READABLE_MM. En points, il garde sa taille à l'écran et
-    reste lisible à toute échelle — seul le plafond de performance joue.
+    La taille des étiquettes n'est pas choisie en mètres : l'utilisateur
+    choisit une échelle d'impression cible, et la taille en découle pour que
+    le texte fasse LABEL_TARGET_MM sur le papier. On remonte donc d'abord à
+    cette échelle cible, puis on autorise LABEL_ZOOM_FACTOR fois de dézoom
+    avant de masquer :
+
+        échelle cible = taille × 1000 / LABEL_TARGET_MM
+        seuil         = échelle cible × LABEL_ZOOM_FACTOR   (plafond 1:2000)
+
+        cible 1/150 → 1/1500
+        cible 1/200 → 1/2000   (plafonné)
+        cible 1/1000 → 1/2000  (plafonné)
+
+    Le facteur de dézoom est indispensable : sans lui, les étiquettes
+    disparaîtraient dès qu'on s'écarte de l'échelle d'impression, alors qu'on
+    passe son temps à dézoomer pour se repérer sur le réseau.
+
+    En mode « points », le texte garde sa taille à l'écran quel que soit le
+    zoom : aucune échelle ne le rend illisible, seul le plafond s'applique.
     """
-    if unit != QgsUnitTypes.RenderMapUnits:
+    if unit != Qgis.RenderUnit.MapUnits:
         return LABEL_MIN_SCALE
     try:
         size = float(size)
@@ -104,10 +129,12 @@ def default_min_scale(size, unit):
         return LABEL_MIN_SCALE
     if size <= 0:
         return LABEL_MIN_SCALE
-    # Arrondi au 50 le plus proche : un seuil « 1/400 » se lit mieux
-    # qu'un « 1/417 » dans le dialogue.
-    seuil = size * 1000.0 / MIN_READABLE_MM
-    return max(200, int(round(seuil / 50.0)) * 50)
+    echelle_cible = size * 1000.0 / LABEL_TARGET_MM
+    seuil = echelle_cible * LABEL_ZOOM_FACTOR
+    # Arrondi au 50 le plus proche : un seuil « 1/1500 » se lit mieux
+    # qu'un « 1/1487 » dans le dialogue.
+    seuil = max(200, int(round(seuil / 50.0)) * 50)
+    return min(LABEL_MIN_SCALE, seuil)
 
 # Priorité de placement (0 = la plus faible, 10 = la plus forte). Un nom de
 # regard est l'information qu'on cherche en premier sur un plan de réseau ;
@@ -227,7 +254,7 @@ def _make_callout(dashed=False, min_length_mm=CALLOUT_MIN_LENGTH_MM):
     callout = QgsSimpleLineCallout()
     callout.setEnabled(True)
     callout.setMinimumLength(min_length_mm)
-    callout.setMinimumLengthUnit(QgsUnitTypes.RenderMillimeters)
+    callout.setMinimumLengthUnit(Qgis.RenderUnit.Millimeters)
     callout.setLineSymbol(QgsLineSymbol.createSimple(props))
     return callout
 
@@ -269,7 +296,7 @@ def _apply_placement_policy(pal, role, min_scale=LABEL_MIN_SCALE):
 
 
 def _line_text_format(reseau, role, size=LABEL_SIZE_MAP_UNITS,
-                      unit=QgsUnitTypes.RenderMapUnits):
+                      unit=Qgis.RenderUnit.MapUnits):
     """Format texte des conduites et branchements (halo blanc)."""
     # Conduites EP : gras + halo épais, hérité de la v1.0 pour les distinguer
     # sur un plan où EU et EP se superposent souvent.
@@ -286,7 +313,7 @@ def _line_text_format(reseau, role, size=LABEL_SIZE_MAP_UNITS,
     buf = QgsTextBufferSettings()
     buf.setEnabled(True)
     buf.setSize(buffer_mm)
-    buf.setSizeUnit(QgsUnitTypes.RenderMillimeters)
+    buf.setSizeUnit(Qgis.RenderUnit.Millimeters)
     buf.setColor(QColor(255, 255, 255))
     buf.setOpacity(0.9)
     fmt.setBuffer(buf)
@@ -294,7 +321,7 @@ def _line_text_format(reseau, role, size=LABEL_SIZE_MAP_UNITS,
 
 
 def _make_line_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
-                        unit=QgsUnitTypes.RenderMapUnits,
+                        unit=Qgis.RenderUnit.MapUnits,
                         min_scale=LABEL_MIN_SCALE):
     """Rule-based labeling des lignes (conduites et branchements) :
       - règle 1 (lbl_x IS NULL)     : Curved auto, le texte suit la ligne.
@@ -321,11 +348,11 @@ def _make_line_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
 
     # ── Règle 1 : curviligne automatique ─────────────────────────────────
     pal_auto = _base()
-    pal_auto.placement = QgsPalLayerSettings.Curved
-    pal_auto.placementFlags = (QgsPalLayerSettings.BelowLine |
-                               QgsPalLayerSettings.MapOrientation)
+    pal_auto.placement = Qgis.LabelPlacement.Curved
+    pal_auto.placementFlags = (Qgis.LabelLinePlacementFlag.BelowLine |
+                               Qgis.LabelLinePlacementFlag.MapOrientation)
     pc1 = QgsPropertyCollection()
-    pc1.setProperty(QgsPalLayerSettings.Show, show)
+    pc1.setProperty(QgsPalLayerSettings.Property.Show, show)
     pal_auto.setDataDefinedProperties(pc1)
     rule_auto = QgsRuleBasedLabeling.Rule(pal_auto)
     rule_auto.setFilterExpression(f'"{LBL_X}" IS NULL')
@@ -338,14 +365,14 @@ def _make_line_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
     try:
         pal_pin.placement = Qgis.LabelPlacement.OverPoint
     except AttributeError:
-        pal_pin.placement = QgsPalLayerSettings.OverPoint
+        pal_pin.placement = Qgis.LabelPlacement.OverPoint
     pc2 = QgsPropertyCollection()
-    pc2.setProperty(QgsPalLayerSettings.Show, show)
-    pc2.setProperty(QgsPalLayerSettings.PositionX, QgsProperty.fromField(LBL_X))
-    pc2.setProperty(QgsPalLayerSettings.PositionY, QgsProperty.fromField(LBL_Y))
-    pc2.setProperty(QgsPalLayerSettings.Hali, QgsProperty.fromValue('Center'))
-    pc2.setProperty(QgsPalLayerSettings.Vali, QgsProperty.fromValue('Half'))
-    pc2.setProperty(QgsPalLayerSettings.LabelRotation,
+    pc2.setProperty(QgsPalLayerSettings.Property.Show, show)
+    pc2.setProperty(QgsPalLayerSettings.Property.PositionX, QgsProperty.fromField(LBL_X))
+    pc2.setProperty(QgsPalLayerSettings.Property.PositionY, QgsProperty.fromField(LBL_Y))
+    pc2.setProperty(QgsPalLayerSettings.Property.Hali, QgsProperty.fromValue('Center'))
+    pc2.setProperty(QgsPalLayerSettings.Property.Vali, QgsProperty.fromValue('Half'))
+    pc2.setProperty(QgsPalLayerSettings.Property.LabelRotation,
                     QgsProperty.fromField(LBL_ROT))
     pal_pin.setDataDefinedProperties(pc2)
     try:
@@ -407,7 +434,7 @@ def pal_settings(labeling):
 
 
 def _make_point_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
-                         unit=QgsUnitTypes.RenderMapUnits,
+                         unit=Qgis.RenderUnit.MapUnits,
                          padding=LABEL_PADDING_MAP_UNITS,
                          min_scale=LABEL_MIN_SCALE,
                          offset=None):
@@ -423,19 +450,19 @@ def _make_point_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
     pal.enabled = True
     pal.isExpression = True
     pal.fieldName = expression
-    pal.placement = QgsPalLayerSettings.AroundPoint
+    pal.placement = Qgis.LabelPlacement.AroundPoint
     # Lu à l'appel et non figé en valeur par défaut, pour que la constante
     # reste ajustable sans réimporter le module.
     pal.dist = LABEL_OFFSET_MAP_UNITS if offset is None else offset
-    pal.distUnits = QgsUnitTypes.RenderMapUnits
+    pal.distUnits = Qgis.RenderUnit.MapUnits
 
     pc = QgsPropertyCollection()
-    pc.setProperty(QgsPalLayerSettings.Show,
+    pc.setProperty(QgsPalLayerSettings.Property.Show,
                    QgsProperty.fromExpression(f'coalesce("{LBL_VISIBLE}", 1)'))
-    pc.setProperty(QgsPalLayerSettings.PositionX, QgsProperty.fromField(LBL_X))
-    pc.setProperty(QgsPalLayerSettings.PositionY, QgsProperty.fromField(LBL_Y))
-    pc.setProperty(QgsPalLayerSettings.Hali, QgsProperty.fromValue('Center'))
-    pc.setProperty(QgsPalLayerSettings.Vali, QgsProperty.fromValue('Half'))
+    pc.setProperty(QgsPalLayerSettings.Property.PositionX, QgsProperty.fromField(LBL_X))
+    pc.setProperty(QgsPalLayerSettings.Property.PositionY, QgsProperty.fromField(LBL_Y))
+    pc.setProperty(QgsPalLayerSettings.Property.Hali, QgsProperty.fromValue('Center'))
+    pc.setProperty(QgsPalLayerSettings.Property.Vali, QgsProperty.fromValue('Half'))
     pal.setDataDefinedProperties(pc)
 
     fmt = QgsTextFormat()
@@ -446,11 +473,11 @@ def _make_point_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
 
     bg = QgsTextBackgroundSettings()
     bg.setEnabled(True)
-    bg.setType(QgsTextBackgroundSettings.ShapeRectangle)
+    bg.setType(QgsTextBackgroundSettings.ShapeType.ShapeRectangle)
     bg.setFillColor(QColor(255, 255, 255, 191))
     bg.setStrokeColor(QColor(80, 80, 80, 255))
     bg.setStrokeWidth(0.3)
-    bg.setSizeType(QgsTextBackgroundSettings.SizeBuffer)
+    bg.setSizeType(QgsTextBackgroundSettings.SizeType.SizeBuffer)
     bg.setSizeUnit(unit)
     bg.setSize(QSizeF(padding, padding))
     fmt.setBackground(bg)
@@ -477,14 +504,14 @@ def remembered_size():
     s = QSettings()
     mode = s.value("CanaPlan/label_size_mode", "map_units")
     raw  = s.value("CanaPlan/label_size_value", None)
-    unit = (QgsUnitTypes.RenderPoints if mode == 'points'
-            else QgsUnitTypes.RenderMapUnits)
+    unit = (Qgis.RenderUnit.Points if mode == 'points'
+            else Qgis.RenderUnit.MapUnits)
     try:
         value = float(raw)
     except (TypeError, ValueError):
-        return LABEL_SIZE_MAP_UNITS, QgsUnitTypes.RenderMapUnits
+        return LABEL_SIZE_MAP_UNITS, Qgis.RenderUnit.MapUnits
     if value <= 0:
-        return LABEL_SIZE_MAP_UNITS, QgsUnitTypes.RenderMapUnits
+        return LABEL_SIZE_MAP_UNITS, Qgis.RenderUnit.MapUnits
     return value, unit
 
 
@@ -643,15 +670,15 @@ def get_label_display_prefs(plugin):
 def apply_label_size_all(plugin, mode, value, min_scale=None):
     """Applique la taille d'étiquette à toutes les couches EU et EP.
 
-    mode      : 'points'    → taille fixe écran (QgsUnitTypes.RenderPoints)
-                'map_units' → taille en mètres  (QgsUnitTypes.RenderMapUnits)
+    mode      : 'points'    → taille fixe écran (Qgis.RenderUnit.Points)
+                'map_units' → taille en mètres  (Qgis.RenderUnit.MapUnits)
     value     : float — taille dans l'unité correspondante
     min_scale : dénominateur du seuil de dézoom, 0 pour aucun seuil.
                 None → conserve le seuil déjà en place sur la couche.
     """
-    unit = (QgsUnitTypes.RenderPoints
+    unit = (Qgis.RenderUnit.Points
             if mode == 'points'
-            else QgsUnitTypes.RenderMapUnits)
+            else Qgis.RenderUnit.MapUnits)
 
     # Padding proportionnel (ratio identique à l'original)
     ratio_padding = LABEL_PADDING_MAP_UNITS / LABEL_SIZE_MAP_UNITS
@@ -801,7 +828,7 @@ def apply_label_fields(plugin, fields_prefs):
                 _ensure_label_fields(layer, role)
                 cur = _line_current_settings(labeling)
                 size  = cur[1] if cur else LABEL_SIZE_MAP_UNITS
-                unit  = cur[2] if cur else QgsUnitTypes.RenderMapUnits
+                unit  = cur[2] if cur else Qgis.RenderUnit.MapUnits
                 scale = cur[3] if cur else LABEL_MIN_SCALE
                 layer.setLabeling(
                     _make_line_labeling(reseau, role, expression, size, unit,

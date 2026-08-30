@@ -7,8 +7,8 @@ from qgis.PyQt.QtWidgets import (
     QComboBox, QDialogButtonBox, QLabel, QMessageBox, QPushButton,
     QGroupBox, QFrame, QWidget, QSizePolicy,
 )
-from qgis.PyQt.QtGui import QFont, QRegExpValidator, QKeyEvent
-from qgis.PyQt.QtCore import Qt, QTimer, QEvent, QLocale, QRegExp, pyqtSignal
+from qgis.PyQt.QtGui import QFont, QRegularExpressionValidator, QKeyEvent
+from qgis.PyQt.QtCore import Qt, QTimer, QEvent, QLocale, QRegularExpression, pyqtSignal
 
 from ..tools import i18n
 from .quick_config_widgets import NETWORK_COLORS
@@ -88,11 +88,12 @@ class NumericEdit(QLineEdit):
     def __init__(self, decimals=3, parent=None):
         super().__init__(parent)
         self._decimals = decimals
-        self.setAlignment(Qt.AlignRight)
+        self.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.setPlaceholderText('—')
         # Accepte chiffres, point, virgule, +, -, espaces — l'évaluation
         # additive est faite dans value(). Permet ex: "1-0.25" → 0.75.
-        validator = QRegExpValidator(QRegExp(r'[\d+\-.,\s]*'))
+        validator = QRegularExpressionValidator(
+            QRegularExpression(r'[\d+\-.,\s]*'))
         self.setValidator(validator)
         self.editingFinished.connect(self._normalize)
 
@@ -103,7 +104,7 @@ class NumericEdit(QLineEdit):
 
     def keyPressEvent(self, event):
         if event.text() == ',':
-            event = QKeyEvent(QEvent.KeyPress, Qt.Key_Period, event.modifiers(), '.')
+            event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Period, event.modifiers(), '.')
         super().keyPressEvent(event)
 
     def value(self):
@@ -206,14 +207,14 @@ class RenseignementDialog(QDialog):
         font.setPointSize(11)
         self.lbl_header.setFont(font)
         self.lbl_header.setStyleSheet("color: #FFFFFF; background: transparent;")
-        self.lbl_header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.lbl_header.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         lay.addWidget(self.lbl_header)
 
         badge = QLabel(self.reseau)
         badge_font = QFont()
         badge_font.setBold(True)
         badge.setFont(badge_font)
-        badge.setAlignment(Qt.AlignCenter)
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         badge.setStyleSheet(
             "QLabel {"
             "  background-color: #FFFFFF;"
@@ -221,7 +222,7 @@ class RenseignementDialog(QDialog):
             "  border-radius: 9px; padding: 2px 10px;"
             "}"
         )
-        lay.addWidget(badge, 0, Qt.AlignRight)
+        lay.addWidget(badge, 0, Qt.AlignmentFlag.AlignRight)
 
         self._refresh_header()
         return header
@@ -244,8 +245,9 @@ class RenseignementDialog(QDialog):
         """Cadre regroupant les champs présents dans la couche, ou None."""
         group = QGroupBox(i18n.tr(cle_section))
         form = QFormLayout(group)
-        form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         form.setHorizontalSpacing(10)
         form.setVerticalSpacing(7)
 
@@ -312,7 +314,7 @@ class RenseignementDialog(QDialog):
         btn = QPushButton(texte)
         btn.setFixedWidth(largeur)
         btn.setToolTip(tooltip)
-        btn.setCursor(Qt.PointingHandCursor)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
         # Sans cela, Entrée dans un champ déclencherait ce bouton au lieu d'OK.
         btn.setAutoDefault(False)
         btn.setDefault(False)
@@ -330,8 +332,8 @@ class RenseignementDialog(QDialog):
 
     def _make_separator(self):
         sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setFrameShadow(QFrame.Sunken)
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
         return sep
 
     def _make_buttons(self):
@@ -340,13 +342,13 @@ class RenseignementDialog(QDialog):
         lay.setContentsMargins(14, 10, 14, 12)
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Apply | QDialogButtonBox.Cancel
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Apply | QDialogButtonBox.StandardButton.Cancel
         )
 
-        btn_ok = buttons.button(QDialogButtonBox.Ok)
+        btn_ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         btn_ok.setDefault(True)
         btn_ok.setAutoDefault(True)
-        btn_ok.setCursor(Qt.PointingHandCursor)
+        btn_ok.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_ok.setStyleSheet(
             "QPushButton {"
             f" background-color: {self._accent}; color: #FFFFFF;"
@@ -357,12 +359,12 @@ class RenseignementDialog(QDialog):
             "QPushButton:pressed { background-color: palette(dark); }"
         )
 
-        btn_apply = buttons.button(QDialogButtonBox.Apply)
+        btn_apply = buttons.button(QDialogButtonBox.StandardButton.Apply)
         btn_apply.setText(i18n.tr('appliquer'))
         btn_apply.setAutoDefault(False)
         btn_apply.clicked.connect(self._apply)
 
-        buttons.button(QDialogButtonBox.Cancel).setAutoDefault(False)
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setAutoDefault(False)
 
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
@@ -432,10 +434,10 @@ class RenseignementDialog(QDialog):
             msg = QMessageBox(self)
             msg.setWindowTitle(i18n.tr('rens_p_modifie'))
             msg.setText(i18n.tr('rens_p_question'))
-            btn_fe = msg.addButton(fe_label, QMessageBox.YesRole)
-            btn_tn = msg.addButton('TN',     QMessageBox.NoRole)
-            msg.addButton(i18n.tr('rens_aucune'), QMessageBox.RejectRole)
-            msg.exec_()
+            btn_fe = msg.addButton(fe_label, QMessageBox.ButtonRole.YesRole)
+            btn_tn = msg.addButton('TN',     QMessageBox.ButtonRole.NoRole)
+            msg.addButton(i18n.tr('rens_aucune'), QMessageBox.ButtonRole.RejectRole)
+            msg.exec()
             clicked = msg.clickedButton()
             if clicked == btn_fe:
                 self._set(fe_w, tn_w.value() - p_w.value())

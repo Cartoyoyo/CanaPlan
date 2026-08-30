@@ -29,7 +29,7 @@ if QT6:
     ItemIsSelectable  = QtCore.Qt.ItemFlag.ItemIsSelectable
     ItemIsEnabled     = QtCore.Qt.ItemFlag.ItemIsEnabled
     ItemIsUserCheckable = QtCore.Qt.ItemFlag.ItemIsUserCheckable
-    ItemIsTristate    = QtCore.Qt.ItemFlag.ItemIsAutoTristate
+    ItemIsTristate    = QtCore.Qt.ItemFlag.ItemIsUserTristate
     WaitCursor        = QtCore.Qt.CursorShape.WaitCursor
 else:
     ItemFlags         = QtCore.Qt.ItemFlags
@@ -44,7 +44,7 @@ QGIS3 = QGIS_VERSION_INT < 40000
 QGIS4 = QGIS_VERSION_INT >= 40000
 
 def exec_dialog(dialog):
-    return dialog.exec() if QT6 else dialog.exec_()
+    return dialog.exec()
 
 QNetworkAccessManager = QtNetwork.QNetworkAccessManager
 QNetworkRequest       = QtNetwork.QNetworkRequest
@@ -54,7 +54,7 @@ QByteArray = QtCore.QByteArray
 QTimer     = QtCore.QTimer
 
 if hasattr(QNetworkRequest, "HttpStatusCodeAttribute"):
-    HttpStatusCodeAttribute = QNetworkRequest.HttpStatusCodeAttribute
+    HttpStatusCodeAttribute = QNetworkRequest.Attribute.HttpStatusCodeAttribute
 else:
     try:
         HttpStatusCodeAttribute = QNetworkRequest.Attribute.HttpStatusCodeAttribute
@@ -62,7 +62,7 @@ else:
         HttpStatusCodeAttribute = None
 
 if hasattr(QNetworkRequest, "RedirectionTargetAttribute"):
-    RedirectionTargetAttribute = QNetworkRequest.RedirectionTargetAttribute
+    RedirectionTargetAttribute = QNetworkRequest.Attribute.RedirectionTargetAttribute
 else:
     try:
         RedirectionTargetAttribute = QNetworkRequest.Attribute.RedirectionTargetAttribute

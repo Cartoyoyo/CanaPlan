@@ -133,7 +133,7 @@ class EtiquetteAffichageDialog(QDialog):
         # En-têtes colonnes
         for col, role in enumerate(_ROLES):
             lbl = QLabel(i18n.tr(_ROLE_LABELS[role]))
-            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             f2 = QFont(); f2.setBold(True)
             lbl.setFont(f2)
             grid.addWidget(lbl, 0, col + 1)
@@ -149,7 +149,7 @@ class EtiquetteAffichageDialog(QDialog):
                 cb.setToolTip(i18n.tr('ea_etiquettes_role', role=i18n.tr(_ROLE_LABELS[role]),
                                        reseau=reseau))
                 self._vis_checks[(reseau, role)] = cb
-                grid.addWidget(cb, row + 1, col + 1, alignment=Qt.AlignCenter)
+                grid.addWidget(cb, row + 1, col + 1, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Boutons rapides visibilité
         btn_row = QHBoxLayout()
@@ -197,7 +197,7 @@ class EtiquetteAffichageDialog(QDialog):
         layout.addWidget(grp_fields)
 
         # ── Boutons OK / Annuler ──────────────────────────────────────────
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)

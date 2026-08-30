@@ -140,7 +140,7 @@ def collect(project, metier_ids, work_dir):
                 opts.layerName = _safe_name(layer.name())
                 err, msg, _, _ = QgsVectorFileWriter.writeAsVectorFormatV3(
                     layer, dest, QgsCoordinateTransformContext(), opts)
-                if err != QgsVectorFileWriter.NoError:
+                if err != QgsVectorFileWriter.WriterError.NoError:
                     errors.append("%s : %s" % (layer.name(), msg))
                     continue
                 entry["file"] = ARCH_DIR + "/" + base + ".gpkg"

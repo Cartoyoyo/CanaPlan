@@ -1,6 +1,5 @@
 # gui/annotation_dialog.py
 
-from qgis.core import QgsUnitTypes
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
     QFontComboBox, QDoubleSpinBox, QSpinBox, QComboBox, QPushButton,
@@ -13,9 +12,10 @@ from qgis.PyQt.QtCore import Qt, pyqtSignal
 from ..tools import i18n
 
 from .etiquette_taille_dialog import _TARGET_MM, _SCALES
+from qgis.core import Qgis
 
-_UNIT_PT  = QgsUnitTypes.RenderPoints
-_UNIT_MAP = QgsUnitTypes.RenderMapUnits
+_UNIT_PT  = Qgis.RenderUnit.Points
+_UNIT_MAP = Qgis.RenderUnit.MapUnits
 
 
 class AnnotationDialog(QDialog):
@@ -28,7 +28,7 @@ class AnnotationDialog(QDialog):
     def __init__(self, parent=None, text='', font_name='Arial',
                  size=2.0, size_unit=_UNIT_MAP, color=None,
                  bold=False, italic=False, underline=False,
-                 alignment=Qt.AlignLeft,
+                 alignment=Qt.AlignmentFlag.AlignLeft,
                  frame=False, frame_filled=True,
                  frame_fill_color=None, frame_border_color=None,
                  opacity=1.0):
@@ -59,8 +59,8 @@ class AnnotationDialog(QDialog):
         toolbar.addWidget(self.btn_underline)
 
         sep = QFrame()
-        sep.setFrameShape(QFrame.VLine)
-        sep.setFrameShadow(QFrame.Sunken)
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
         sep.setFixedWidth(10)
         toolbar.addWidget(sep)
 
@@ -68,10 +68,10 @@ class AnnotationDialog(QDialog):
         self._align_group.setExclusive(True)
 
         _align_id = {
-            Qt.AlignLeft:    0,
-            Qt.AlignHCenter: 1,
-            Qt.AlignCenter:  1,
-            Qt.AlignRight:   2,
+            Qt.AlignmentFlag.AlignLeft:    0,
+            Qt.AlignmentFlag.AlignHCenter: 1,
+            Qt.AlignmentFlag.AlignCenter:  1,
+            Qt.AlignmentFlag.AlignRight:   2,
         }.get(int(alignment), 0)
 
         self.btn_al = self._fmt_btn("G", i18n.tr('an_aligner_gauche'),
@@ -240,8 +240,8 @@ class AnnotationDialog(QDialog):
 
         # ── Appliquer / OK / Annuler ─────────────────────────────────────
         btns = QDialogButtonBox(
-            QDialogButtonBox.Apply | QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.button(QDialogButtonBox.Apply).clicked.connect(
+            QDialogButtonBox.StandardButton.Apply | QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btns.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(
             lambda: self.applied.emit(self.get_values()))
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
@@ -325,17 +325,17 @@ class AnnotationDialog(QDialog):
         font.setPointSizeF(pt)
 
         if self.btn_ac.isChecked():
-            align = Qt.AlignHCenter
+            align = Qt.AlignmentFlag.AlignHCenter
         elif self.btn_ar.isChecked():
-            align = Qt.AlignRight
+            align = Qt.AlignmentFlag.AlignRight
         else:
-            align = Qt.AlignLeft
+            align = Qt.AlignmentFlag.AlignLeft
 
         # Applique police/couleur/alignement à tout le document sans
         # perturber la position du curseur de saisie de l'utilisateur.
         block_signals = self.text_edit.blockSignals(True)
         doc_cursor = QTextCursor(self.text_edit.document())
-        doc_cursor.select(QTextCursor.Document)
+        doc_cursor.select(QTextCursor.SelectionType.Document)
         char_fmt = QTextCharFormat()
         char_fmt.setFont(font)
         char_fmt.setForeground(self._color)
@@ -381,7 +381,7 @@ class AnnotationDialog(QDialog):
     # ── Résultat ───────────────────────────────────────────────────────
 
     def get_values(self):
-        _align_map = {0: Qt.AlignLeft, 1: Qt.AlignHCenter, 2: Qt.AlignRight}
+        _align_map = {0: Qt.AlignmentFlag.AlignLeft, 1: Qt.AlignmentFlag.AlignHCenter, 2: Qt.AlignmentFlag.AlignRight}
         return {
             'text':      self.text_edit.toPlainText().strip(),
             'font':      self.font_combo.currentFont().family(),
@@ -391,7 +391,7 @@ class AnnotationDialog(QDialog):
             'bold':      self.btn_bold.isChecked(),
             'italic':    self.btn_italic.isChecked(),
             'underline': self.btn_underline.isChecked(),
-            'alignment': _align_map.get(self._align_group.checkedId(), Qt.AlignLeft),
+            'alignment': _align_map.get(self._align_group.checkedId(), Qt.AlignmentFlag.AlignLeft),
             'frame':               self.chk_frame.isChecked(),
             'frame_filled':        self.chk_frame_filled.isChecked(),
             'frame_fill_color':    QColor(self._frame_fill_color),

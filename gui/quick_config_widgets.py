@@ -30,7 +30,7 @@ MATERIAUX = [""] + _materiaux_labels()
 # Materiaux de remblai et de chaussee : lit de pose, enrobage, remblai,
 # chaussees inferieure et superieure. Sans rapport avec les materiaux de
 # canalisation ci-dessus, et hors du perimetre de l'export StaR-Eau.
-MATERIAUX_REMBLAI = ["", "Sable", "2/6", "0/31.5", "Tout-venant",
+MATERIAUX_REMBLAI = ["", "Sable", "2/6", "0/31.5", "Tout-venant", "Recyclé",
                      "GB (Grave bitume)", "GC (Grave ciment)", "Enrobé"]
 
 # Couleurs des réseaux (mêmes valeurs que main.py:COLORS — EU rouge, EP bleu),
@@ -111,7 +111,7 @@ class TrenchSchemaWidget(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         w = self.width()
         h = self.height()
@@ -147,6 +147,7 @@ class TrenchSchemaWidget(QWidget):
             if 'sable' in mat_lower: return QColor(245, 235, 175)
             if '2/6' in mat_lower: return QColor(210, 210, 210)
             if '0/31.5' in mat_lower or 'tout-venant' in mat_lower: return QColor(175, 175, 175)
+            if 'recycl' in mat_lower: return QColor(168, 187, 163)
             if 'gb' in mat_lower or 'bitume' in mat_lower: return QColor(100, 100, 100)
             if 'gc' in mat_lower or 'ciment' in mat_lower: return QColor(180, 180, 185)
             if 'enrobé' in mat_lower: return QColor(50, 50, 50)
@@ -160,11 +161,11 @@ class TrenchSchemaWidget(QWidget):
 
             color = get_color(mat)
             painter.setBrush(QBrush(color))
-            painter.setPen(QPen(Qt.black, 1))
+            painter.setPen(QPen(Qt.GlobalColor.black, 1))
             painter.drawRect(rect)
 
             lum = color.red() * 0.299 + color.green() * 0.587 + color.blue() * 0.114
-            text_color = Qt.black if lum > 128 else Qt.white
+            text_color = Qt.GlobalColor.black if lum > 128 else Qt.GlobalColor.white
 
             if layer_id == 'enr':
                 diam = min(layer_h * 0.55, draw_w * 0.3)
@@ -173,15 +174,15 @@ class TrenchSchemaWidget(QWidget):
                 cy = current_y + layer_h - radius
 
                 painter.setBrush(QBrush(QColor(255, 255, 255)))
-                painter.setPen(QPen(Qt.black, 2))
+                painter.setPen(QPen(Qt.GlobalColor.black, 2))
                 painter.drawEllipse(int(cx - radius), int(cy - radius), int(radius * 2), int(radius * 2))
 
                 dim_x = cx
-                painter.setPen(QPen(text_color, 1, Qt.DashLine))
+                painter.setPen(QPen(text_color, 1, Qt.PenStyle.DashLine))
                 painter.drawLine(int(dim_x), int(cy - radius), int(margin_x + draw_w - 10), int(cy - radius))
 
                 arrow_x = margin_x + draw_w - 25
-                painter.setPen(QPen(text_color, 1, Qt.SolidLine))
+                painter.setPen(QPen(text_color, 1, Qt.PenStyle.SolidLine))
                 painter.drawLine(int(arrow_x), int(current_y), int(arrow_x), int(cy - radius))
                 painter.drawLine(int(arrow_x - 3), int(current_y), int(arrow_x + 3), int(current_y))
                 painter.drawLine(int(arrow_x - 3), int(cy - radius), int(arrow_x + 3), int(cy - radius))
@@ -192,7 +193,7 @@ class TrenchSchemaWidget(QWidget):
             font.setBold(True)
             painter.setFont(font)
             text_rect_left = QRectF(margin_x + 10, current_y, 110, layer_h)
-            painter.drawText(text_rect_left, int(Qt.AlignVCenter | Qt.AlignLeft), label)
+            painter.drawText(text_rect_left, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft), label)
 
             font.setBold(False)
             painter.setFont(font)
@@ -202,13 +203,13 @@ class TrenchSchemaWidget(QWidget):
                     text_rect_ep = QRectF(margin_x + 125, current_y, 60, (cy - radius) - current_y)
                 else:
                     text_rect_ep = QRectF(margin_x + 125, current_y, 60, layer_h)
-                painter.drawText(text_rect_ep, int(Qt.AlignVCenter | Qt.AlignLeft), ep_str)
+                painter.drawText(text_rect_ep, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft), ep_str)
 
             if layer_id == 'enr':
                 text_rect_right = QRectF(margin_x + draw_w / 2 + 10, cy - radius, draw_w / 2 - 20, 2 * radius)
             else:
                 text_rect_right = QRectF(margin_x + draw_w / 2 + 10, current_y, draw_w / 2 - 20, layer_h)
-            painter.drawText(text_rect_right, int(Qt.AlignVCenter | Qt.AlignRight), mat)
+            painter.drawText(text_rect_right, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight), mat)
 
             current_y += layer_h
 
@@ -229,7 +230,7 @@ class CubatureSchemaWidget(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         w = self.width()
         h = self.height()
@@ -247,7 +248,7 @@ class CubatureSchemaWidget(QWidget):
         trench_top = margin_y + 20
         trench_bottom = h - 20
 
-        painter.setPen(Qt.NoPen)
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(QColor(185, 155, 115)))
 
         painter.drawRect(QRectF(margin_x, trench_top, trench_left - margin_x, trench_bottom - trench_top))
@@ -262,11 +263,11 @@ class CubatureSchemaWidget(QWidget):
 
         radius = min(trench_w * 0.3, (trench_bottom - trench_top) * 0.25)
         painter.setBrush(QBrush(QColor(240, 240, 240)))
-        painter.setPen(QPen(Qt.black, 1))
+        painter.setPen(QPen(Qt.GlobalColor.black, 1))
         painter.drawEllipse(int(cx - radius), int(trench_bottom - radius * 2 - 5), int(radius * 2), int(radius * 2))
 
         cote_y = margin_y
-        painter.setPen(QPen(Qt.black, 1))
+        painter.setPen(QPen(Qt.GlobalColor.black, 1))
         painter.drawLine(int(trench_left), int(cote_y), int(trench_right), int(cote_y))
         painter.drawLine(int(trench_left), int(cote_y - 5), int(trench_left), int(trench_top))
         painter.drawLine(int(trench_right), int(cote_y - 5), int(trench_right), int(trench_top))
@@ -281,8 +282,8 @@ class CubatureSchemaWidget(QWidget):
         text_bg = QRectF(cx - tw / 2 - 5, cote_y - 10, tw + 10, 20)
         painter.fillRect(text_bg, self.palette().window())
 
-        painter.setPen(Qt.black)
-        painter.drawText(text_bg, int(Qt.AlignCenter), text)
+        painter.setPen(Qt.GlobalColor.black)
+        painter.drawText(text_bg, int(Qt.AlignmentFlag.AlignCenter), text)
 
 
 class NetworkSchemaWidget(QWidget):
@@ -303,7 +304,7 @@ class NetworkSchemaWidget(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         w = self.width()
         h = self.height()
@@ -338,45 +339,45 @@ class NetworkSchemaWidget(QWidget):
         cx_b = margin_x + draw_w * 0.7
         cy_b = margin_y + draw_h / 2
 
-        painter.setPen(QPen(QColor(200, 200, 200), 1, Qt.DashLine))
+        painter.setPen(QPen(QColor(200, 200, 200), 1, Qt.PenStyle.DashLine))
         painter.drawLine(int(margin_x), int(cy_c + r_c + 5), int(margin_x + draw_w), int(cy_c + r_c + 5))
 
         painter.setBrush(QBrush(get_pipe_color(self.data.get('mat_cond', ''))))
-        painter.setPen(QPen(Qt.black, 2))
+        painter.setPen(QPen(Qt.GlobalColor.black, 2))
         painter.drawEllipse(int(cx_c - r_c), int(cy_c - r_c), int(r_c * 2), int(r_c * 2))
 
         inner_r_c = max(2, r_c * 0.85)
         painter.setBrush(QBrush(QColor(255, 255, 255)))
-        painter.setPen(QPen(Qt.black, 1))
+        painter.setPen(QPen(Qt.GlobalColor.black, 1))
         painter.drawEllipse(int(cx_c - inner_r_c), int(cy_c - inner_r_c), int(inner_r_c * 2), int(inner_r_c * 2))
 
         painter.setBrush(QBrush(get_pipe_color(self.data.get('mat_branch', ''))))
-        painter.setPen(QPen(Qt.black, 2))
+        painter.setPen(QPen(Qt.GlobalColor.black, 2))
         painter.drawEllipse(int(cx_b - r_b), int(cy_b - r_b), int(r_b * 2), int(r_b * 2))
 
         inner_r_b = max(2, r_b * 0.85)
         painter.setBrush(QBrush(QColor(255, 255, 255)))
-        painter.setPen(QPen(Qt.black, 1))
+        painter.setPen(QPen(Qt.GlobalColor.black, 1))
         painter.drawEllipse(int(cx_b - inner_r_b), int(cy_b - inner_r_b), int(inner_r_b * 2), int(inner_r_b * 2))
 
         font = painter.font()
-        painter.setPen(Qt.black)
+        painter.setPen(Qt.GlobalColor.black)
 
         font.setBold(True)
         painter.setFont(font)
-        painter.drawText(QRectF(cx_c - 100, cy_c + r_c + 10, 200, 20), int(Qt.AlignCenter),
+        painter.drawText(QRectF(cx_c - 100, cy_c + r_c + 10, 200, 20), int(Qt.AlignmentFlag.AlignCenter),
                          i18n.tr('qc_schema_conduite', diam=diam_c))
         font.setBold(False)
         painter.setFont(font)
-        painter.drawText(QRectF(cx_c - 100, cy_c + r_c + 25, 200, 20), int(Qt.AlignCenter), self.data.get('mat_cond', ''))
+        painter.drawText(QRectF(cx_c - 100, cy_c + r_c + 25, 200, 20), int(Qt.AlignmentFlag.AlignCenter), self.data.get('mat_cond', ''))
 
         font.setBold(True)
         painter.setFont(font)
-        painter.drawText(QRectF(cx_b - 100, cy_b + r_b + 10, 200, 20), int(Qt.AlignCenter),
+        painter.drawText(QRectF(cx_b - 100, cy_b + r_b + 10, 200, 20), int(Qt.AlignmentFlag.AlignCenter),
                          i18n.tr('qc_schema_branchement', diam=diam_b))
         font.setBold(False)
         painter.setFont(font)
-        painter.drawText(QRectF(cx_b - 100, cy_b + r_b + 25, 200, 20), int(Qt.AlignCenter), self.data.get('mat_branch', ''))
+        painter.drawText(QRectF(cx_b - 100, cy_b + r_b + 25, 200, 20), int(Qt.AlignmentFlag.AlignCenter), self.data.get('mat_branch', ''))
 
 
 class ReseauDefautWidget(QWidget):

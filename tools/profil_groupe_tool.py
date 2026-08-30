@@ -1,13 +1,13 @@
 # tools/profil_groupe_tool.py
 
-import sip
-from qgis.core import QgsPointXY, QgsGeometry, QgsWkbTypes
+from qgis.PyQt import sip
+from qgis.core import Qgis, QgsPointXY, QgsGeometry, QgsWkbTypes
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt
 
 from . import i18n
 from qgis.PyQt.QtGui import QColor
-from qgis.PyQt.QtWidgets import QMessageBox
+from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 from ..gui.profil_dialog import ProfilOptionsDialog
 from ..gui.profil_groupe_dialog import ProfilGroupeDialog
 
@@ -41,11 +41,11 @@ class ProfilGroupeTool(QgsMapTool):
 
     def activate(self):
         super().activate()
-        self.canvas.setCursor(Qt.CrossCursor)
+        self.canvas.setCursor(Qt.CursorShape.CrossCursor)
         self.iface.messageBar().pushMessage(
             i18n.tr('po_profil_groupe'),
             i18n.tr('po_aide_axe'),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     def deactivate(self):
@@ -61,33 +61,33 @@ class ProfilGroupeTool(QgsMapTool):
         self._update_band(self.toMapCoordinates(event.pos()))
 
     def canvasReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             self._points.append(self.toMapCoordinates(event.pos()))
             self._update_band(self.toMapCoordinates(event.pos()))
-        elif event.button() == Qt.RightButton:
+        elif event.button() == Qt.MouseButton.RightButton:
             if len(self._points) >= 2:
                 self._compute_and_show()
             self._reset()
 
     def canvasDoubleClickEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             # canvasReleaseEvent a déjà ajouté le point — on déclenche le calcul
             if len(self._points) >= 2:
                 self._compute_and_show()
             self._reset()
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self._reset()
 
     # ------------------------------------------------------------------ rubberband
 
     def _update_band(self, cursor_pt=None):
         if self._band is None:
-            self._band = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+            self._band = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
             self._band.setColor(QColor(255, 120, 0, 200))
             self._band.setWidth(2)
-        self._band.reset(QgsWkbTypes.LineGeometry)
+        self._band.reset(QgsWkbTypes.GeometryType.LineGeometry)
         for p in self._points:
             self._band.addPoint(p, False)
         if cursor_pt is not None:
@@ -271,7 +271,7 @@ class ProfilGroupeTool(QgsMapTool):
                 })
 
         opts_dlg = ProfilOptionsDialog(self.iface.mainWindow())
-        if opts_dlg.exec_() != opts_dlg.Accepted:
+        if opts_dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
         dlg = ProfilGroupeDialog(

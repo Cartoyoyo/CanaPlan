@@ -40,8 +40,8 @@ class AboutDialog(QDialog):
     @staticmethod
     def _sep():
         sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setFrameShadow(QFrame.Sunken)
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
         return sep
 
     def _texte_auteur(self):
@@ -60,7 +60,7 @@ class AboutDialog(QDialog):
         if os.path.exists(logo_path):
             logo_label = QLabel()
             logo_label.setPixmap(QIcon(logo_path).pixmap(360, 94))
-            logo_label.setAlignment(Qt.AlignCenter)
+            logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(logo_label)
 
         # Badges : ce sont des rendus du service shields.io, rasterisés à
@@ -85,7 +85,7 @@ class AboutDialog(QDialog):
             '</div>'
         )
         badges.setOpenExternalLinks(True)
-        badges.setAlignment(Qt.AlignCenter)
+        badges.setAlignment(Qt.AlignmentFlag.AlignCenter)
         badges.setWordWrap(True)
         layout.addWidget(badges)
 
@@ -97,7 +97,7 @@ class AboutDialog(QDialog):
         about = QLabel(i18n.tr('ab_description') or meta["about"])
         self.lbl_about = about
         about.setWordWrap(True)
-        about.setAlignment(Qt.AlignJustify)
+        about.setAlignment(Qt.AlignmentFlag.AlignJustify)
         layout.addWidget(about)
 
         layout.addWidget(self._sep())
@@ -107,7 +107,7 @@ class AboutDialog(QDialog):
         author = QLabel(self._texte_auteur())
         self.lbl_author = author
         author.setOpenExternalLinks(True)
-        author.setAlignment(Qt.AlignCenter)
+        author.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(author)
 
         github_badge = os.path.join(self.plugin_dir, "icon", "badge-github.png").replace("\\", "/")
@@ -118,7 +118,7 @@ class AboutDialog(QDialog):
             f'<a href="https://www.linkedin.com/in/ylaloux/"><img src="{linkedin_badge}"></a>'
         )
         badge_links.setOpenExternalLinks(True)
-        badge_links.setAlignment(Qt.AlignCenter)
+        badge_links.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(badge_links)
 
         layout.addWidget(self._sep())

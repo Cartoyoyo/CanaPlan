@@ -7,7 +7,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget,
     QWidget, QCheckBox, QGroupBox, QToolBox, QTextEdit, QFrame,
-    QLineEdit, QFileDialog, QMessageBox,
+    QLineEdit, QFileDialog, QMessageBox, QScrollArea, QApplication,
 )
 from qgis.PyQt.QtGui import QFont, QColor
 from qgis.core import (
@@ -38,6 +38,31 @@ WGS84_CRS = QgsCoordinateReferenceSystem("EPSG:4326")
 DEFAULT_LON, DEFAULT_LAT = 3.4265, 46.1278
 DEFAULT_HALF_EXTENT_M = 1500   # vue large ~3 km, ville entière
 PICKED_HALF_EXTENT_M = 200     # vue rapprochée ~400 m, échelle de rue
+
+# Ascenseur discret : pas de flèches, poignée translucide qui ne s'affirme
+# qu'au survol. Appliqué à la barre seule et non au QScrollArea, pour ne pas
+# cascader sur les QGroupBox enfants qui ont déjà leur propre feuille de style.
+_SCROLLBAR_DISCRET_QSS = """
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical {
+    background: rgba(0, 0, 0, 55);
+    min-height: 28px;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical:hover {
+    background: rgba(0, 0, 0, 110);
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+"""
 
 # Titres des étapes : traduits à l'affichage, pas au chargement du module.
 STEP_TITLE_KEYS = ['wz_etape1', 'wz_etape2', 'wz_etape3', 'wz_etape4']
@@ -81,7 +106,7 @@ class _AddressPage(QWidget):
 
         self._marker = QgsVertexMarker(self._canvas)
         self._marker.setColor(QColor(220, 40, 40))
-        self._marker.setIconType(QgsVertexMarker.ICON_CROSS)
+        self._marker.setIconType(QgsVertexMarker.IconType.ICON_CROSS)
         self._marker.setIconSize(14)
         self._marker.setPenWidth(3)
         self._marker.hide()
@@ -188,7 +213,27 @@ class _RecapPage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
+
+        # Le récapitulatif empile six blocs (aide, enregistrement, résumé,
+        # réseau, largeurs, remblai) et dépasse la hauteur utile sur un écran
+        # modeste. Tout passe donc dans une zone défilante : la page cesse
+        # d'imposer sa hauteur au dialogue, et l'ascenseur n'apparaît que
+        # lorsqu'il manque réellement de la place.
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.verticalScrollBar().setStyleSheet(_SCROLLBAR_DISCRET_QSS)
+        outer.addWidget(scroll)
+
+        content = QWidget()
+        scroll.setWidget(content)
+
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 6, 0)   # marge droite = place de l'ascenseur
         layout.addWidget(QLabel(
             i18n.tr('wz_recap_aide')))
 
@@ -270,6 +315,10 @@ class _RecapPage(QWidget):
         remblai_group.setLayout(remblai_layout)
         layout.addWidget(remblai_group)
 
+        # Sans ressort final, les blocs se dilateraient pour remplir la zone
+        # défilante dès qu'il reste de la place.
+        layout.addStretch()
+
     def _browse_folder(self):
         folder = QFileDialog.getExistingDirectory(
             self, i18n.tr('wz_dossier_titre'),
@@ -325,6 +374,13 @@ class ProjectWizardDialog(QDialog):
         self.setWindowTitle(i18n.tr('nouveau_projet_assistant'))
         self.setMinimumSize(560, 520)
 
+        # Ouvrir assez grand pour que le récapitulatif (étape 4, la plus
+        # dense) tienne d'un seul tenant quand l'écran le permet ; sinon on
+        # s'arrête à la place disponible et son ascenseur prend le relais.
+        ecran = QApplication.primaryScreen().availableGeometry()
+        self.resize(min(700, ecran.width() - 80),
+                    min(880, ecran.height() - 100))
+
         layout = QVBoxLayout(self)
 
         self._title_label = QLabel()
@@ -335,8 +391,8 @@ class ProjectWizardDialog(QDialog):
         layout.addWidget(self._title_label)
 
         sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setFrameShadow(QFrame.Sunken)
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(sep)
 
         self._stack = QStackedWidget()
@@ -414,8 +470,8 @@ class ProjectWizardDialog(QDialog):
             reply = QMessageBox.question(
                 self, i18n.tr('nouveau_projet_assistant'),
                 i18n.tr('wz_ecraser', nom=proj_name),
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if reply != QMessageBox.Yes:
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            if reply != QMessageBox.StandardButton.Yes:
                 return
         gpkg_temp = os.path.join(proj_folder, f"{proj_name}_tmp.gpkg")
 

@@ -9,11 +9,12 @@ from datetime import date, datetime
 from qgis.core import (QgsProject, QgsVectorLayer, QgsVectorFileWriter,
                        QgsRectangle, QgsCoordinateTransform,
                        QgsMemoryProviderUtils, QgsFeature, QgsLayerTreeGroup,
-                       QgsUnitTypes)
+                       )
 from qgis.PyQt.QtCore import QSettings, Qt
 from . import i18n
 from qgis.PyQt.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QProgressDialog, QApplication
 from . import errlog
+from qgis.core import Qgis
 
 
 def _copy_to_memory(layer):
@@ -115,7 +116,7 @@ def _read_label_size(project, s):
         if pal is None:
             continue
         fmt  = pal.format()
-        unit = ('points' if fmt.sizeUnit() == QgsUnitTypes.RenderPoints
+        unit = ('points' if fmt.sizeUnit() == Qgis.RenderUnit.Points
                 else 'map_units')
         # Seuil de dézoom : lu sur les mêmes settings (0 = pas de seuil).
         min_scale = int(pal.minimumScale) if pal.scaleVisibility else 0
@@ -205,7 +206,7 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
     progress = QProgressDialog(i18n.tr('bet_sauvegarde'), None, 0, total_steps,
                                iface.mainWindow())
     progress.setWindowTitle(i18n.tr('enregistrer_projet'))
-    progress.setWindowModality(Qt.WindowModal)
+    progress.setWindowModality(Qt.WindowModality.WindowModal)
     progress.setMinimumDuration(0)
     progress.setMinimumWidth(380)
     progress.setValue(0)
@@ -286,15 +287,15 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
         opts.driverName = 'GPKG'
         opts.layerName  = layer_name
         opts.actionOnExistingFile = (
-            QgsVectorFileWriter.CreateOrOverwriteFile if first
-            else QgsVectorFileWriter.CreateOrOverwriteLayer
+            QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteFile if first
+            else QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer
         )
         first = False
 
         err, msg, _, _ = QgsVectorFileWriter.writeAsVectorFormatV3(
             mem_layer, gpkg_temp, ctx, opts)
 
-        if err != QgsVectorFileWriter.NoError:
+        if err != QgsVectorFileWriter.WriterError.NoError:
             errors.append(f"{layer_name} : {msg}")
         else:
             layers_meta[reseau][role] = layer_name

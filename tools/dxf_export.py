@@ -15,6 +15,7 @@ import os
 from qgis.PyQt.QtCore import Qt, QFile, QIODevice
 from qgis.PyQt.QtWidgets import QApplication, QMessageBox
 from qgis.core import (
+    Qgis,
     QgsProject, QgsVectorLayer, QgsDxfExport, QgsMapSettings,
 )
 
@@ -127,7 +128,7 @@ def export_dxf(iface, dxf_path, extent, scale, *,
             errlog.ignored(_err, "dxf_export.export_dxf:126")
 
     f = QFile(dxf_path)
-    if not f.open(QIODevice.WriteOnly | QIODevice.Truncate):
+    if not f.open(QIODevice.OpenModeFlag.WriteOnly | QIODevice.OpenModeFlag.Truncate):
         raise RuntimeError(i18n.tr('dxf_ouverture_impossible', chemin=dxf_path))
     try:
         result = export.writeToFile(f, encoding)
@@ -170,7 +171,7 @@ def run_export_dxf_with_ui(iface, dxf_path, extent, scale, *,
 
     Retourne True si l'export a réussi, False sinon.
     """
-    QApplication.setOverrideCursor(Qt.WaitCursor)
+    QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
     try:
         n_layers = export_dxf(
             iface, dxf_path, extent, scale, force_2d=force_2d)
@@ -192,7 +193,7 @@ def run_export_dxf_with_ui(iface, dxf_path, extent, scale, *,
             iface.messageBar().pushMessage(
                 i18n.tr('pt_export_dxf'),
                 i18n.tr('ot_dxf_symboles', erreur=exc),
-                level=1, duration=6,
+                level=Qgis.MessageLevel.Warning, duration=6,
             )
         try:
             from .dxf_postprocess import apply_ltscale
@@ -201,7 +202,7 @@ def run_export_dxf_with_ui(iface, dxf_path, extent, scale, *,
             iface.messageBar().pushMessage(
                 i18n.tr('pt_export_dxf'),
                 i18n.tr('ot_dxf_ltscale', erreur=exc),
-                level=1, duration=6,
+                level=Qgis.MessageLevel.Warning, duration=6,
             )
         try:
             from .dxf_postprocess import add_label_decorations
@@ -211,7 +212,7 @@ def run_export_dxf_with_ui(iface, dxf_path, extent, scale, *,
             iface.messageBar().pushMessage(
                 i18n.tr('pt_export_dxf'),
                 i18n.tr('ot_dxf_etiquettes', erreur=exc),
-                level=1, duration=6,
+                level=Qgis.MessageLevel.Warning, duration=6,
             )
     QApplication.restoreOverrideCursor()
 
@@ -220,7 +221,7 @@ def run_export_dxf_with_ui(iface, dxf_path, extent, scale, *,
     iface.messageBar().pushMessage(
         i18n.tr('pt_export_dxf'),
         i18n.tr('ot_dxf_exporte', nb=str(n_layers) + suffix, chemin=dxf_path),
-        level=0, duration=8,
+        level=Qgis.MessageLevel.Info, duration=8,
     )
     if open_after:
         open_dxf_externally(dxf_path)

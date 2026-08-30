@@ -75,8 +75,8 @@ class StarEauExportDialog(QDialog):
         layout.addWidget(self.tabs)
 
         self.buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.buttons.button(QDialogButtonBox.Ok).setText(i18n.tr('exp_titre'))
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(i18n.tr('exp_titre'))
         self.buttons.accepted.connect(self._on_accept)
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
@@ -129,7 +129,7 @@ class StarEauExportDialog(QDialog):
         out_layout.addLayout(dir_row)
 
         self.lbl_name = QLabel()
-        self.lbl_name.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.lbl_name.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.lbl_name.setWordWrap(True)
         font = QFont()
         font.setBold(True)
@@ -346,9 +346,9 @@ class StarEauExportDialog(QDialog):
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels([i18n.tr('se_niveau'), i18n.tr('se_objet'), i18n.tr('se_anomalie')])
         self.table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.Stretch)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+            2, QHeaderView.ResizeMode.Stretch)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.itemDoubleClicked.connect(self._zoom_to_issue)
         layout.addWidget(self.table)
 
@@ -390,7 +390,7 @@ class StarEauExportDialog(QDialog):
             self.table.setItem(row, 2, QTableWidgetItem(issue["message"]))
         self._ordered_issues = ordered
         self.table.resizeColumnsToContents()
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
 
         if not self._issues:
             self.lbl_check.setText(i18n.tr('se_aucune_anomalie'))
@@ -455,7 +455,7 @@ class StarEauExportDialog(QDialog):
     def changeEvent(self, event):
         """Recontrole aussi au retour de focus, en complement de l'ecoute."""
         super().changeEvent(event)
-        if event.type() == QEvent.ActivationChange and self.isActiveWindow():
+        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
             self.run_check()
 
     def closeEvent(self, event):
@@ -600,8 +600,8 @@ class StarEauExportDialog(QDialog):
             answer = QMessageBox.question(
                 self, i18n.tr('se_non_conformes'),
                 i18n.tr('se_poursuivre', nb=len(bloquants)),
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if answer != QMessageBox.Yes:
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            if answer != QMessageBox.StandardButton.Yes:
                 self.tabs.setCurrentIndex(4)
                 return
 

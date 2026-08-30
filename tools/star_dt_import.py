@@ -31,17 +31,17 @@ from qgis.core import (
     QgsPointXY, QgsWkbTypes, QgsProject,
     QgsLineSymbol, QgsSymbol,
     QgsSimpleLineSymbolLayer, QgsSimpleMarkerSymbolLayer,
-    QgsSingleSymbolRenderer, QgsUnitTypes,
-    QgsVectorFileWriter, QgsCoordinateReferenceSystem,
+    QgsSingleSymbolRenderer, QgsVectorFileWriter, QgsCoordinateReferenceSystem,
     QgsMarkerLineSymbolLayer, QgsFontMarkerSymbolLayer,
     QgsSymbolLayer, QgsProperty,
     QgsPalLayerSettings, QgsTextFormat, QgsVectorLayerSimpleLabeling,
 )
-from qgis.PyQt.QtCore import QVariant
+from qgis.PyQt.QtCore import QMetaType
 from qgis.PyQt.QtGui import QColor
 
 from . import i18n
 from . import errlog
+from qgis.core import Qgis
 
 
 # ---------------------------------------------------------------- lecture XML
@@ -225,14 +225,14 @@ def _element_geometry(el):
 
 # ---- Champs communs a tous les types ----
 _COMMON_FIELDS = [
-    ("identifiant",       QVariant.String),
-    ("reseau",            QVariant.String),
-    ("statut",            QVariant.String),
-    ("positionVerticale", QVariant.String),
-    ("visibleSurface",    QVariant.String),
-    ("sensible",          QVariant.String),
-    ("miseAJour",         QVariant.String),
-    ("caracteristiques",  QVariant.String),
+    ("identifiant",       QMetaType.Type.QString),
+    ("reseau",            QMetaType.Type.QString),
+    ("statut",            QMetaType.Type.QString),
+    ("positionVerticale", QMetaType.Type.QString),
+    ("visibleSurface",    QMetaType.Type.QString),
+    ("sensible",          QMetaType.Type.QString),
+    ("miseAJour",         QMetaType.Type.QString),
+    ("caracteristiques",  QMetaType.Type.QString),
 ]
 
 # Ordre d'affichage prioritaire. Les classes StaR-Elec absentes de cette liste
@@ -460,9 +460,9 @@ def import_star_dt(gml_paths, gpkg_path, selected_types=None,
             continue
 
         wkb_name = {
-            QgsWkbTypes.PointGeometry:   "Point",
-            QgsWkbTypes.LineGeometry:    "LineString",
-            QgsWkbTypes.PolygonGeometry: "Polygon",
+            QgsWkbTypes.GeometryType.PointGeometry:   "Point",
+            QgsWkbTypes.GeometryType.LineGeometry:    "LineString",
+            QgsWkbTypes.GeometryType.PolygonGeometry: "Polygon",
         }.get(geom_type)
         if wkb_name is None:
             continue
@@ -471,7 +471,7 @@ def import_star_dt(gml_paths, gpkg_path, selected_types=None,
         dp = mem_layer.dataProvider()
 
         field_names = _discover_fields(elements)
-        dp.addAttributes([QgsField(name, QVariant.String) for name in field_names])
+        dp.addAttributes([QgsField(name, QMetaType.Type.QString) for name in field_names])
         mem_layer.updateFields()
 
         mem_layer.startEditing()
@@ -494,15 +494,15 @@ def import_star_dt(gml_paths, gpkg_path, selected_types=None,
         opts.driverName = "GPKG"
         opts.layerName = out_type
         opts.actionOnExistingFile = (
-            QgsVectorFileWriter.CreateOrOverwriteFile if first
-            else QgsVectorFileWriter.CreateOrOverwriteLayer
+            QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteFile if first
+            else QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer
         )
         first = False
 
         err, msg, _, _ = QgsVectorFileWriter.writeAsVectorFormatV3(
             mem_layer, gpkg_path, ctx, opts)
 
-        if err != QgsVectorFileWriter.NoError:
+        if err != QgsVectorFileWriter.WriterError.NoError:
             raise RuntimeError(i18n.tr('sdt_err_ecriture', couche=out_type,
                                        code=err, detail=msg))
 
@@ -609,24 +609,24 @@ def _apply_style(layer, out_type, is_cable=False):
         layer.setRenderer(QgsSingleSymbolRenderer(
             _make_labeled_line_symbol(color, width, abbr, has_precision)))
 
-    elif layer.geometryType() == QgsWkbTypes.LineGeometry:
+    elif layer.geometryType() == QgsWkbTypes.GeometryType.LineGeometry:
         # Fourreau : ligne #93120C pointillee
         sl = QgsSimpleLineSymbolLayer(color, width)
-        sl.setWidthUnit(QgsUnitTypes.RenderMillimeters)
+        sl.setWidthUnit(Qgis.RenderUnit.Millimeters)
         if dashed:
             sl.setCustomDashVector([2.0, 1.2])
-            sl.setCustomDashPatternUnit(QgsUnitTypes.RenderMillimeters)
+            sl.setCustomDashPatternUnit(Qgis.RenderUnit.Millimeters)
             sl.setUseCustomDashPattern(True)
         layer.setRenderer(QgsSingleSymbolRenderer(QgsLineSymbol([sl])))
 
     else:
         # Points : rond
-        symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.PointGeometry)
+        symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.GeometryType.PointGeometry)
         ml = QgsSimpleMarkerSymbolLayer(
-            QgsSimpleMarkerSymbolLayer.Circle, marker_size)
+            Qgis.MarkerShape.Circle, marker_size)
         ml.setColor(color)
         ml.setStrokeColor(color.darker(130))
-        ml.setSizeUnit(QgsUnitTypes.RenderMapUnits)
+        ml.setSizeUnit(Qgis.RenderUnit.MapUnits)
         symbol.changeSymbolLayer(0, ml)
         layer.setRenderer(QgsSingleSymbolRenderer(symbol))
 
@@ -652,34 +652,34 @@ def _make_labeled_line_symbol(color, width, abbr, has_precision=True):
 
     # ---- Couche 1 : trait fin, interrompu a chaque marqueur ----
     line = QgsSimpleLineSymbolLayer(color, width)
-    line.setWidthUnit(QgsUnitTypes.RenderMillimeters)
+    line.setWidthUnit(Qgis.RenderUnit.Millimeters)
     line.setCustomDashVector([_MARKER_DASH, _MARKER_GAP])
-    line.setCustomDashPatternUnit(QgsUnitTypes.RenderMillimeters)
+    line.setCustomDashPatternUnit(Qgis.RenderUnit.Millimeters)
     line.setUseCustomDashPattern(True)
 
     # ---- Couche 2 : libelle repete, centre dans la coupure ----
     marker_line = QgsMarkerLineSymbolLayer()
     marker_line.setInterval(period)
-    marker_line.setIntervalUnit(QgsUnitTypes.RenderMillimeters)
+    marker_line.setIntervalUnit(Qgis.RenderUnit.Millimeters)
     marker_line.setPlacement(QgsMarkerLineSymbolLayer.Interval)
     marker_line.setOffsetAlongLine(_MARKER_DASH + _MARKER_GAP / 2.0)
-    marker_line.setOffsetAlongLineUnit(QgsUnitTypes.RenderMillimeters)
+    marker_line.setOffsetAlongLineUnit(Qgis.RenderUnit.Millimeters)
 
     # Sous-symbole : marqueur police
-    sub = QgsSymbol.defaultSymbol(QgsWkbTypes.PointGeometry)
+    sub = QgsSymbol.defaultSymbol(QgsWkbTypes.GeometryType.PointGeometry)
     font_marker = QgsFontMarkerSymbolLayer()
     font_marker.setFontFamily("Arial")
     font_marker.setCharacter(abbr)
     font_marker.setColor(color)
     font_marker.setSize(_MARKER_TEXT_SIZE)
-    font_marker.setSizeUnit(QgsUnitTypes.RenderMillimeters)
+    font_marker.setSizeUnit(Qgis.RenderUnit.Millimeters)
 
     if has_precision:
         # La classe varie d'une entite a l'autre : le texte est pilote par le champ.
         expr = (f"'{abbr}-' || coalesce(nullif(\"{_PRECISION_FIELD}\", ''), '?')")
         try:
             font_marker.setDataDefinedProperty(
-                QgsSymbolLayer.PropertyCharacter, QgsProperty.fromExpression(expr))
+                QgsSymbolLayer.Property.PropertyCharacter, QgsProperty.fromExpression(expr))
         except Exception as _err:
             errlog.ignored(_err, "star_dt_import._make_labeled_line_symbol:681")
 
@@ -714,13 +714,13 @@ def _apply_labels(layer, out_type):
         settings = QgsPalLayerSettings()
         settings.fieldName = expression
         settings.isExpression = True
-        settings.placement = QgsPalLayerSettings.AroundPoint
+        settings.placement = Qgis.LabelPlacement.AroundPoint
         settings.dist = _LABEL_DIST
-        settings.distUnits = QgsUnitTypes.RenderMillimeters
+        settings.distUnits = Qgis.RenderUnit.Millimeters
 
         text_format = QgsTextFormat()
         text_format.setSize(_LABEL_TEXT_SIZE)
-        text_format.setSizeUnit(QgsUnitTypes.RenderMillimeters)
+        text_format.setSizeUnit(Qgis.RenderUnit.Millimeters)
         text_format.setColor(QColor(60, 60, 60))
         settings.setFormat(text_format)
 

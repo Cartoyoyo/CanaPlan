@@ -89,7 +89,7 @@ class ProfilGroupeDialog(QDialog):
         }
         self.setWindowTitle(i18n.tr('pg_titre'))
         self.setMinimumSize(600, 400)
-        self.setAttribute(Qt.WA_DeleteOnClose, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
         if not HAS_MPL:
             QMessageBox.critical(
@@ -122,7 +122,7 @@ class ProfilGroupeDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidget(self.canvas)
         scroll.setWidgetResizable(False)
-        scroll.setAlignment(Qt.AlignCenter)
+        scroll.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(scroll, stretch=1)
 
         screen = QApplication.primaryScreen().availableGeometry()

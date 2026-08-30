@@ -2,7 +2,7 @@
 
 import math
 
-from qgis.core import QgsPointXY, QgsWkbTypes
+from qgis.core import Qgis, QgsPointXY, QgsWkbTypes
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
@@ -48,12 +48,12 @@ class CopyAttributesTool(QgsMapTool):
 
     def activate(self):
         super().activate()
-        self.canvas.setCursor(Qt.CrossCursor)
+        self.canvas.setCursor(Qt.CursorShape.CrossCursor)
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             i18n.tr('copy_attributes'),
             i18n.tr('ot_aide_copy'),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     def deactivate(self):
@@ -68,7 +68,7 @@ class CopyAttributesTool(QgsMapTool):
         self._update_hover(event.pos())
 
     def canvasReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             if self._hover is None:
                 return
             role, feat, layer, reseau = self._hover
@@ -87,12 +87,12 @@ class CopyAttributesTool(QgsMapTool):
                 self._clear_hover_band()
                 self.canvas.update()
 
-        elif event.button() == Qt.RightButton:
+        elif event.button() == Qt.MouseButton.RightButton:
             if self._mode == 'select' and self._targets:
                 self._apply()
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self._reset()
 
     # ------------------------------------------------------------------ copie source
@@ -191,12 +191,12 @@ class CopyAttributesTool(QgsMapTool):
 
     def _make_band(self, feat, layer, color):
         gtype = layer.geometryType()
-        if gtype == QgsWkbTypes.PointGeometry:
-            rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        if gtype == QgsWkbTypes.GeometryType.PointGeometry:
+            rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
             rb.setToGeometry(feat.geometry(), layer)
             rb.setColor(color)
             rb.setIconSize(16)
-            rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+            rb.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
         else:
             rb = QgsRubberBand(self.canvas, gtype)
             rb.setToGeometry(feat.geometry(), layer)

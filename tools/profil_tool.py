@@ -1,11 +1,11 @@
-import sip
-from qgis.core import QgsPointXY, QgsWkbTypes
+from qgis.PyQt import sip
+from qgis.core import Qgis, QgsPointXY, QgsWkbTypes
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt
 
 from . import i18n
 from qgis.PyQt.QtGui import QColor
-from qgis.PyQt.QtWidgets import QMessageBox
+from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
 from .graph_utils import _to_float, build_graph, bfs, QGIS_NULL
 
@@ -34,11 +34,11 @@ class ProfilTool(QgsMapTool):
 
     def activate(self):
         super().activate()
-        self.canvas.setCursor(Qt.CrossCursor)
+        self.canvas.setCursor(Qt.CursorShape.CrossCursor)
         self.iface.messageBar().pushMessage(
             i18n.tr('ot_titre_profil', reseau=self.reseau),
             i18n.tr('po_aide_profil'),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     def deactivate(self):
@@ -70,7 +70,7 @@ class ProfilTool(QgsMapTool):
             self._clear_band('_hover_band')
 
     def canvasReleaseEvent(self, event):
-        if event.button() != Qt.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
             return
         feat = self._nearest_regard(self.toMapCoordinates(event.pos()))
         if feat is None:
@@ -86,7 +86,7 @@ class ProfilTool(QgsMapTool):
             self._reset()
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self._reset()
 
     # ------------------------------------------------------------------ données
@@ -96,6 +96,13 @@ class ProfilTool(QgsMapTool):
         regard_layer   = self._layer('regard')
         if conduite_layer is None or regard_layer is None:
             return
+
+        # Le regard le plus profond doit toujours apparaître à gauche du
+        # profil, quel que soit l'ordre de clic départ/arrivée.
+        prof_start = _to_float(start['profondeur'])
+        prof_end   = _to_float(end['profondeur'])
+        if prof_end is not None and (prof_start is None or prof_end > prof_start):
+            start, end = end, start
 
         from .calc_pentes import recalc_pentes
         recalc_pentes(conduite_layer, regard_layer,
@@ -135,7 +142,7 @@ class ProfilTool(QgsMapTool):
 
         from ..gui.profil_dialog import ProfilDialog, ProfilOptionsDialog
         opts_dlg = ProfilOptionsDialog(self.iface.mainWindow())
-        if opts_dlg.exec_() != opts_dlg.Accepted:
+        if opts_dlg.exec() != QDialog.DialogCode.Accepted:
             return
         dlg = ProfilDialog(
             {
@@ -185,10 +192,10 @@ class ProfilTool(QgsMapTool):
         return ''
 
     def _make_pt_band(self, color):
-        rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
         rb.setColor(color)
         rb.setIconSize(14)
-        rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+        rb.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
         return rb
 
     def _clear_band(self, attr):

@@ -6,11 +6,13 @@ import math
 from qgis.PyQt.QtCore import Qt, QDate, QSize
 from qgis.PyQt.QtGui import QColor, QFont
 from qgis.PyQt.QtWidgets import (
+    QDialog,
     QApplication, QFileDialog, QMessageBox,
     QGraphicsTextItem,
 )
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.core import (
+    Qgis,
     QgsWkbTypes, QgsGeometry, QgsRectangle, QgsPointXY,
     QgsProject, QgsMapSettings, QgsMapRendererParallelJob,
 )
@@ -47,7 +49,7 @@ class _Chrono:
         if not _CHRONO:
             return
         from qgis.core import QgsMessageLog, Qgis
-        QgsMessageLog.logMessage(message, self.TAG, Qgis.Info)
+        QgsMessageLog.logMessage(message, self.TAG, Qgis.MessageLevel.Info)
 
     def etape(self, libelle):
         """Temps écoulé depuis l'étape précédente, et depuis le début."""
@@ -112,18 +114,18 @@ class PrintTool(QgsMapTool):
         self._sheets = []   # [{'center': QgsPointXY, 'rotation_rad': float}]
         self._bands  = []   # [QgsRubberBand] feuilles définitivement posées
 
-        self._preview = QgsRubberBand(canvas, QgsWkbTypes.PolygonGeometry)
+        self._preview = QgsRubberBand(canvas, QgsWkbTypes.GeometryType.PolygonGeometry)
         self._preview.setColor(QColor(255, 140, 0, 70))
         self._preview.setStrokeColor(QColor(220, 100, 0, 230))
         self._preview.setWidth(2)
 
         # Trait épais rouge sur le bord HAUT pour distinguer le sens
-        self._preview_top_edge = QgsRubberBand(canvas, QgsWkbTypes.LineGeometry)
+        self._preview_top_edge = QgsRubberBand(canvas, QgsWkbTypes.GeometryType.LineGeometry)
         self._preview_top_edge.setColor(QColor(220, 30, 30, 255))
         self._preview_top_edge.setWidth(5)
 
         # Bande grise en bas = zone cartouche
-        self._preview_carto_band = QgsRubberBand(canvas, QgsWkbTypes.PolygonGeometry)
+        self._preview_carto_band = QgsRubberBand(canvas, QgsWkbTypes.GeometryType.PolygonGeometry)
         self._preview_carto_band.setColor(QColor(180, 180, 180, 150))
         self._preview_carto_band.setStrokeColor(QColor(90, 90, 90, 200))
         self._preview_carto_band.setWidth(1)
@@ -140,18 +142,18 @@ class PrintTool(QgsMapTool):
         self._preview_label.setVisible(False)
         canvas.scene().addItem(self._preview_label)
 
-        self.setCursor(Qt.CrossCursor)
+        self.setCursor(Qt.CursorShape.CrossCursor)
 
     # ── Cycle de vie ───────────────────────────────────────────────────────
 
     def activate(self):
         super().activate()
-        self.canvas().setCursor(Qt.CrossCursor)
+        self.canvas().setCursor(Qt.CursorShape.CrossCursor)
         if self.s.get('cadrage_auto'):
             return   # rien à poser : l'aide n'aurait aucun sens
         self.iface.messageBar().pushMessage(
             i18n.tr('msg_impression'), _aide_pose(self.s),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     def deactivate(self):
@@ -207,7 +209,7 @@ class PrintTool(QgsMapTool):
     def canvasPressEvent(self, event):
         pt = self.toMapCoordinates(event.pos())
 
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             if self._state == _STATE_MOVE:
                 # 1er clic : ancrer la position, passer en rotation
                 self._anchor  = self._compute_move_center(pt)
@@ -217,7 +219,7 @@ class PrintTool(QgsMapTool):
                 self.iface.messageBar().pushMessage(
                     i18n.tr('msg_impression'),
                     i18n.tr('pt_orienter', n=n),
-                    level=0, duration=5,
+                    level=Qgis.MessageLevel.Info, duration=5,
                 )
 
             else:  # _STATE_ROTATE
@@ -225,20 +227,20 @@ class PrintTool(QgsMapTool):
                 self._place_sheet(self._anchor, self._cur_rot)
                 self._state = _STATE_MOVE
 
-        elif event.button() == Qt.RightButton:
+        elif event.button() == Qt.MouseButton.RightButton:
             if self._sheets:
                 self._ask_and_export()
             else:
                 self.canvas().unsetMapTool(self)
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             from qgis.PyQt.QtCore import QTimer
             self._reset()
             QTimer.singleShot(0, self._reopen_settings)
             event.accept()
 
-        elif event.key() in (Qt.Key_Backspace, Qt.Key_Delete):
+        elif event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):
             if self._state == _STATE_ROTATE:
                 # Annule l'ancrage en cours, revient au placement libre
                 self._state   = _STATE_MOVE
@@ -246,7 +248,7 @@ class PrintTool(QgsMapTool):
                 self._cur_rot = 0.0
                 self.iface.messageBar().pushMessage(
                     i18n.tr('msg_impression'), i18n.tr('pt_ancrage_annule'),
-                    level=0, duration=3)
+                    level=Qgis.MessageLevel.Info, duration=3)
             elif self._sheets:
                 # Dépile uniquement la dernière feuille posée
                 self._sheets.pop()
@@ -256,7 +258,7 @@ class PrintTool(QgsMapTool):
                 self.iface.messageBar().pushMessage(
                     i18n.tr('msg_impression'),
                     i18n.tr('pt_feuille_supprimee', n=len(self._sheets) + 1),
-                    level=0, duration=3)
+                    level=Qgis.MessageLevel.Info, duration=3)
             event.accept()
 
     def _reset(self):
@@ -297,7 +299,7 @@ class PrintTool(QgsMapTool):
         else:
             dlg.rb_manuel.setChecked(True)
 
-        if dlg.exec_() != PrintDialog.Accepted:
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             self.canvas().unsetMapTool(self)
             return
 
@@ -318,7 +320,7 @@ class PrintTool(QgsMapTool):
 
         self.iface.messageBar().pushMessage(
             i18n.tr('msg_impression'), _aide_pose(self.s),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     # ── Calcul de position ─────────────────────────────────────────────────
@@ -524,7 +526,7 @@ class PrintTool(QgsMapTool):
 
     def _place_sheet(self, center, rotation_rad, annoncer=True):
         corners = self._corners(center.x(), center.y(), rotation_rad)
-        band = QgsRubberBand(self.canvas(), QgsWkbTypes.PolygonGeometry)
+        band = QgsRubberBand(self.canvas(), QgsWkbTypes.GeometryType.PolygonGeometry)
         band.setColor(QColor(30, 100, 200, 45))
         band.setStrokeColor(QColor(20, 80, 180, 210))
         band.setWidth(2)
@@ -541,7 +543,7 @@ class PrintTool(QgsMapTool):
             self.iface.messageBar().pushMessage(
                 i18n.tr('msg_impression'),
                 i18n.tr('pt_feuille_posee', n=n),
-                level=0, duration=4,
+                level=Qgis.MessageLevel.Info, duration=4,
             )
 
     # ── Choix du format d'export ───────────────────────────────────────────
@@ -585,7 +587,7 @@ class PrintTool(QgsMapTool):
             if not os.path.exists(cand) or QMessageBox.question(
                     self.iface.mainWindow(), i18n.tr('pt_export_dxf'),
                     i18n.tr('pt_fichier_existe', chemin=cand),
-                    QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
                 dxf_path = cand
         if not dxf_path:
             start_dir   = project_dir() or os.path.expanduser("~")
@@ -628,7 +630,7 @@ class PrintTool(QgsMapTool):
             if not os.path.exists(cand) or QMessageBox.question(
                     self.iface.mainWindow(), i18n.tr('msg_impression'),
                     i18n.tr('pt_fichier_existe', chemin=cand),
-                    QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
                 pdf_path = cand
         if not pdf_path:
             start_dir = project_dir() or os.path.expanduser("~")
@@ -641,7 +643,7 @@ class PrintTool(QgsMapTool):
             if not pdf_path:
                 return
 
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             self._generate_pdf(pdf_path, overview_settings)
         except Exception as exc:
@@ -850,9 +852,9 @@ class PrintTool(QgsMapTool):
             ms.setOutputDpi(dpi)
             ms.setBackgroundColor(QColor(255, 255, 255))
             try:
-                ms.setFlag(QgsMapSettings.Antialiasing,       True)
-                ms.setFlag(QgsMapSettings.DrawLabeling,       True)
-                ms.setFlag(QgsMapSettings.UseAdvancedEffects, True)
+                ms.setFlag(Qgis.MapSettingsFlag.Antialiasing,       True)
+                ms.setFlag(Qgis.MapSettingsFlag.DrawLabeling,       True)
+                ms.setFlag(Qgis.MapSettingsFlag.UseAdvancedEffects, True)
                 # ForceVectorOutput n'a rien à faire ici : la sortie de ce job
                 # est une QImage (renderedImage()), recollée ensuite dans le
                 # QPrinter. Le drapeau ne préservait donc aucun vectoriel mais
@@ -867,8 +869,8 @@ class PrintTool(QgsMapTool):
                 from qgis.core import QgsVectorSimplifyMethod
                 simplify = QgsVectorSimplifyMethod()
                 simplify.setSimplifyHints(
-                    QgsVectorSimplifyMethod.GeometrySimplification)
-                simplify.setSimplifyAlgorithm(QgsVectorSimplifyMethod.Distance)
+                    Qgis.VectorRenderingSimplificationFlag.GeometrySimplification)
+                simplify.setSimplifyAlgorithm(Qgis.VectorSimplificationAlgorithm.Distance)
                 simplify.setThreshold(1.0)
                 simplify.setForceLocalOptimization(True)
                 ms.setSimplifyMethod(simplify)
@@ -897,7 +899,7 @@ class PrintTool(QgsMapTool):
             # bande de libellés. Fixer cette hauteur en millimètres coupait
             # le texte par le bas dès que la police dépassait — ce qui était
             # le cas sur tous les formats à partir du A3.
-            drapeau = Qt.AlignHCenter | Qt.AlignBottom
+            drapeau = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom
             f_sb = QFont("Arial")
             f_sb.setPointSize(max(5, int(carto_h_mm / 25.4 * 72 * 0.16)))
             painter.setFont(f_sb)
@@ -919,7 +921,7 @@ class PrintTool(QgsMapTool):
             # Un seul contour pour toute la barre, plus les séparations : les
             # segments encadrés un par un doublaient chaque trait intérieur.
             painter.setPen(QPen(encre, 1))
-            painter.setBrush(Qt.NoBrush)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(QRect(sb_x, sb_y, total_px, sb_h_px))
             for k in range(1, n_seg):
                 x = sb_x + int(k * seg_px)
@@ -962,7 +964,7 @@ class PrintTool(QgsMapTool):
                 """
                 f = QFont("Arial")
                 f.setBold(bold)
-                flags = Qt.AlignHCenter | Qt.AlignVCenter | Qt.TextWordWrap
+                flags = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap
                 for taille in range(int(pt), 4, -1):
                     f.setPointSize(taille)
                     # boundingRect du painter : métriques du périphérique de
@@ -993,7 +995,7 @@ class PrintTool(QgsMapTool):
                 painter.setPen(QColor(0, 0, 0))
                 painter.drawText(
                     QRect(xp + 4, carto_y_px, wp - 8, carto_h_px),
-                    Qt.AlignHCenter | Qt.AlignVCenter | Qt.TextWordWrap,
+                    Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap,
                     text)
             painter.setPen(QPen(QColor(0, 0, 0), 1))
             painter.drawRect(QRect(0, carto_y_px, w_px - 1,
@@ -1026,7 +1028,7 @@ class PrintTool(QgsMapTool):
                 QPoint(int(r * 0.55), int(r * 0.45)),
             ])
             painter.setBrush(QColor(0, 0, 0))
-            painter.setPen(Qt.NoPen)
+            painter.setPen(Qt.PenStyle.NoPen)
             painter.drawPolygon(arrow)
             f_n = QFont("Arial")
             f_n.setBold(True)
@@ -1035,7 +1037,7 @@ class PrintTool(QgsMapTool):
             painter.setPen(QColor(0, 0, 0))
             painter.drawText(
                 QRect(int(-r), int(r * 0.30), int(2 * r), int(size * 0.32)),
-                Qt.AlignHCenter | Qt.AlignVCenter, "N")
+                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "N")
             painter.restore()
 
         # ── Rendu de toutes les pages en parallèle ────────────────────────
@@ -1086,7 +1088,7 @@ class PrintTool(QgsMapTool):
             i18n.tr('pt_rendu_cartes'), i18n.tr('annuler'), 0, len(jobs),
             self.iface.mainWindow())
         progress.setWindowTitle(i18n.tr('msg_impression'))
-        progress.setWindowModality(Qt.WindowModal)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(400)
         deja_fini = [False] * len(jobs)
         try:
@@ -1107,11 +1109,12 @@ class PrintTool(QgsMapTool):
                         j.cancel()
                     self.iface.messageBar().pushMessage(
                         i18n.tr('msg_impression'), i18n.tr('pt_export_annule'),
-                        level=1, duration=5)
+                        level=Qgis.MessageLevel.Warning, duration=5)
                     return
                 if done == len(jobs):
                     break
-                QApplication.processEvents(QEventLoop.AllEvents, 50)
+                QApplication.processEvents(
+                    QEventLoop.ProcessEventsFlag.AllEvents, 50)
         finally:
             progress.close()
 
@@ -1126,18 +1129,16 @@ class PrintTool(QgsMapTool):
         try:
             from qgis.PyQt.QtPrintSupport import QPrinter
             from qgis.PyQt.QtCore import QSizeF
+            from qgis.PyQt.QtGui import QPageSize
             writer = QPrinter()
             writer.setOutputFileName(pdf_path)
             writer.setResolution(int(dpi))
             writer.setFullPage(True)
-            # setPaperSize : Qt5 = (QSizeF, QPrinter.Millimeter)
-            #                Qt6 = (QSizeF, QPrinter.Unit.Millimeter)
-            try:
-                writer.setOutputFormat(QPrinter.PdfFormat)
-                writer.setPaperSize(QSizeF(w_mm, h_mm), QPrinter.Millimeter)
-            except AttributeError:
-                writer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
-                writer.setPaperSize(QSizeF(w_mm, h_mm), QPrinter.Unit.Millimeter)
+            writer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+            # setPaperSize() a disparu en Qt6. setPageSize(QPageSize) existe
+            # depuis Qt 5.3 et donne le même résultat au mm près.
+            writer.setPageSize(
+                QPageSize(QSizeF(w_mm, h_mm), QPageSize.Unit.Millimeter))
         except Exception as e:
             raise RuntimeError(i18n.tr('pt_pdf_impossible', chemin=e))
 
@@ -1167,7 +1168,7 @@ class PrintTool(QgsMapTool):
             # un transparency group PDF que Qt5 ne ferme pas sans restore(),
             # ce qui crée un voile blanc sur toutes les pages suivantes.
             painter.save()
-            painter.setRenderHint(QPainter.Antialiasing, True)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
             # Chaque planche reçoit sa teinte, et le style de trait alterne
             # au-delà de la palette : deux planches de même couleur ne se
@@ -1184,21 +1185,21 @@ class PrintTool(QgsMapTool):
             # Passe 1 : les fonds, très légers. Un aplat marqué s'additionne
             # dans les recouvrements et noircit justement les zones où il
             # faudrait y voir clair.
-            painter.setPen(Qt.NoPen)
+            painter.setPen(Qt.PenStyle.NoPen)
             for si, poly in enumerate(polys):
                 painter.setBrush(_couleur_planche(si, 30))
                 painter.drawPolygon(poly)
 
             # Passe 2 : tous les contours par-dessus tous les fonds, sinon le
             # fond d'une planche vient masquer le contour de sa voisine.
-            painter.setBrush(Qt.NoBrush)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
             for si, poly in enumerate(polys):
-                style = (Qt.SolidLine
+                style = (Qt.PenStyle.SolidLine
                          if (si // len(_TEINTES_PLANCHES)) % 2 == 0
-                         else Qt.DashLine)
+                         else Qt.PenStyle.DashLine)
                 stylo = QPen(_couleur_planche(si, 245), max(2, px(0.6)))
                 stylo.setStyle(style)
-                stylo.setJoinStyle(Qt.MiterJoin)
+                stylo.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
                 painter.setPen(stylo)
                 painter.drawPolygon(poly)
 
@@ -1238,9 +1239,9 @@ class PrintTool(QgsMapTool):
                     f_num, texte)
 
                 painter.setPen(QPen(QColor(255, 255, 255, 230), liseré))
-                painter.setBrush(Qt.NoBrush)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawPath(chemin)              # le cerne
-                painter.setPen(Qt.NoPen)
+                painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(_couleur_planche(si, 255))
                 painter.drawPath(chemin)              # le chiffre
             painter.restore()
@@ -1274,7 +1275,7 @@ class PrintTool(QgsMapTool):
         self.iface.messageBar().pushMessage(
             i18n.tr('msg_impression'),
             i18n.tr('pt_pdf_exporte', nb=n, chemin=pdf_path),
-            level=0, duration=8,
+            level=Qgis.MessageLevel.Info, duration=8,
         )
         if self.s.get('open_after', True):
             try:

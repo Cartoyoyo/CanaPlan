@@ -12,8 +12,9 @@
 
 **Plugin QGIS de dessin topologique de réseaux d'assainissement — EU / EP, du tracé terrain à la livraison StaR-Eau**
 
-[![QGIS](https://img.shields.io/badge/QGIS-3.28%2B-green?logo=qgis&logoColor=white)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-1.4-blue)](#-changelog)
+[![QGIS](https://img.shields.io/badge/QGIS-3.40%2B%20%7C%204.x-green?logo=qgis&logoColor=white)](https://qgis.org)
+[![Version](https://img.shields.io/badge/version-1.8-blue)](#-changelog)
+[![Qt](https://img.shields.io/badge/Qt-5%20%7C%206-brightgreen?logo=qt&logoColor=white)](https://qgis.org)
 [![StaR-Eau](https://img.shields.io/badge/StaR--Eau-V2024%20CNIG%2FASTEE-orange)](#-export-star-eau-cnig--astee-v2024)
 [![Langues](https://img.shields.io/badge/langues-FR%20%7C%20EN%20%7C%20ES%20%7C%20PT%20%7C%20DE-purple)](#-langues--languages)
 
@@ -434,6 +435,15 @@ son cadre délimite exactement la zone que montrera la planche.
 > cubature remblai (PDF + XLSX) et les coupes types EU et EP, rassemblés dans
 > une seule archive. Les cases cochées sont ignorées : c'est un raccourci
 > « tout le dossier », pas une option de plus.
+>
+> **PDF complet** — le bouton violet, à sa gauche, prend le même contenu et
+> l'assemble en **un seul document** : plan, puis profils EU/EP, puis coupes
+> types, puis cubature. Le DXF et le classeur XLSX ne sont pas produits, ils ne
+> s'assemblent pas dans un PDF. À choisir selon l'usage : l'archive garde les
+> pièces séparées et rééditables, le PDF se fait circuler tel quel.
+> L'assemblage repose sur *pypdf*, vérifié **avant** de produire quoi que ce
+> soit — jamais après avoir fait poser les feuilles du plan. Le compte rendu
+> final, dans les deux cas, propose d'ouvrir le dossier de sortie.
 
 <div align="center">
   <img src="images/imprime_exporter_pdfdxf_parametreimpression.png" alt="Paramètres d'impression">
@@ -859,11 +869,14 @@ La compatibilite ascendante est assuree avec le format v1 (JSON brut + GPKG exte
 
 2. Copiez le dossier `CanaPlan` dans le répertoire des plugins QGIS :
 
+   `<QGIS3>` vaut `QGIS3` sous QGIS 3 et `QGIS4` sous QGIS 4 : le profil change de
+   dossier avec la version majeure.
+
    | Système | Chemin |
    |---------|--------|
-   | Windows | `C:\Users\<utilisateur>\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\` |
-   | macOS   | `~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins/` |
-   | Linux   | `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/` |
+   | Windows | `C:\Users\<utilisateur>\AppData\Roaming\QGIS\<QGIS3>\profiles\default\python\plugins\` |
+   | macOS   | `~/Library/Application Support/QGIS/<QGIS3>/profiles/default/python/plugins/` |
+   | Linux   | `~/.local/share/QGIS/<QGIS3>/profiles/default/python/plugins/` |
 
 3. Ouvrez QGIS, allez dans **Extensions → Installer/Gérer les extensions → Installées**, cochez **CanaPlan** et cliquez sur **OK**.
 
@@ -873,11 +886,18 @@ La compatibilite ascendante est assuree avec le format v1 (JSON brut + GPKG exte
 
 | Dépendance | Statut | Usage |
 |---|---|---|
-| QGIS **>= 3.28** | requis (>= 3.38 recommandé pour éviter les avertissements `QMetaType`) | — |
+| QGIS **>= 3.40**, jusqu'à **4.x** inclus | requis | le même paquet tourne sous Qt 5 et Qt 6 |
 | **matplotlib** | optionnel | profil en long, coupe transversale, dessinateur de coupes de tranchées composées |
-| **ezdxf** | inclus (`libs/`) | post-traitement de l'export DXF (fonds, cadres, lignes de rappel, symboles ponctuels) |
+| **ezdxf**, **fontTools**, **pyparsing** | téléchargées à la demande | export DXF et conversion DXF/DWG. Le plugin propose de les installer dans son propre dossier au premier export, sans droits administrateur — le reste de CanaPlan ne pose jamais la question |
+| **pypdf** | téléchargée à la demande | assemblage du **PDF complet**. Fourni par plusieurs versions de QGIS : le cas courant est qu'il n'y ait rien à installer |
 | **reportlab** | optionnel | exports PDF de cubature / remblai |
 | **openpyxl** | optionnel | exports Excel de cubature / remblai |
+
+> **QGIS 4 / Qt 6.** Depuis la version 1.8, `metadata.txt` déclare
+> `qgisMinimumVersion=3.40` et `qgisMaximumVersion=4.99` : un seul paquet pour
+> les deux générations. Tous les énumérés Qt et QGIS sont écrits sous leur forme
+> qualifiée (`Qt.AlignmentFlag.AlignCenter`), la seule que PyQt6 accepte et qui
+> reste valide sous PyQt5.
 
 ---
 
@@ -932,11 +952,18 @@ From field survey to delivery, one tool covers the whole chain: Star-DT / StaR-E
 
 | Dependency | Status | Used for |
 |---|---|---|
-| QGIS **>= 3.28** | required (>= 3.38 recommended, avoids `QMetaType` warnings) | — |
+| QGIS **>= 3.40**, up to **4.x** | required | one package runs on both Qt 5 and Qt 6 |
 | **matplotlib** | optional | longitudinal profiles, cross sections, composite trench designer |
-| **ezdxf** | bundled (`libs/`) | DXF export post-processing (hatches, frames, extension lines, point symbols) |
+| **ezdxf**, **fontTools**, **pyparsing** | downloaded on demand | DXF export and DXF/DWG conversion. The plugin offers to install them into its own folder on the first export, without administrator rights |
+| **pypdf** | downloaded on demand | assembling the **complete PDF**. Shipped by several QGIS versions, so usually there is nothing to install |
 | **reportlab** | optional | volume / backfill PDF reports |
 | **openpyxl** | optional | volume / backfill Excel reports |
+
+> **QGIS 4 / Qt 6.** From version 1.8 on, `metadata.txt` declares
+> `qgisMinimumVersion=3.40` and `qgisMaximumVersion=4.99`: a single package for
+> both generations. Every Qt and QGIS enum is written in its scoped form
+> (`Qt.AlignmentFlag.AlignCenter`), the only one PyQt6 accepts and one that
+> stays valid under PyQt5.
 
 ### 🚀 Installation
 
@@ -996,7 +1023,7 @@ Del levantamiento de campo a la entrega, una sola herramienta cubre toda la cade
 3. En QGIS, vaya a **Complementos → Administrar e instalar complementos → Instalados**, marque **CanaPlan** y pulse **Aceptar**.
 4. Un único icono aparece en la barra de complementos: muestra y oculta el panel lateral.
 
-Requisitos: QGIS **>= 3.28**; *matplotlib*, *reportlab* y *openpyxl* son opcionales, *ezdxf* viene incluido.
+Requisitos: QGIS **>= 3.40**, hasta **4.x** (Qt 5 y Qt 6 con el mismo paquete); *matplotlib*, *reportlab* y *openpyxl* son opcionales; *ezdxf* y *pypdf* se descargan a petición, en la primera exportación que las necesite.
 
 ---
 
@@ -1030,7 +1057,7 @@ Do levantamento de campo à entrega, uma só ferramenta cobre toda a cadeia: imp
 3. No QGIS, vá a **Módulos → Gerir e instalar módulos → Instalados**, marque **CanaPlan** e clique em **OK**.
 4. Um único ícone aparece na barra de módulos: mostra e oculta o painel lateral.
 
-Requisitos: QGIS **>= 3.28**; *matplotlib*, *reportlab* e *openpyxl* são opcionais, *ezdxf* está incluído.
+Requisitos: QGIS **>= 3.40**, até **4.x** (Qt 5 e Qt 6 com o mesmo pacote); *matplotlib*, *reportlab* e *openpyxl* são opcionais; *ezdxf* e *pypdf* são descarregados a pedido, na primeira exportação que os exija.
 
 ---
 
@@ -1064,7 +1091,7 @@ Von der Feldaufnahme bis zur Übergabe deckt ein einziges Werkzeug die gesamte K
 3. In QGIS **Erweiterungen → Erweiterungen verwalten und installieren → Installiert** öffnen, **CanaPlan** ankreuzen und auf **OK** klicken.
 4. Ein einziges Symbol erscheint in der Erweiterungs-Werkzeugleiste; es blendet die Seitenleiste ein und aus.
 
-Voraussetzungen: QGIS **>= 3.28**; *matplotlib*, *reportlab* und *openpyxl* sind optional, *ezdxf* ist enthalten.
+Voraussetzungen: QGIS **>= 3.40**, bis **4.x** (Qt 5 und Qt 6 mit demselben Paket); *matplotlib*, *reportlab* und *openpyxl* sind optional; *ezdxf* und *pypdf* werden beim ersten Export, der sie benötigt, heruntergeladen.
 
 ---
 
@@ -1093,8 +1120,10 @@ CanaPlan/
 │   ├── annotation_dialog.py        # Dialogue d'annotation (texte, police, couleur, cadre, transparence)
 │   ├── tableau_saisie_dialog.py    # Tableau de saisie groupee (regards/tabourets/conduites/branchements)
 │   ├── chain_profile_widget.py     # Widget du profil simplifie pour l'onglet Chaine du tableau de saisie
-│   ├── export_dialog.py            # Fenetre unique d'export : sorties + reglages du plan + bouton Toutes les pieces (ZIP)
+│   ├── export_dialog.py            # Fenetre unique d'export : sorties + reglages du plan + raccourcis Toutes les pieces (ZIP) et PDF complet
 │   ├── welcome_dialog.py           # Dialogue d'accueil (assistant / ouvrir / annuler)
+│   ├── recent_projects_dialog.py   # Liste des projets .bet recemment ouverts
+│   ├── dependances_dialog.py       # Proposition d'installation des librairies manquantes (ezdxf, pypdf)
 │   ├── project_wizard_dialog.py    # Assistant de creation de projet (adresse, fonds de plan, config rapide, recap)
 │   ├── quick_config_widgets.py     # Widgets Reseau/Cubature/Remblai partages entre ConfigDialog et l'assistant
 │   ├── ban_search_widget.py        # Barre de recherche d'adresse BAN avec suggestions
@@ -1104,6 +1133,10 @@ CanaPlan/
 │   └── config_dialog.py            # Dialogue de configuration (reseaux, couches, cubature, remblai)
 ├── tools/
 │   ├── __init__.py                 # Utilitaire partage layer_ok()
+│   ├── i18n.py                     # Table de traduction FR/EN/ES/PT/DE et resolution de la langue
+│   ├── errlog.py                   # Journal QGIS onglet CanaPlan, plafonne (erreurs jusqu'ici avalees)
+│   ├── dependances.py              # Installation a la demande dans libs/ : ezdxf/fontTools/pyparsing (DXF), pypdf (PDF complet)
+│   ├── fonds_plan.py               # Chargement des fonds de plan (BAN, PCI, ortho IGN, OSM)
 │   ├── draw_conduite_tool.py       # Trace des conduites
 │   ├── draw_branchement_tool.py    # Trace des branchements
 │   ├── insert_regard_tool.py       # Insertion de regard sur conduite
@@ -1147,6 +1180,12 @@ CanaPlan/
 
 | Version | Notes |
 |---------|-------|
+| **1.8** | Compatibilité **QGIS 4 / Qt 6** — bouton **PDF complet** dans la fenêtre d'export — profils en long toujours orientés regard le plus profond à gauche — seuil de dézoom des étiquettes déduit de l'échelle cible |
+| **1.7.1** | Retrait du paquet des scripts de mise au point du parseur DXF, qui bloquaient la validation de sécurité de plugins.qgis.org |
+| **1.7** | Librairies DXF installées à la demande depuis PyPI : le paquet passe de 26,8 à 2,7 Mo |
+| **1.6.2** | Paquet allégé et durci : numpy n'est plus embarqué, GML avec DOCTYPE refusés, WFS restreint à http/https, erreurs tracées dans le journal QGIS |
+| **1.6** | Cadrage automatique des planches et numérotation de proche en proche — fenêtre d'export unique — bouton « Toutes les pièces (ZIP) » — export PDF quatre fois plus rapide |
+| **1.5** | Interface entièrement multilingue (FR / EN / ES / PT / DE), rapports et plans compris |
 | **1.4** | Assistant de création de projet en 4 étapes (adresse BAN, fonds de plan, configuration rapide, récapitulatif) — PCI Vecteur basculé sur le Parcellaire Express IGN — Couches de fond WFS mises à jour en place |
 | **1.3** | Export StaR-Eau V2024 (CNIG/ASTEE), GeoPackage 5 couches, UUID v5 déterministes — Import Star-DT étendu à StaR-Elec, multi-fichiers et glisser-déposer — Interpolation en cascade des cotes de piquage |
 | **1.2** | Fusion Cubature / Remblai en une fenêtre unique avec détail à la volée — Tableau de saisie groupée (Ctrl+Z, copier/coller Excel) — Réseau AEP dans le dessinateur de coupes composées |
@@ -1155,6 +1194,115 @@ CanaPlan/
 
 <details>
 <summary>Détail complet des versions</summary>
+
+### 1.8
+
+- **Compatibilite QGIS 4 / Qt 6.** Le meme paquet tourne sur QGIS 4 et sur
+  QGIS 3.40+. Tous les enumeres Qt et QGIS passent a leur forme qualifiee
+  (`Qt.AlignmentFlag.AlignCenter` et non `Qt.AlignCenter`), seule acceptee par
+  PyQt6 ; les niveaux de la barre de messages passent de leurs valeurs
+  numeriques a `Qgis.MessageLevel` ; `QgsUnitTypes`, deprecie, cede la place a
+  `Qgis.RenderUnit` ; `QMouseEvent.globalPos()`, supprime en Qt 6, est remplace
+  par `QCursor.pos()`. `metadata.txt` declare `qgisMinimumVersion=3.40` et
+  `qgisMaximumVersion=4.99`.
+- Quatre plantages QGIS 4 corriges, la ou l enum etait lue sur une instance et
+  echappait donc a une relecture des imports : `QListWidget.MultiSelection`
+  (import DXF), `QFormLayout.ExpandingFieldsGrow` (formulaire Renseigner),
+  `QEventLoop.AllEvents` (export PDF) et `QTextCursor.End` (journal de la
+  conversion DXF).
+- **PDF complet** : nouveau bouton dans la fenetre d export, a cote de
+  « Toutes les pieces (ZIP) ». Meme contenu, assemble en un seul document a
+  faire circuler — plan, puis profils EU/EP, puis coupes types, puis cubature.
+  Le DXF et le classeur XLSX ne sont pas produits : ils ne s assemblent pas
+  dans un PDF. L assemblage utilise *pypdf*, verifie et propose a
+  l installation **avant** de produire quoi que ce soit, et non apres avoir
+  fait poser les feuilles du plan.
+- Le compte rendu de fin d export, ZIP comme PDF, propose d ouvrir le dossier
+  de sortie.
+- **Profils en long** : le regard le plus profond est toujours place a gauche,
+  quel que soit l ordre de clic depart / arrivee et quel que soit le sens
+  trouve par le parcours automatique du collecteur principal.
+- **Etiquettes** : le seuil de dezoom se deduit desormais de l echelle
+  d impression cible et non de la limite de lisibilite du texte. Il valait
+  1/1667 pour une cible au 1/150, si bas que les etiquettes disparaissaient
+  des qu on s ecartait de l echelle du plan ; il passe a dix fois l echelle
+  cible, plafonne a 1/2000.
+- Materiau **« Recycle »** ajoute aux remblais (configuration rapide, coupe
+  transversale, coupe de tranchee composee).
+- **Assistant de creation de projet** : le recapitulatif, qui empile six blocs,
+  devient defilant et ne deborde plus de l ecran.
+- **Tableau de saisie** : la selection laissee sur la carte est videe a la
+  fermeture, sur les deux reseaux.
+- Paquet : `analyze_ml.py`, dernier script de mise au point du parseur DXF
+  encore livre, rejoint les trois autres retires en 1.7.1.
+
+### 1.7.1
+
+- Trois scripts de mise au point du parseur DXF partaient par erreur dans le
+  paquet de la 1.7.0. Importes par aucun module et pointant en dur vers une
+  machine de developpement, ils declenchaient neanmoins les alertes bandit
+  (`B110` try/except/pass, `B608` requete SQL par concatenation) qui bloquent
+  la validation sur plugins.qgis.org. Retires du paquet ; aucun changement de
+  fonctionnement.
+
+### 1.7
+
+- Les **bibliotheques d export DXF ne sont plus embarquees** : le paquet passe
+  de 26,8 a 2,7 Mo. Au premier export DXF ou a la premiere conversion DXF/DWG,
+  le plugin propose de telecharger *ezdxf*, *fontTools* et *pyparsing* depuis
+  PyPI et de les installer dans son propre dossier, sans droits
+  administrateur. Tout le reste de CanaPlan fonctionne sans elles et ne pose
+  jamais la question. Si l installation echoue (proxy d entreprise), la
+  fenetre affiche la commande a executer a la main. A refaire apres une mise a
+  jour du plugin, QGIS remplacant alors tout son dossier.
+
+### 1.6.2
+
+- Paquet allege et durci. *numpy*, que QGIS fournit deja, n est plus embarque
+  (il masquait celui de QGIS dans le `sys.path`) ; les outils autonomes d
+  *ezdxf* et *fontTools* sont ecartes a la construction.
+- Les GML Star-DT porteurs d une declaration `DOCTYPE` sont refuses avant
+  lecture, les telechargements WFS n acceptent plus que `http` et `https`, un
+  nom de calque contenant un guillemet ne peut plus s echapper de l option
+  `-sql` passee a `ogr2ogr`, et les erreurs jusqu ici avalees en silence
+  laissent une trace dans le journal QGIS, onglet « CanaPlan ».
+
+### 1.6
+
+- **Cadrage automatique des planches** : on choisit format et echelle, le
+  plugin calcule le decoupage qui couvre tout le reseau avec le moins de
+  planches possible, en alignant la plus grande longueur du reseau sur la plus
+  grande dimension de la feuille. Planches numerotees de proche en proche,
+  cartouche du meme cote d une planche jointive a l autre : les tirages s
+  assemblent sans en retourner un. La marge se deduit des etiquettes
+  reellement affichees, dont le texte est evalue.
+- Correction majeure : la rotation des planches n etait pas appliquee au rendu
+  (signe inverse), de sorte qu une planche inclinee sortait a deux fois son
+  inclinaison au lieu d etre redressee.
+- **Fenetre d export unique** : les reglages d impression rejoignent la
+  fenetre d export, plus aucune boite de dialogue intermediaire. Nouveau
+  bouton **« Toutes les pieces (ZIP) »** qui produit en une fois plan PDF et
+  DXF, profils EU et EP, cubature remblai (PDF et XLSX) et coupes types EU et
+  EP, rassembles dans une archive.
+- Plan d ensemble plus lisible (une teinte par planche, numeros cernes de
+  blanc), barre d echelle redessinee, cartouche dont la taille du texte s
+  adapte a chaque case.
+- **Performance** : l export PDF est environ quatre fois plus rapide
+  (25 s -> 6 s sur un cas reel) ; les fonds WMS ne sont plus demandes en tuiles
+  de 256 px et le rendu n impose plus `ForceVectorOutput` inutile.
+
+### 1.5
+
+- **Interface entierement multilingue** (francais, anglais, espagnol,
+  portugais, allemand) : toutes les fenetres suivent la langue choisie dans le
+  panneau CanaPlan ou le menu *Langue*. Sont traduits les en-tetes et rapports
+  de cubature / remblai (ecran, CSV, PDF, XLSX), le plan de coupe
+  transversale, la coupe de tranchee composee, l assistant de creation de
+  projet, le dialogue d impression, les profils en long, le tableau de saisie,
+  le dialogue de renseignement, la gestion des etiquettes, l export StaR-Eau
+  et son controle de conformite, l import Star-DT et l export DXF.
+- Les valeurs normatives StaR-Eau, les materiaux et les noms de couches
+  restent en francais : ce sont des donnees, pas de l interface.
 
 ### 1.4
 

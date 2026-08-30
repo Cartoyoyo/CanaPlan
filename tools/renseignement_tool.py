@@ -2,10 +2,11 @@
 
 import math
 
-from qgis.core import QgsPointXY, QgsWkbTypes, QgsRectangle, QgsProject, QgsGeometry
+from qgis.core import Qgis, QgsPointXY, QgsWkbTypes, QgsRectangle, QgsProject, QgsGeometry
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal
-from qgis.PyQt.QtGui import QColor
+from qgis.PyQt.QtWidgets import QDialog
+from qgis.PyQt.QtGui import QColor, QCursor
 
 from . import i18n
 from . import layer_ok as _ok
@@ -30,12 +31,12 @@ class RenseignementTool(QgsMapTool):
 
     def activate(self):
         super().activate()
-        self.canvas.setCursor(Qt.PointingHandCursor)
+        self.canvas.setCursor(Qt.CursorShape.PointingHandCursor)
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             "Renseigner",
             i18n.tr('ot_aide_renseignement'),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     def deactivate(self):
@@ -51,7 +52,7 @@ class RenseignementTool(QgsMapTool):
         self._update_hover(event.pos())
 
     def canvasReleaseEvent(self, event):
-        if event.button() != Qt.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
             return
         if self._hover is None and self._hover_annotation is None:
             self._update_hover(event.pos())
@@ -75,8 +76,9 @@ class RenseignementTool(QgsMapTool):
                 underline=font.underline(),
                 alignment=_get_alignment(item),
             )
-            dlg.move(event.globalPos().x() + 20, event.globalPos().y() - 100)
-            if dlg.exec_() == AnnotationDialog.Accepted:
+            pos = QCursor.pos()
+            dlg.move(pos.x() + 20, pos.y() - 100)
+            if dlg.exec() == QDialog.DialogCode.Accepted:
                 vals = dlg.get_values()
                 from qgis.core import QgsProject, QgsAnnotationPointTextItem
                 ann_layer = QgsProject.instance().mainAnnotationLayer()
@@ -102,8 +104,9 @@ class RenseignementTool(QgsMapTool):
         dlg = RenseignementDialog(role, feat, layer, reseau,
                                   couches=self.couches[reseau])
         # Positionner le dialogue à droite du clic pour ne pas masquer l'élément
-        dlg.move(event.globalPos().x() + 20, event.globalPos().y() - 100)
-        dlg.exec_()
+        pos = QCursor.pos()
+        dlg.move(pos.x() + 20, pos.y() - 100)
+        dlg.exec()
         self._clear_hover()
 
     # ------------------------------------------------------------------ survol
@@ -122,11 +125,11 @@ class RenseignementTool(QgsMapTool):
                 # Rubber band de mise en évidence
                 pt = ann[1].point()
                 geom = QgsGeometry.fromPointXY(QgsPointXY(pt.x(), pt.y()))
-                rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+                rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
                 rb.setToGeometry(geom)
                 rb.setColor(QColor(255, 165, 0))
                 rb.setIconSize(14)
-                rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+                rb.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
                 self._hover_band = rb
             return
         elif self._hover_annotation is not None:
@@ -222,12 +225,12 @@ class RenseignementTool(QgsMapTool):
     def _make_hover_band(self, feat, layer):
         geom = feat.geometry()
         gtype = layer.geometryType()
-        if gtype == QgsWkbTypes.PointGeometry:
-            rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        if gtype == QgsWkbTypes.GeometryType.PointGeometry:
+            rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
             rb.setToGeometry(geom, layer)
             rb.setColor(QColor(255, 165, 0))
             rb.setIconSize(14)
-            rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+            rb.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
         else:
             rb = QgsRubberBand(self.canvas, gtype)
             rb.setToGeometry(geom, layer)

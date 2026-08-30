@@ -21,7 +21,7 @@ class PrintDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(i18n.tr('pd_titre'))
         self.setMinimumWidth(380)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         self.reglages = PrintSettingsWidget(self)
 
@@ -36,10 +36,10 @@ class PrintDialog(QDialog):
         self.rb_manuel    = self.reglages.rb_manuel
         self.rb_auto      = self.reglages.rb_auto
 
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
-        btns.button(QDialogButtonBox.Ok).setText(i18n.tr('pd_placer'))
+        btns.button(QDialogButtonBox.StandardButton.Ok).setText(i18n.tr('pd_placer'))
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.reglages)

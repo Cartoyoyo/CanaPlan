@@ -76,7 +76,7 @@ class ProfilOptionsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(i18n.tr('pf_options'))
         self.setFixedWidth(340)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
@@ -86,8 +86,8 @@ class ProfilOptionsDialog(QDialog):
         layout.addWidget(lbl)
 
         sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setFrameShadow(QFrame.Sunken)
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(sep)
 
         self.cb_cartouche  = QCheckBox(i18n.tr('pf_tableau'))
@@ -103,8 +103,8 @@ class ProfilOptionsDialog(QDialog):
         self.cb_fleches.toggled.connect(self._on_fleches_toggled)
 
         sep2 = QFrame()
-        sep2.setFrameShape(QFrame.HLine)
-        sep2.setFrameShadow(QFrame.Sunken)
+        sep2.setFrameShape(QFrame.Shape.HLine)
+        sep2.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(sep2)
 
         fmt_row = QHBoxLayout()
@@ -118,8 +118,8 @@ class ProfilOptionsDialog(QDialog):
         layout.addLayout(fmt_row)
 
         sep3 = QFrame()
-        sep3.setFrameShape(QFrame.HLine)
-        sep3.setFrameShadow(QFrame.Sunken)
+        sep3.setFrameShape(QFrame.Shape.HLine)
+        sep3.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(sep3)
 
         btn_row = QHBoxLayout()
@@ -195,7 +195,7 @@ class ProfilDialog(QDialog):
             i18n.tr('pf_titre', reseau=data['reseau'], debut=nom_dep,
                     fin=nom_arr))
         self.setMinimumSize(600, 400)
-        self.setAttribute(Qt.WA_DeleteOnClose, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
         if not HAS_MPL:
             QMessageBox.critical(
@@ -228,7 +228,7 @@ class ProfilDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidget(self.canvas)
         scroll.setWidgetResizable(False)
-        scroll.setAlignment(Qt.AlignCenter)
+        scroll.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(scroll, stretch=1)
 
         # Taille fenêtre = paper limité à l'écran disponible

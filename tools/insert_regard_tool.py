@@ -3,6 +3,7 @@
 import math
 
 from qgis.core import (
+    Qgis,
     QgsPointXY, QgsGeometry, QgsFeature, QgsWkbTypes
 )
 from qgis.gui import QgsMapToolEmitPoint, QgsRubberBand
@@ -32,35 +33,35 @@ class InsertRegardTool(QgsMapToolEmitPoint):
         }
 
         # Indicateur de snap (croix + trait de projection)
-        self.snap_cross = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self.snap_cross = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
         self.snap_cross.setColor(QColor(0, 200, 0))
         self.snap_cross.setWidth(2)
 
-        self.snap_line = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self.snap_line = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
         self.snap_line.setColor(QColor(0, 200, 0))
         self.snap_line.setWidth(2)
 
     def activate(self):
         super().activate()
-        self.canvas.setCursor(Qt.CrossCursor)
+        self.canvas.setCursor(Qt.CursorShape.CrossCursor)
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             i18n.tr('insert_regard'),
             i18n.tr('ot_aide_insert_regard'),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     def deactivate(self):
         from qgis.utils import iface
         iface.messageBar().clearWidgets()
-        self.snap_cross.reset(QgsWkbTypes.LineGeometry)
-        self.snap_line.reset(QgsWkbTypes.LineGeometry)
+        self.snap_cross.reset(QgsWkbTypes.GeometryType.LineGeometry)
+        self.snap_line.reset(QgsWkbTypes.GeometryType.LineGeometry)
         super().deactivate()
 
     def canvasMoveEvent(self, event):
         """Affiche l'indicateur de projection sur la conduite."""
-        self.snap_cross.reset(QgsWkbTypes.LineGeometry)
-        self.snap_line.reset(QgsWkbTypes.LineGeometry)
+        self.snap_cross.reset(QgsWkbTypes.GeometryType.LineGeometry)
+        self.snap_line.reset(QgsWkbTypes.GeometryType.LineGeometry)
 
         cursor = self.toMapCoordinates(event.pos())
         result = self._find_closest_conduite(cursor)
@@ -87,7 +88,7 @@ class InsertRegardTool(QgsMapToolEmitPoint):
             QgsGeometry.fromMultiPolylineXY([cross_h, cross_v]), None)
 
     def canvasReleaseEvent(self, event):
-        if event.button() != Qt.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
             return
 
         click_point = self.toMapCoordinates(event.pos())
@@ -112,8 +113,8 @@ class InsertRegardTool(QgsMapToolEmitPoint):
         self._split_conduite(conduite_layer, best_feat, best_proj)
 
         # Nettoyer l'indicateur
-        self.snap_cross.reset(QgsWkbTypes.LineGeometry)
-        self.snap_line.reset(QgsWkbTypes.LineGeometry)
+        self.snap_cross.reset(QgsWkbTypes.GeometryType.LineGeometry)
+        self.snap_line.reset(QgsWkbTypes.GeometryType.LineGeometry)
 
         self.canvas.refresh()
         self.finished.emit()

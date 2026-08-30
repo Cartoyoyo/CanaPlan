@@ -1,15 +1,16 @@
 # tools/annotation_tool.py
 
 from qgis.core import (
+    Qgis,
     QgsAnnotationPointTextItem,
     QgsTextFormat,
     QgsTextBackgroundSettings,
     QgsProject,
     QgsPointXY,
-    QgsUnitTypes,
 )
 from qgis.gui import QgsMapTool
 from qgis.PyQt.QtCore import Qt, QSizeF
+from qgis.PyQt.QtWidgets import QDialog
 from qgis.PyQt.QtGui import QFont, QColor
 
 from . import i18n
@@ -54,12 +55,12 @@ def freeze_annotations_to_map_units(canvas):
         if not isinstance(item, QgsAnnotationPointTextItem):
             continue
         fmt = item.format()
-        if fmt.sizeUnit() == QgsUnitTypes.RenderMapUnits:
+        if fmt.sizeUnit() == Qgis.RenderUnit.MapUnits:
             continue
         size_px = fmt.size() * dpi / 72.0
         size_m = size_px * mupp
         fmt.setSize(size_m)
-        fmt.setSizeUnit(QgsUnitTypes.RenderMapUnits)
+        fmt.setSizeUnit(Qgis.RenderUnit.MapUnits)
         item.setFormat(fmt)
         converted += 1
 
@@ -96,7 +97,7 @@ def make_text_format(vals):
     font.setItalic(vals.get('italic', False))
     font.setUnderline(vals.get('underline', False))
     fmt.setFont(font)
-    fmt.setSizeUnit(vals.get('size_unit', QgsUnitTypes.RenderPoints))
+    fmt.setSizeUnit(vals.get('size_unit', Qgis.RenderUnit.Points))
     fmt.setSize(vals['size'])
     fmt.setColor(vals['color'])
     fmt.setOpacity(vals.get('opacity', 1.0))
@@ -107,14 +108,14 @@ def make_text_format(vals):
         bg.setType(_bg_enum('ShapeType', 'ShapeRectangle'))
         bg.setSizeType(_bg_enum('SizeType', 'SizeBuffer'))
         bg.setSize(QSizeF(1.0, 1.0))
-        bg.setSizeUnit(QgsUnitTypes.RenderMillimeters)
+        bg.setSizeUnit(Qgis.RenderUnit.Millimeters)
         if vals.get('frame_filled', True):
             bg.setFillColor(vals.get('frame_fill_color') or QColor(255, 255, 255))
         else:
             bg.setFillColor(QColor(0, 0, 0, 0))
         bg.setStrokeColor(vals.get('frame_border_color') or QColor(0, 0, 0))
         bg.setStrokeWidth(0.5)
-        bg.setStrokeWidthUnit(QgsUnitTypes.RenderMillimeters)
+        bg.setStrokeWidthUnit(Qgis.RenderUnit.Millimeters)
     fmt.setBackground(bg)
     return fmt
 
@@ -130,7 +131,7 @@ def _get_alignment(item):
     try:
         return item.alignment()
     except AttributeError:
-        return Qt.AlignLeft
+        return Qt.AlignmentFlag.AlignLeft
 
 
 def _snapshot_item(item):
@@ -183,7 +184,7 @@ class AnnotationTool(QgsMapTool):
     def __init__(self, canvas, iface):
         super().__init__(canvas)
         self.iface = iface
-        self.setCursor(Qt.CrossCursor)
+        self.setCursor(Qt.CursorShape.CrossCursor)
         self._paste_pending = False
         self._cursor_pt = None
 
@@ -211,18 +212,18 @@ class AnnotationTool(QgsMapTool):
             self._cursor_pt = None
 
     def canvasReleaseEvent(self, event):
-        if event.button() != Qt.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
             return
 
         click_pt = self.toMapCoordinates(event.pos())
-        ctrl = bool(event.modifiers() & Qt.ControlModifier)
+        ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
 
         # Mode coller actif : le prochain clic gauche dépose la copie
         if self._paste_pending:
             self._paste_pending = False
             if self._paste_at(QgsPointXY(click_pt.x(), click_pt.y())):
                 self.iface.messageBar().pushMessage(
-                    "Annotation", i18n.tr('ot_annotation_collee'), level=0, duration=3)
+                    "Annotation", i18n.tr('ot_annotation_collee'), level=Qgis.MessageLevel.Info, duration=3)
                 self.canvas().refresh()
             return
 
@@ -280,14 +281,14 @@ class AnnotationTool(QgsMapTool):
                 except Exception as exc:
                     self.iface.messageBar().pushMessage(
                         "Annotation", i18n.tr('ot_impossible_appliquer', erreur=exc),
-                        level=2, duration=6)
+                        level=Qgis.MessageLevel.Critical, duration=6)
                     return
                 ann_layer.removeItem(state['item_id'])
                 state['item_id'] = ann_layer.addItem(new_item)
                 self.canvas().refresh()
 
             dlg.applied.connect(_apply_live)
-            accepted = dlg.exec_() == AnnotationDialog.Accepted
+            accepted = dlg.exec() == QDialog.DialogCode.Accepted
 
             if accepted:
                 vals = dlg.get_values()
@@ -317,7 +318,7 @@ class AnnotationTool(QgsMapTool):
                 except Exception as exc:
                     self.iface.messageBar().pushMessage(
                         "Annotation", i18n.tr('ot_impossible_appliquer', erreur=exc),
-                        level=2, duration=6)
+                        level=Qgis.MessageLevel.Critical, duration=6)
                     return
                 if state['item_id'] is not None:
                     ann_layer.removeItem(state['item_id'])
@@ -325,7 +326,7 @@ class AnnotationTool(QgsMapTool):
                 self.canvas().refresh()
 
             dlg.applied.connect(_apply_live_new)
-            accepted = dlg.exec_() == AnnotationDialog.Accepted
+            accepted = dlg.exec() == QDialog.DialogCode.Accepted
 
             if accepted:
                 vals = dlg.get_values()
@@ -344,37 +345,37 @@ class AnnotationTool(QgsMapTool):
         self.canvas().refresh()
 
     def keyPressEvent(self, event):
-        ctrl = bool(event.modifiers() & Qt.ControlModifier)
-        if ctrl and event.key() == Qt.Key_C:
+        ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+        if ctrl and event.key() == Qt.Key.Key_C:
             existing = self._annotation_at_cursor()
             if existing is not None:
                 _, item = existing
                 AnnotationTool._clipboard = _snapshot_item(item)
                 self.iface.messageBar().pushMessage(
                     "Annotation", i18n.tr('ot_annotation_copiee'),
-                    level=0, duration=4)
+                    level=Qgis.MessageLevel.Info, duration=4)
             else:
                 self.iface.messageBar().pushMessage(
                     "Annotation",
                     i18n.tr('ot_curseur_annotation'),
-                    level=1, duration=3)
+                    level=Qgis.MessageLevel.Warning, duration=3)
             event.accept()
             return
-        if ctrl and event.key() == Qt.Key_V:
+        if ctrl and event.key() == Qt.Key.Key_V:
             if AnnotationTool._clipboard is None:
                 self.iface.messageBar().pushMessage(
-                    "Annotation", i18n.tr('ot_presse_papier_vide'), level=1, duration=3)
+                    "Annotation", i18n.tr('ot_presse_papier_vide'), level=Qgis.MessageLevel.Warning, duration=3)
             else:
                 self._paste_pending = True
                 self.iface.messageBar().pushMessage(
                     "Annotation", i18n.tr('ot_cliquez_coller'),
-                    level=0, duration=4)
+                    level=Qgis.MessageLevel.Info, duration=4)
             event.accept()
             return
-        if event.key() == Qt.Key_Escape and self._paste_pending:
+        if event.key() == Qt.Key.Key_Escape and self._paste_pending:
             self._paste_pending = False
             self.iface.messageBar().pushMessage(
-                "Annotation", i18n.tr('ot_coller_annule'), level=0, duration=2)
+                "Annotation", i18n.tr('ot_coller_annule'), level=Qgis.MessageLevel.Info, duration=2)
             event.accept()
             return
         super().keyPressEvent(event)

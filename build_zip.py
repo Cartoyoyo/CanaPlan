@@ -8,7 +8,8 @@ le workflow de publication (.github), le figeage des librairies
 (requirements-libs.txt), fichiers de travail (audit.md, amelioration.txt, INTERVIEW.md,
 assistant_creation_projet.md, uml_structure.mmd / .d2 / .puml,
 icon/fichedemarque.md, symbology-style.db, .gitignore, build_zip.py lui-même,
-les scripts de mise au point tools/dxf_convert/{analyze_dxf,inspect_all,test_parser}.py)
+les scripts de mise au point
+tools/dxf_convert/{analyze_dxf,analyze_ml,inspect_all,test_parser}.py)
 et fichiers temporaires (*.pyc, *.tmp, *.zip).
 
 NB : le paquet reprend libs/ tel qu'il est sur la machine de build. C'est
@@ -44,6 +45,7 @@ EXCLUDE_FILES = {
     # (B110 try/except/pass, B608 requete SQL construite par concatenation)
     # qui bloquent la validation sur plugins.qgis.org.
     os.path.join("tools", "dxf_convert", "analyze_dxf.py"),
+    os.path.join("tools", "dxf_convert", "analyze_ml.py"),
     os.path.join("tools", "dxf_convert", "inspect_all.py"),
     os.path.join("tools", "dxf_convert", "test_parser.py"),
 }

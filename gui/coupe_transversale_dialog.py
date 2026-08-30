@@ -35,6 +35,7 @@ MATERIAU_REMBLAI_COLORS = {
     '2/6':               '#ffcc80',
     '0/31.5':            '#bcaaa4',
     'Tout-venant':       '#d7ccc8',
+    'Recyclé':           '#a8bba3',
     'GB (Grave bitume)': '#546e7a',
     'GC (Grave ciment)': '#90a4ae',
     'Enrobé':            '#424242',
@@ -307,7 +308,7 @@ class CoupeTransversaleDialog(QDialog):
         self.setWindowTitle(i18n.tr('ct_titre'))
         self.setMinimumSize(900, 580)
         self.resize(1100, 680)
-        self.setAttribute(Qt.WA_DeleteOnClose, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
         layout = QVBoxLayout(self)
 
@@ -332,7 +333,7 @@ class CoupeTransversaleDialog(QDialog):
 
         self.figure = Figure()
         self.canvas = FigureCanvas(self.figure)
-        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         layout.addWidget(self.canvas)
 
         self._refresh()

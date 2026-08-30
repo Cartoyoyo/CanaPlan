@@ -25,10 +25,10 @@ from .quick_config_widgets import (  # noqa: F401
 )
 
 ROLES = {
-    'conduite':    QgsWkbTypes.LineGeometry,
-    'branchement': QgsWkbTypes.LineGeometry,
-    'regard':      QgsWkbTypes.PointGeometry,
-    'tabouret':    QgsWkbTypes.PointGeometry,
+    'conduite':    QgsWkbTypes.GeometryType.LineGeometry,
+    'branchement': QgsWkbTypes.GeometryType.LineGeometry,
+    'regard':      QgsWkbTypes.GeometryType.PointGeometry,
+    'tabouret':    QgsWkbTypes.GeometryType.PointGeometry,
 }
 
 # Clés i18n, pas des libellés : traduire avec i18n.tr au moment de l'affichage.
@@ -97,7 +97,7 @@ class ConfigDialog(QDialog):
 
         main_layout.addWidget(tabs)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self._save_and_accept)
         buttons.rejected.connect(self.reject)
         main_layout.addWidget(buttons)

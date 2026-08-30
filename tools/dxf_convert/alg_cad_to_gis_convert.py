@@ -1,5 +1,5 @@
 import os, shutil
-from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterFile, QgsProcessingParameterString,    QgsProcessingParameterBoolean, QgsProcessingParameterEnum, QgsProcessingParameterNumber,    QgsProcessingParameterFileDestination, QgsProcessingParameterFolderDestination, QgsProcessingOutputHtml,    QgsVectorLayer, QgsProject, QgsProcessingException)
+from qgis.core import (Qgis, QgsProcessingAlgorithm, QgsProcessingParameterFile, QgsProcessingParameterString,    QgsProcessingParameterBoolean, QgsProcessingParameterEnum, QgsProcessingParameterNumber,    QgsProcessingParameterFileDestination, QgsProcessingParameterFolderDestination, QgsProcessingOutputHtml,    QgsVectorLayer, QgsProject, QgsProcessingException)
 from .services.dwg_support import dwg_to_temp_dxf_auto
 from .services import deps as _deps
 from .. import errlog
@@ -9,22 +9,22 @@ def _apply_text_labels(vlayer):
     """Configure fixed-size labels + invisible marker on a _texts layer."""
     try:
         from qgis.core import (QgsPalLayerSettings, QgsVectorLayerSimpleLabeling,
-                               QgsTextFormat, QgsProperty, QgsUnitTypes,
+                               QgsTextFormat, QgsProperty,
                                QgsSingleSymbolRenderer, QgsMarkerSymbol)
         pal = QgsPalLayerSettings()
         pal.enabled = True
         pal.fieldName = 'text_val'
         pal.isExpression = False
-        pal.placement = QgsPalLayerSettings.OverPoint
+        pal.placement = Qgis.LabelPlacement.OverPoint
 
         pal.dataDefinedProperties().setProperty(
-            QgsPalLayerSettings.LabelRotation,
+            QgsPalLayerSettings.Property.LabelRotation,
             QgsProperty.fromField('txt_rot')
         )
 
         tf = QgsTextFormat()
         tf.setSize(8.0)
-        tf.setSizeUnit(QgsUnitTypes.RenderPoints)
+        tf.setSizeUnit(Qgis.RenderUnit.Points)
         pal.setFormat(tf)
 
         vlayer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
@@ -48,11 +48,11 @@ class AlgCadToGisConvert(QgsProcessingAlgorithm):
     def initAlgorithm(self, config=None):
         self.addParameter(QgsProcessingParameterFile(self.P_INPUT,'Input CAD file (DXF or DWG)'))
         self.addParameter(QgsProcessingParameterString(self.P_LAYERS,'Layer names (CSV, optional; leave empty for ALL)', optional=True))
-        self.addParameter(QgsProcessingParameterNumber(self.P_SRC_EPSG,'Source EPSG', type=QgsProcessingParameterNumber.Integer, defaultValue=3826))
+        self.addParameter(QgsProcessingParameterNumber(self.P_SRC_EPSG,'Source EPSG', type=QgsProcessingParameterNumber.Type.Integer, defaultValue=3826))
         self.addParameter(QgsProcessingParameterString(self.P_TGT_EPSG,'Target EPSG (optional)', optional=True))
         self.addParameter(QgsProcessingParameterEnum(self.P_MODE,'Block handling mode', options=['keep-merge','explode'], defaultValue=0))
         # Default merge tolerance = 0.0
-        self.addParameter(QgsProcessingParameterNumber(self.P_MERGE_TOL,'Line-merge tolerance', type=QgsProcessingParameterNumber.Double, defaultValue=0.0))
+        self.addParameter(QgsProcessingParameterNumber(self.P_MERGE_TOL,'Line-merge tolerance', type=QgsProcessingParameterNumber.Type.Double, defaultValue=0.0))
         self.addParameter(QgsProcessingParameterEnum(self.P_DRIVER,'Output driver', options=['GPKG','ESRI Shapefile'], defaultValue=0))
         self.addParameter(QgsProcessingParameterFileDestination(self.P_OUT_GPKG,'Output GeoPackage (for driver=GPKG)', fileFilter='GeoPackage (*.gpkg)', optional=True))
         self.addParameter(QgsProcessingParameterFolderDestination(self.P_OUT_FOLDER,'Output folder (for driver=SHP)', optional=True))

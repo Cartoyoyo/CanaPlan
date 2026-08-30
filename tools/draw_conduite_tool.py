@@ -3,12 +3,13 @@
 import math
 
 from qgis.core import (
+    Qgis,
     QgsPointXY, QgsGeometry, QgsFeature, QgsWkbTypes, QgsProject
 )
 from qgis.gui import QgsMapToolEmitPoint, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import QMessageBox, QToolTip
-from qgis.PyQt.QtGui import QColor
+from qgis.PyQt.QtGui import QColor, QCursor
 
 from . import i18n
 
@@ -42,25 +43,25 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
 
         # Rubber band pour le segment en cours de tracé
         color = QColor(255, 0, 0) if reseau == "EU" else QColor(0, 0, 255)
-        self.rubber = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self.rubber = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
         self.rubber.setColor(color)
         self.rubber.setWidth(2)
 
     def activate(self):
         super().activate()
-        self.canvas.setCursor(Qt.CrossCursor)
+        self.canvas.setCursor(Qt.CursorShape.CrossCursor)
         from qgis.utils import iface
         iface.messageBar().pushMessage(
             f"Conduite {self.reseau}",
             i18n.tr('ot_aide_conduite'),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     def deactivate(self):
         from qgis.utils import iface
         iface.messageBar().clearWidgets()
         QToolTip.hideText()
-        self.rubber.reset(QgsWkbTypes.LineGeometry)
+        self.rubber.reset(QgsWkbTypes.GeometryType.LineGeometry)
         self.last_point = None
         self.points = []
         self.regard_ids = []
@@ -78,7 +79,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
                 angle = self._compute_angle(self.points[-2], self.points[-1], point)
                 deviation = 180.0 - angle
                 texte += f"  ·  {angle:.1f}° / {deviation:.1f}°".replace('.', ',')
-            QToolTip.showText(event.globalPos(), texte, self.canvas)
+            QToolTip.showText(QCursor.pos(), texte, self.canvas)
         else:
             QToolTip.hideText()
 
@@ -95,7 +96,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
         return abs(math.degrees(math.atan2(det, dot)))
 
     def canvasReleaseEvent(self, event):
-        if event.button() == Qt.RightButton:
+        if event.button() == Qt.MouseButton.RightButton:
             if self.last_point is None:
                 return
             point = self.toMapCoordinates(event.pos())
@@ -103,18 +104,18 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
             self._reset()
             return
 
-        if event.button() != Qt.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
             return
 
         point = self.toMapCoordinates(event.pos())
         self._add_point(point)
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self._cancel()
-        elif event.key() in (Qt.Key_Return, Qt.Key_Enter):
+        elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self._reset()
-        elif event.key() == Qt.Key_Backspace:
+        elif event.key() == Qt.Key.Key_Backspace:
             self._undo_last()
 
     def _add_point(self, point):
@@ -129,7 +130,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
                 _iface.messageBar().pushMessage(
                     "Topologie",
                     i18n.tr('ot_regard_proche', distance=i18n.nombre(SNAP_WARN_M)),
-                    level=1, duration=4,
+                    level=Qgis.MessageLevel.Warning, duration=4,
                 )
             regard_id = self._create_regard(point)
             self.regard_ids.append(regard_id)
@@ -186,7 +187,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
                 self.regard_layer.commitChanges()
             self.last_point = None
             self.points = []
-            self.rubber.reset(QgsWkbTypes.LineGeometry)
+            self.rubber.reset(QgsWkbTypes.GeometryType.LineGeometry)
             return
 
         # Supprimer le dernier tronçon
@@ -211,7 +212,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
         if self.points:
             self.points.pop()
         self.last_point = QgsPointXY(prev_point)
-        self.rubber.reset(QgsWkbTypes.LineGeometry)
+        self.rubber.reset(QgsWkbTypes.GeometryType.LineGeometry)
 
     def _cancel(self):
         """Annule tout : supprime tous les tronçons et regards créés."""
@@ -230,7 +231,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
             self.regard_layer.commitChanges()
 
         QToolTip.hideText()
-        self.rubber.reset(QgsWkbTypes.LineGeometry)
+        self.rubber.reset(QgsWkbTypes.GeometryType.LineGeometry)
         self.last_point = None
         self.points = []
         self.regard_ids = []
@@ -239,7 +240,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
     def _reset(self):
         """Termine le tracé en cours, prêt pour un nouveau."""
         QToolTip.hideText()
-        self.rubber.reset(QgsWkbTypes.LineGeometry)
+        self.rubber.reset(QgsWkbTypes.GeometryType.LineGeometry)
         self.last_point = None
         self.points = []
         self.regard_ids = []
@@ -250,7 +251,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
         for feat in self.regard_layer.getFeatures(
                 rect_request(point, self._TOPO_MIN_DIST_M)):
             geom = feat.geometry()
-            if geom.type() != QgsWkbTypes.PointGeometry:
+            if geom.type() != QgsWkbTypes.GeometryType.PointGeometry:
                 continue
             d = point.distance(QgsPointXY(geom.asPoint()))
             if 0 < d <= self._TOPO_MIN_DIST_M:

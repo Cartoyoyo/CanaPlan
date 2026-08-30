@@ -1,12 +1,13 @@
 import os
-from qgis.PyQt.QtCore import QObject, QSettings, Qt, QVariant
+from qgis.PyQt.QtCore import QObject, QSettings, Qt, QMetaType
 from qgis.PyQt.QtGui import QIcon, QColor
-from qgis.PyQt.QtWidgets import QAction, QActionGroup, QMenu, QMessageBox
+from qgis.PyQt.QtWidgets import QAction, QActionGroup, QDialog, QMenu, QMessageBox
 from qgis.core import (
+    Qgis,
     QgsProject, QgsVectorLayer, QgsField, QgsWkbTypes,
     QgsSymbol, QgsSimpleLineSymbolLayer, QgsSimpleMarkerSymbolLayer,
     QgsSingleSymbolRenderer, QgsLayerTreeGroup,
-    QgsProperty, QgsSymbolLayer, QgsUnitTypes,
+    QgsProperty, QgsSymbolLayer,
 )
 
 from .tools import i18n
@@ -400,7 +401,7 @@ class ReseauAssainissementPlugin(QObject):
 
     def unload(self):
         """Supprime la barre d'outils, les actions et les rubber bands."""
-        import sip
+        from qgis.PyQt import sip
         self._cleanup_tools()
         from .tools.projet_bet import cleanup_plugin_resources
         cleanup_plugin_resources(self)
@@ -462,7 +463,7 @@ class ReseauAssainissementPlugin(QObject):
     def show_about_dialog(self):
         from .gui.about_dialog import AboutDialog
         dlg = AboutDialog(self.plugin_dir, self.iface.mainWindow())
-        dlg.exec_()
+        dlg.exec()
 
     # --- Définition des champs par type de couche ---
 
@@ -470,43 +471,43 @@ class ReseauAssainissementPlugin(QObject):
         'conduite': {
             'geom': 'LineString',
             'fields': [
-                ('diametre', QVariant.Double, 'Diamètre (mm)'),
-                ('materiau', QVariant.String, 'Matériau'),
-                ('longueur', QVariant.Double, 'Longueur (m)'),
-                ('pente', QVariant.Double, 'Pente (%)'),
+                ('diametre', QMetaType.Type.Double, 'Diamètre (mm)'),
+                ('materiau', QMetaType.Type.QString, 'Matériau'),
+                ('longueur', QMetaType.Type.Double, 'Longueur (m)'),
+                ('pente', QMetaType.Type.Double, 'Pente (%)'),
             ],
         },
         'branchement': {
             'geom': 'LineString',
             'fields': [
-                ('id_conduite',   QVariant.Int,    'ID conduite'),
-                ('pk_debut',      QVariant.Double, 'PK piquage'),
-                ('cote_piquage',  QVariant.Double, 'Cote piquage (m NGF)'),
-                ('diametre',      QVariant.Double, 'Diamètre (mm)'),
-                ('materiau',      QVariant.String, 'Matériau'),
-                ('longueur',      QVariant.Double, 'Longueur (m)'),
-                ('pente',         QVariant.Double, 'Pente (%)'),
-                ('sens',          QVariant.String, 'Sens'),
+                ('id_conduite',   QMetaType.Type.Int,    'ID conduite'),
+                ('pk_debut',      QMetaType.Type.Double, 'PK piquage'),
+                ('cote_piquage',  QMetaType.Type.Double, 'Cote piquage (m NGF)'),
+                ('diametre',      QMetaType.Type.Double, 'Diamètre (mm)'),
+                ('materiau',      QMetaType.Type.QString, 'Matériau'),
+                ('longueur',      QMetaType.Type.Double, 'Longueur (m)'),
+                ('pente',         QMetaType.Type.Double, 'Pente (%)'),
+                ('sens',          QMetaType.Type.QString, 'Sens'),
             ],
         },
         'regard': {
             'geom': 'Point',
             'fields': [
-                ('nom', QVariant.String, 'Nom'),
-                ('tn', QVariant.Double, 'TN (m)'),
-                ('fe_radier', QVariant.Double, 'FE radier (m)'),
-                ('diametre', QVariant.Double, 'Diamètre (mm)'),
-                ('profondeur', QVariant.Double, 'Profondeur (m)'),
+                ('nom', QMetaType.Type.QString, 'Nom'),
+                ('tn', QMetaType.Type.Double, 'TN (m)'),
+                ('fe_radier', QMetaType.Type.Double, 'FE radier (m)'),
+                ('diametre', QMetaType.Type.Double, 'Diamètre (mm)'),
+                ('profondeur', QMetaType.Type.Double, 'Profondeur (m)'),
             ],
         },
         'tabouret': {
             'geom': 'Point',
             'fields': [
-                ('nom', QVariant.String, 'Nom'),
-                ('tn', QVariant.Double, 'TN (m)'),
-                ('fe_entree', QVariant.Double, 'FE entrée (m)'),
-                ('diametre', QVariant.Double, 'Diamètre (mm)'),
-                ('profondeur', QVariant.Double, 'Profondeur (m)'),
+                ('nom', QMetaType.Type.QString, 'Nom'),
+                ('tn', QMetaType.Type.Double, 'TN (m)'),
+                ('fe_entree', QMetaType.Type.Double, 'FE entrée (m)'),
+                ('diametre', QMetaType.Type.Double, 'Diamètre (mm)'),
+                ('profondeur', QMetaType.Type.Double, 'Profondeur (m)'),
             ],
         },
     }
@@ -524,7 +525,7 @@ class ReseauAssainissementPlugin(QObject):
                 return
         from .gui.welcome_dialog import WelcomeDialog
         dlg = WelcomeDialog(self.iface.mainWindow())
-        dlg.exec_()
+        dlg.exec()
         choice = dlg.chosen()
         if choice == WelcomeDialog.NEW:
             self.run_nouveau_projet_assistant()
@@ -654,30 +655,30 @@ class ReseauAssainissementPlugin(QObject):
 
         if role in ('conduite', 'branchement'):
             # Epaisseur proportionnelle au diametre (mm -> m)
-            symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.LineGeometry)
+            symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.GeometryType.LineGeometry)
             sl = QgsSimpleLineSymbolLayer(color)
-            sl.setWidthUnit(QgsUnitTypes.RenderMapUnits)
+            sl.setWidthUnit(Qgis.RenderUnit.MapUnits)
             sl.setDataDefinedProperty(
-                QgsSymbolLayer.PropertyStrokeWidth,
+                QgsSymbolLayer.Property.PropertyStrokeWidth,
                 QgsProperty.fromExpression('coalesce("diametre", 200) / 1000'))
             symbol.changeSymbolLayer(0, sl)
 
         elif role == 'regard':
             # Cercle de 1m de diametre en unites carte
-            symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.PointGeometry)
-            ml = QgsSimpleMarkerSymbolLayer(QgsSimpleMarkerSymbolLayer.Circle, 1.0)
+            symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.GeometryType.PointGeometry)
+            ml = QgsSimpleMarkerSymbolLayer(Qgis.MarkerShape.Circle, 1.0)
             ml.setColor(color)
             ml.setStrokeColor(color)
-            ml.setSizeUnit(QgsUnitTypes.RenderMapUnits)
+            ml.setSizeUnit(Qgis.RenderUnit.MapUnits)
             symbol.changeSymbolLayer(0, ml)
 
         elif role == 'tabouret':
             # Carre de 0.4m x 0.4m en unites carte
-            symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.PointGeometry)
-            ml = QgsSimpleMarkerSymbolLayer(QgsSimpleMarkerSymbolLayer.Square, 0.4)
+            symbol = QgsSymbol.defaultSymbol(QgsWkbTypes.GeometryType.PointGeometry)
+            ml = QgsSimpleMarkerSymbolLayer(Qgis.MarkerShape.Square, 0.4)
             ml.setColor(color)
             ml.setStrokeColor(color)
-            ml.setSizeUnit(QgsUnitTypes.RenderMapUnits)
+            ml.setSizeUnit(Qgis.RenderUnit.MapUnits)
             symbol.changeSymbolLayer(0, ml)
 
         else:
@@ -787,7 +788,7 @@ class ReseauAssainissementPlugin(QObject):
         from .tools.calc_cubature import calculer_cubature_reseau
 
         dlg = CubatureOptionsDialog(self.iface.mainWindow())
-        if dlg.exec_() != dlg.Accepted:
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             self.action_dict[key].setChecked(False)
             return
         opts = dlg.options()
@@ -893,7 +894,7 @@ class ReseauAssainissementPlugin(QObject):
                 prefs['visibility'][reseau][role] = current_vis.get(reseau, {}).get(role, True)
 
         dlg = EtiquetteAffichageDialog(prefs=prefs, parent=self.iface.mainWindow())
-        if dlg.exec_() != EtiquetteAffichageDialog.Accepted:
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         new_prefs = dlg.get_prefs()
         self._label_display_prefs = new_prefs
@@ -934,7 +935,7 @@ class ReseauAssainissementPlugin(QObject):
         last_scale = get_label_min_scale(self)
         dlg = EtiquetteTailleDialog(last_mode, last_value, last_scale,
                                     parent=self.iface.mainWindow())
-        if dlg.exec_() != EtiquetteTailleDialog.Accepted:
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         mode, value, min_scale = dlg.get_result()
         s.setValue("CanaPlan/label_size_mode",  mode)
@@ -1048,7 +1049,7 @@ class ReseauAssainissementPlugin(QObject):
         if not requests:
             self.iface.messageBar().pushMessage(
                 i18n.tr('fond_projet'), i18n.tr('msg_fond_ok'),
-                level=0, duration=6)
+                level=Qgis.MessageLevel.Info, duration=6)
             return
 
         def style_fdp(layer, name):
@@ -1116,7 +1117,7 @@ class ReseauAssainissementPlugin(QObject):
 
         bbox = current_bbox_l93(self.iface.mapCanvas())
         QgsMessageLog.logMessage(
-            f"{title} : bbox envoyée = {bbox}", "CanaPlan", Qgis.Info)
+            f"{title} : bbox envoyée = {bbox}", "CanaPlan", Qgis.MessageLevel.Info)
         for req in requests:
             req['bbox'] = bbox
 
@@ -1180,7 +1181,7 @@ class ReseauAssainissementPlugin(QObject):
                 msg += "  |  " + " / ".join(msgs)
             iface.messageBar().pushMessage(
                 title, msg,
-                level=1 if loaded == 0 else 0, duration=6)
+                level=Qgis.MessageLevel.Warning if loaded == 0 else Qgis.MessageLevel.Info, duration=6)
             if restore_extent is not None:
                 rcanvas, rextent = restore_extent
                 rcanvas.setExtent(rextent)
@@ -1188,14 +1189,14 @@ class ReseauAssainissementPlugin(QObject):
 
         fetch_wfs_async(title, requests, on_done)
         iface.messageBar().pushMessage(
-            title, i18n.tr('msg_telechargement'), level=0, duration=3)
+            title, i18n.tr('msg_telechargement'), level=Qgis.MessageLevel.Info, duration=3)
 
     @staticmethod
     def _make_label_settings(field, is_expr, placement, size=8,
                              rgb=(50, 50, 50)):
         """QgsPalLayerSettings partagés par les styles de fonds vecteur."""
         from qgis.core import (
-            QgsPalLayerSettings, QgsTextFormat, QgsUnitTypes,
+            QgsPalLayerSettings, QgsTextFormat,
         )
         from qgis.PyQt.QtGui import QColor, QFont
         pal = QgsPalLayerSettings()
@@ -1205,7 +1206,7 @@ class ReseauAssainissementPlugin(QObject):
         pal.enabled      = True
         fmt = QgsTextFormat()
         fmt.setFont(QFont('Arial'))
-        fmt.setSizeUnit(QgsUnitTypes.RenderPoints)
+        fmt.setSizeUnit(Qgis.RenderUnit.Points)
         fmt.setSize(size)
         fmt.setColor(QColor(*rgb))
         pal.setFormat(fmt)
@@ -1401,7 +1402,7 @@ class ReseauAssainissementPlugin(QObject):
     def run_nouveau_projet_assistant(self):
         from .gui.project_wizard_dialog import ProjectWizardDialog
         wizard = ProjectWizardDialog(self, self.iface)
-        wizard.exec_()
+        wizard.exec()
 
     def run_enregistrer_projet(self):
         from .tools.projet_bet import save_projet
@@ -1421,7 +1422,7 @@ class ReseauAssainissementPlugin(QObject):
         from .tools.projet_bet import load_projet, recent_projects
 
         dlg = RecentProjectsDialog(recent_projects(), self.iface.mainWindow())
-        if dlg.exec_() != RecentProjectsDialog.Accepted:
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         bet_path = dlg.selected_path()
         if bet_path:
@@ -1433,12 +1434,16 @@ class ReseauAssainissementPlugin(QObject):
 
         dlg_export = ExportDialog(self.iface.mainWindow(),
                                   default_dir=project_dir())
-        if dlg_export.exec_() != ExportDialog.Accepted:
+        if dlg_export.exec() != QDialog.DialogCode.Accepted:
             return
         choices = dlg_export.get_choices()
         # Les réglages du plan sont désormais dans la même fenêtre : plus de
         # PrintDialog à traverser avant d'exporter.
         settings = dlg_export.get_print_settings()
+
+        if choices.get('pdf_complet'):
+            self._export_tout_en_un(choices, settings, mode='pdf')
+            return
 
         if choices.get('tout_en_un'):
             self._export_tout_en_un(choices, settings)
@@ -1488,14 +1493,13 @@ class ReseauAssainissementPlugin(QObject):
             return
 
         from .tools.print_tool import PrintTool
-        from qgis.core import QgsUnitTypes
 
         settings['do_pdf']     = do_plan_pdf
         settings['do_dxf']     = do_plan_dxf
         settings['output_dir'] = out_dir
 
         crs = self.iface.mapCanvas().mapSettings().destinationCrs()
-        if crs.mapUnits() != QgsUnitTypes.DistanceMeters:
+        if crs.mapUnits() != Qgis.DistanceUnit.Meters:
             from qgis.PyQt.QtWidgets import QMessageBox
             QMessageBox.warning(
                 self.iface.mainWindow(), i18n.tr('msg_impression'),
@@ -1514,32 +1518,45 @@ class ReseauAssainissementPlugin(QObject):
         from .tools.print_tool import _aide_pose
         self.iface.messageBar().pushMessage(
             i18n.tr('msg_impression'), _aide_pose(settings),
-            level=0, duration=0,
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
-    def _export_tout_en_un(self, choices, settings):
-        """Bouton « Tout en un » : toutes les sorties dans une archive ZIP.
+    def _export_tout_en_un(self, choices, settings, mode='zip'):
+        """Raccourcis « Tout en un » : une seule livraison, deux formes.
+
+        mode='zip' → toutes les pièces séparées dans une archive.
+        mode='pdf' → les mêmes pièces assemblées en un seul PDF.
 
         Les sorties automatiques (profils, cubature, coupes types) partent
         d'abord dans un dossier de travail. Le cadrage du plan reste posé à la
         main sur la carte, comme pour un export normal : c'est PrintTool qui
-        signale la fin, et l'archive est refermée à ce moment-là.
+        signale la fin, et la livraison est close à ce moment-là.
         """
         import os
         import tempfile
         from datetime import datetime
         from qgis.PyQt.QtWidgets import QMessageBox
-        from qgis.core import QgsProject, QgsUnitTypes
+        from qgis.core import QgsProject
 
         out_dir = choices.get('output_dir')
         if not out_dir or not os.path.isdir(out_dir):
             return
 
+        # pypdf est vérifié AVANT de produire quoi que ce soit : découvrir
+        # qu'on ne sait pas assembler après avoir fait poser les feuilles du
+        # plan serait le pire moment pour l'annoncer.
+        if mode == 'pdf':
+            from .tools import dependances
+            if not dependances.assurer(self.iface.mainWindow(),
+                                       requis=dependances.REQUIS_PDF):
+                return
+
         # Nom horodaté : jamais de collision avec un export précédent.
         projet_path = QgsProject.instance().fileName()
         base = (os.path.splitext(os.path.basename(projet_path))[0]
                 if projet_path else "CanaPlan")
-        base = f"{base}_tout_en_un_{datetime.now():%Y%m%d_%H%M}"
+        suffixe = "complet" if mode == 'pdf' else "tout_en_un"
+        base = f"{base}_{suffixe}_{datetime.now():%Y%m%d_%H%M}"
 
         # Le travail se fait dans le TEMP du système, jamais dans le dossier
         # de l'utilisateur : celui-ci ne doit jamais voir apparaître autre
@@ -1547,9 +1564,11 @@ class ReseauAssainissementPlugin(QObject):
         try:
             work_dir = tempfile.mkdtemp(prefix="canaplan_tout_en_un_")
         except OSError as e:
-            QMessageBox.critical(self.iface.mainWindow(),
-                                 i18n.tr('msg_tout_en_un'),
-                                 i18n.tr('msg_zip_erreur', erreur=e))
+            QMessageBox.critical(
+                self.iface.mainWindow(),
+                i18n.tr('msg_pdf_complet' if mode == 'pdf' else 'msg_tout_en_un'),
+                i18n.tr('msg_pdf_erreur' if mode == 'pdf' else 'msg_zip_erreur',
+                        erreur=e))
             return
 
         # « Tout » veut dire tout : les cases du dialogue ne s'appliquent pas,
@@ -1565,7 +1584,9 @@ class ReseauAssainissementPlugin(QObject):
             'cubature_conduites':    True,
             'cubature_branchements': True,
             'cubature_pdf':          True,
-            'cubature_xlsx':         True,
+            # Le classeur n'a rien à faire dans un PDF ; l'archive, elle, doit
+            # rester rééditable.
+            'cubature_xlsx':         mode != 'pdf',
             'cubature_csv':          False,
             'cubature_remblai':      True,
             'coupe_eu':              True,
@@ -1582,7 +1603,9 @@ class ReseauAssainissementPlugin(QObject):
 
         settings = dict(settings)   # ne pas polluer les réglages de l'appelant
         settings['do_pdf']     = True
-        settings['do_dxf']     = True
+        # Un DXF ne s'assemble pas dans un PDF : le produire ne ferait que
+        # rallonger l'export d'un fichier destiné à être jeté.
+        settings['do_dxf']     = mode != 'pdf'
         settings['output_dir'] = work_dir
         # Les fichiers partent dans le TEMP et sont supprimés après archivage :
         # les ouvrir afficherait un PDF et lancerait AutoCAD sur des fichiers
@@ -1590,13 +1613,16 @@ class ReseauAssainissementPlugin(QObject):
         settings['open_after'] = False
 
         crs = self.iface.mapCanvas().mapSettings().destinationCrs()
-        if crs.mapUnits() != QgsUnitTypes.DistanceMeters:
+        if crs.mapUnits() != Qgis.DistanceUnit.Meters:
             QMessageBox.warning(
                 self.iface.mainWindow(), i18n.tr('msg_impression'),
                 i18n.tr('msg_crs_non_metrique', crs=crs.authid()),
             )
 
-        cloture = lambda: self._finaliser_zip(work_dir, out_dir, base, msgs)
+        if mode == 'pdf':
+            cloture = lambda: self._finaliser_pdf(work_dir, out_dir, base, msgs)
+        else:
+            cloture = lambda: self._finaliser_zip(work_dir, out_dir, base, msgs)
 
         if settings.get('cadrage_auto'):
             # Le ZIP se referme de la même façon : c'est PrintTool qui
@@ -1613,10 +1639,12 @@ class ReseauAssainissementPlugin(QObject):
         self.iface.mapCanvas().setMapTool(tool)
         self.tools['imprimer'] = tool
 
+        titre = 'msg_pdf_complet' if mode == 'pdf' else 'msg_tout_en_un'
+        pose = 'msg_pdf_complet_pose' if mode == 'pdf' else 'msg_tout_en_un_pose'
         self.iface.messageBar().pushMessage(
-            i18n.tr('msg_tout_en_un'),
-            i18n.tr('msg_tout_en_un_pose') + "  " + _aide_pose(settings),
-            level=0, duration=0,
+            i18n.tr(titre),
+            i18n.tr(pose) + "  " + _aide_pose(settings),
+            level=Qgis.MessageLevel.Info, duration=0,
         )
 
     # Au-delà, on demande confirmation : un export de cette taille prend
@@ -1672,9 +1700,9 @@ class ReseauAssainissementPlugin(QObject):
 
         self.iface.messageBar().pushMessage(
             i18n.tr('msg_impression'), i18n.tr('msg_cadrage_calcul'),
-            level=0, duration=3)
+            level=Qgis.MessageLevel.Info, duration=3)
 
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             planches = calculer_planches(
                 couches, settings['w_mm'], settings['h_mm'],
@@ -1701,8 +1729,8 @@ class ReseauAssainissementPlugin(QObject):
                 self.iface.mainWindow(), i18n.tr('msg_impression'),
                 i18n.tr('msg_cadrage_beaucoup', nb=len(planches),
                         echelle=settings['echelle']),
-                QMessageBox.Yes | QMessageBox.No)
-            if rep != QMessageBox.Yes:
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if rep != QMessageBox.StandardButton.Yes:
                 abandon()
                 return
 
@@ -1717,7 +1745,7 @@ class ReseauAssainissementPlugin(QObject):
             i18n.tr('msg_impression'),
             i18n.tr('msg_cadrage_pret', nb=len(planches),
                     echelle=settings['echelle']),
-            level=0, duration=5)
+            level=Qgis.MessageLevel.Info, duration=5)
         tool.exporter_maintenant()
 
     def _finaliser_zip(self, work_dir, out_dir, base, msgs):
@@ -1753,11 +1781,103 @@ class ReseauAssainissementPlugin(QObject):
         msgs = list(msgs) + [i18n.tr('msg_zip_ok',
                                      fichier=os.path.basename(zip_path),
                                      nb=len(fichiers))]
-        QMessageBox.information(
-            self.iface.mainWindow(), i18n.tr('msg_tout_en_un'),
-            "\n".join(msgs) + "\n\n"
-            + i18n.tr('msg_dossier', chemin=out_dir),
-        )
+        self._rapport_livraison(msgs, out_dir)
+
+    # Ordre d'assemblage du PDF complet, et reconnaissance des pièces par leur
+    # nom de fichier. Le plan n'a pas de motif : c'est PrintTool qui le nomme,
+    # d'après le nom du projet. Il est donc identifié par élimination, ce qui
+    # le place naturellement en tête.
+    _ORDRE_PDF = (
+        ('plan',     None),
+        ('profil',   lambda n: n.upper().endswith('_PROFIL.PDF')),
+        ('coupe',    lambda n: n.lower().startswith('coupe_type')),
+        ('cubature', lambda n: n.lower().startswith('cubature')),
+    )
+
+    def _classer_pdf(self, noms):
+        """Trie les PDF du dossier de travail dans l'ordre d'assemblage."""
+        restants = sorted(noms)
+        classes = {cle: [] for cle, _ in self._ORDRE_PDF}
+        for cle, motif in self._ORDRE_PDF:
+            if motif is None:
+                continue
+            pris = [n for n in restants if motif(n)]
+            classes[cle] = pris
+            restants = [n for n in restants if n not in pris]
+        classes['plan'] = restants     # tout ce qui n'a pas été reconnu
+        ordonnes = []
+        for cle, _ in self._ORDRE_PDF:
+            ordonnes.extend(classes[cle])
+        return ordonnes
+
+    def _finaliser_pdf(self, work_dir, out_dir, base, msgs):
+        """Assemble les PDF du dossier de travail en un seul document."""
+        import os
+        import shutil
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        noms = []
+        if os.path.isdir(work_dir):
+            noms = [n for n in os.listdir(work_dir)
+                    if n.lower().endswith('.pdf')
+                    and os.path.isfile(os.path.join(work_dir, n))]
+
+        if not noms:
+            shutil.rmtree(work_dir, ignore_errors=True)
+            QMessageBox.warning(self.iface.mainWindow(),
+                                i18n.tr('msg_pdf_complet'),
+                                i18n.tr('msg_pdf_vide'))
+            return
+
+        ordonnes = self._classer_pdf(noms)
+        pdf_path = os.path.join(out_dir, base + ".pdf")
+        pages = 0
+        try:
+            from pypdf import PdfWriter
+            writer = PdfWriter()
+            for nom in ordonnes:
+                writer.append(os.path.join(work_dir, nom))
+            pages = len(writer.pages)
+            with open(pdf_path, "wb") as sortie:
+                writer.write(sortie)
+            writer.close()
+        except Exception as e:
+            QMessageBox.critical(self.iface.mainWindow(),
+                                 i18n.tr('msg_pdf_complet'),
+                                 i18n.tr('msg_pdf_erreur', erreur=e))
+            return
+        finally:
+            # Le dossier temporaire ne doit jamais survivre, réussite ou non.
+            shutil.rmtree(work_dir, ignore_errors=True)
+
+        msgs = list(msgs) + [
+            i18n.tr('msg_pdf_ok', fichier=os.path.basename(pdf_path),
+                    nb=pages),
+            i18n.tr('msg_pdf_ordre', pieces=" → ".join(ordonnes)),
+        ]
+        self._rapport_livraison(msgs, out_dir, titre='msg_pdf_complet')
+
+    def _rapport_livraison(self, msgs, out_dir, titre='msg_tout_en_un'):
+        """Compte rendu final, avec un raccourci vers le dossier de sortie."""
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        # Le compte rendu se termine par le dossier de sortie : autant
+        # proposer de l'ouvrir plutôt que de laisser recopier le chemin.
+        box = QMessageBox(self.iface.mainWindow())
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle(i18n.tr(titre))
+        box.setText("\n".join(msgs) + "\n\n"
+                    + i18n.tr('msg_dossier', chemin=out_dir))
+        btn_ouvrir = box.addButton(i18n.tr('msg_ouvrir_dossier'),
+                                   QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Close)
+        box.setDefaultButton(btn_ouvrir)
+        box.exec()
+
+        if box.clickedButton() is btn_ouvrir:
+            from qgis.PyQt.QtCore import QUrl
+            from qgis.PyQt.QtGui import QDesktopServices
+            QDesktopServices.openUrl(QUrl.fromLocalFile(out_dir))
 
     def _export_cubature_batch(self, choices):
         """Cubature de l'export groupé : calcul sur le réseau, sans carte.
@@ -1806,7 +1926,7 @@ class ReseauAssainissementPlugin(QObject):
         if not all_results:
             return [i18n.tr('msg_cubature_export_vide')]
 
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             # Le dialogue porte toute la mise en page des exports ; on s'en
             # sert comme moteur de rendu, sans jamais l'afficher.
@@ -1849,7 +1969,7 @@ class ReseauAssainissementPlugin(QObject):
         config = get_cubature_config()
         msgs   = []
 
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             for reseau in demandes:
                 couches = self._get_couches(reseau)
@@ -1886,7 +2006,7 @@ class ReseauAssainissementPlugin(QObject):
         if not out_dir or not os.path.isdir(out_dir):
             return []
 
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         msgs = []
         try:
             from .tools.profil_batch import export_profils_eu_ep, export_profils_groupe
@@ -1993,7 +2113,7 @@ class ReseauAssainissementPlugin(QObject):
 
         from .tools.dxf_convert.ui_dialog import CadToGisDialog
         dlg = CadToGisDialog(self.iface)
-        dlg.exec_()
+        dlg.exec()
 
     def run_export_stareau(self):
         """Ouvre le dialogue d'export StaR-Eau (CNIG/ASTEE).
@@ -2003,7 +2123,7 @@ class ReseauAssainissementPlugin(QObject):
         de les corriger, et le bouton « Relancer le controle » ne pourrait
         jamais rien detecter de nouveau.
         """
-        import sip
+        from qgis.PyQt import sip
         from .gui.stareau_export_dialog import StarEauExportDialog
 
         dlg = getattr(self, '_stareau_dlg', None)
@@ -2032,7 +2152,7 @@ class ReseauAssainissementPlugin(QObject):
             return
 
         out_path = dlg.output_path()
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             path, stats = export_stareau(dlg.params(), out_path)
         except Exception as e:
@@ -2049,13 +2169,13 @@ class ReseauAssainissementPlugin(QObject):
             "StaR-Eau",
             i18n.tr('msg_export_stareau_ok',
                     fichier=os.path.basename(path), detail=detail),
-            level=0, duration=8)
+            level=Qgis.MessageLevel.Info, duration=8)
 
     def run_import_star_dt(self):
         from .gui.star_dt_dialog import StarDtDialog
         from .tools.star_dt_import import import_star_dt
         dlg = StarDtDialog(self.iface.mainWindow())
-        if dlg.exec_() != StarDtDialog.Accepted:
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         paths = dlg.file_paths()
         out = dlg.output_path()
@@ -2075,16 +2195,16 @@ class ReseauAssainissementPlugin(QObject):
                 "Star-DT",
                 i18n.tr('msg_import_ok', couches=len(created),
                         fichiers=len(paths), dossier=out),
-                level=0, duration=5)
+                level=Qgis.MessageLevel.Info, duration=5)
         else:
             self.iface.messageBar().pushMessage(
                 "Star-DT", i18n.tr('msg_rien_a_importer'),
-                level=1, duration=4)
+                level=Qgis.MessageLevel.Warning, duration=4)
 
     def show_config_dialog(self):
         from .config_dialog import ConfigDialog
         dialog = ConfigDialog(self.iface)
-        dialog.exec_()
+        dialog.exec()
 
     def show_tableau_saisie(self):
         self._ensure_project_loaded()

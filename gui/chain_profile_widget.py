@@ -22,7 +22,7 @@ class ChainProfileWidget(QWidget):
         super().__init__(parent)
         self._nodes = []
         self.setMinimumHeight(190)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def set_data(self, nodes):
         """nodes : liste de dicts {nom, cum, tn, profondeur, fe}, triés par
@@ -38,14 +38,14 @@ class ChainProfileWidget(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
         painter.fillRect(self.rect(), self.palette().base())
 
         if len(self._nodes) < 1:
             painter.setPen(QColor(150, 150, 150))
             painter.drawText(
-                self.rect(), Qt.AlignCenter,
+                self.rect(), Qt.AlignmentFlag.AlignCenter,
                 i18n.tr('cp_aucune_chaine'))
             painter.end()
             return
@@ -83,7 +83,7 @@ class ChainProfileWidget(QWidget):
 
         # ligne de terrain naturel (TN), pointillés
         pen_tn = QPen(_COLOR_TERRAIN, 2)
-        pen_tn.setStyle(Qt.DashLine)
+        pen_tn.setStyle(Qt.PenStyle.DashLine)
         for i in range(len(self._nodes) - 1):
             n1, n2 = self._nodes[i], self._nodes[i + 1]
             if n1['tn'] is None or n2['tn'] is None:
@@ -95,7 +95,7 @@ class ChainProfileWidget(QWidget):
         # ligne de fil d'eau (FE / pipe) + libellé de pente par tronçon
         pen_fe = QPen(_COLOR_PIPE, 3)
         pen_fe_missing = QPen(_COLOR_MISSING, 2)
-        pen_fe_missing.setStyle(Qt.DotLine)
+        pen_fe_missing.setStyle(Qt.PenStyle.DotLine)
         for i in range(len(self._nodes) - 1):
             n1, n2 = self._nodes[i], self._nodes[i + 1]
             fe1, fe2 = n1['fe'], n2['fe']
@@ -129,7 +129,7 @@ class ChainProfileWidget(QWidget):
             painter.setPen(QPen(_COLOR_NODE if ok else _COLOR_MISSING, 3))
             painter.drawLine(QPointF(x, y_tn), QPointF(x, y_fe))
 
-            painter.setPen(Qt.NoPen)
+            painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(_COLOR_TERRAIN)
             painter.drawEllipse(QPointF(x, y_tn), 3, 3)
             painter.setBrush(_COLOR_PIPE)

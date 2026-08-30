@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════
-#  CanaPlan — Diagramme structurel (v1.6)
+#  CanaPlan — Diagramme structurel (v1.8)
 #  Source de reference, en remplacement de l ancien uml_structure.puml.
 #
 #  Rendu :   d2 uml_structure.d2 uml_structure.svg
@@ -165,6 +165,27 @@ bet: "CanaPlan" {
     # SidePanel. En tete : toggleViewAction() de la toolbar (etat
     # synchronise par Qt). En pied : l action "A propos" (hors toolbar).
 
+    "── Export groupe (ZIP / PDF complet) ──": ""
+    "-_export_tout_en_un(choices, settings, mode)": ""
+    "-_export_cubature_batch(choices)": ""
+    "-_finaliser_zip(work_dir, out_dir, base, msgs)": ""
+    "-_finaliser_pdf(work_dir, out_dir, base, msgs)": ""
+    "-_classer_pdf(noms)": "list[str]"
+    "-_ORDRE_PDF": "tuple [static]"
+    "-_rapport_livraison(msgs, out_dir, titre)": ""
+    # Note : une seule chaine pour les deux raccourcis, mode='zip' ou 'pdf'.
+    # Les sorties automatiques partent dans le TEMP du systeme ; le cadrage du
+    # plan reste pose a la main sur la carte, et c est PrintTool qui signale la
+    # fin. La cloture (archivage ou assemblage) est donc un callback.
+    # mode='pdf' verifie pypdf AVANT de produire quoi que ce soit : decouvrir
+    # qu on ne sait pas assembler apres avoir fait poser les feuilles serait le
+    # pire moment pour l annoncer. Il coupe aussi le DXF et le XLSX, qui ne
+    # s assemblent pas dans un PDF.
+    # _ORDRE_PDF fixe l ordre d assemblage et reconnait les pieces a leur nom
+    # de fichier. Le plan n a pas de motif — c est PrintTool qui le nomme,
+    # d apres le nom du projet — il est donc identifie par elimination, ce qui
+    # le place naturellement en tete.
+
     "── Privees ──": ""
     "-_get_couches(reseau)": "dict"
     "-_get_or_create_group(reseau)": ""
@@ -313,6 +334,8 @@ bet: "CanaPlan" {
       "-cb_coupe_eu / cb_coupe_ep": "QCheckBox"
       "-coupe_papier / coupe_fichier": "QComboBox"
       "-_tout_en_un": "bool"
+      "-_pdf_complet": "bool"
+      "-_STYLE_RACCOURCI": "str [static]"
       "-dir_edit": "QLineEdit"
       "+__init__(parent, default_dir)": ""
       "+get_choices()": "dict"
@@ -321,12 +344,19 @@ bet: "CanaPlan" {
       "-_bloc_tout_en_un(layout)": ""
       "-_sync_impression()": ""
       "-_on_tout_en_un()": "bool"
+      "-_on_pdf_complet()": "bool"
       # Note : fenetre unique — sorties a produire ET reglages du plan.
       # Le plugin n ouvre plus PrintDialog. Les reglages sont grises tant
       # que ni PDF ni DXF n est coche.
-      # Bouton « Toutes les pieces (ZIP) », en coin haut droit : ignore les
-      # cases et produit plan PDF+DXF, profils EU/EP, cubature remblai
-      # (PDF+XLSX) et coupes types EU/EP dans une archive.
+      # Deux raccourcis en coin haut droit, qui ignorent les cases : ce sont
+      # des sorties de secours, pas des options de plus. Ils partagent la
+      # chaine de production, seul le drapeau leve change la sortie.
+      #   « Toutes les pieces (ZIP) », rouge   -> pieces separees et
+      #     reeditables : plan PDF+DXF, profils EU/EP, cubature remblai
+      #     (PDF+XLSX), coupes types EU/EP, dans une archive.
+      #   « PDF complet », violet              -> meme contenu assemble en un
+      #     seul document. Ni DXF ni XLSX : ils ne s assemblent pas dans un
+      #     PDF. Deux couleurs, parce que le resultat n est pas le meme.
     }
 
     ProfilGroupeDialog: {
@@ -767,6 +797,25 @@ bet: "CanaPlan" {
       # save_projet_sous() direct.
     }
 
+    DependancesDialog: {
+      shape: class
+      "-_paquets": "list[str]  — specs pip"
+      "-_thread": "_Installateur (QThread)"
+      "-_barre": "QProgressBar"
+      "-_journal": "QPlainTextEdit"
+      "-_btn_installer / _btn_annuler": "QPushButton"
+      "+__init__(paquets, parent)": ""
+      "-_lancer()": ""
+      "-_termine(ok, sortie)": ""
+      "+reject()": ""
+      # Note : n apparait que si une librairie manque. L installation tourne
+      # dans un QThread pour ne pas geler QGIS, sort dans le journal, et
+      # ecrit dans <plugin>/libs sans droits administrateur. Refuser est un
+      # choix legitime : l appelant renonce alors a l action.
+      # En cas d echec (proxy d entreprise), la fenetre affiche la commande a
+      # executer a la main plutot que de laisser l utilisateur sans issue.
+    }
+
     ProjectWizardDialog: {
       shape: class
       "-_plugin": "ReseauAssainissementPlugin"
@@ -1025,6 +1074,32 @@ bet: "CanaPlan" {
       "+_longueur_3d(geom, z_start, z_end)": "float"
       "+_to_float(val)": "float"
       "+_nom_regard(feat)": "str"
+    }
+
+    dependances: "dependances «module»" {
+      shape: class
+      class: module
+      "── Constantes ──": ""
+      "+REQUIS": "tuple[(module, spec pip)]  — ezdxf, fontTools, pyparsing"
+      "+REQUIS_PDF": "tuple[(module, spec pip)]  — pypdf"
+      "── API publique ──": ""
+      "+libs_dir()": "str"
+      "+manquants(requis)": "list[str]"
+      "+tout_est_la(requis)": "bool"
+      "+assurer(parent, requis)": "bool"
+      "+interpreteur_python()": "str"
+      "+installer(paquets, timeout)": "(bool, str)"
+      # Note : rien n est embarque dans le paquet. `assurer()` est appelee
+      # juste avant une fonction qui en depend ; si tout est la, elle ne fait
+      # rien et ne montre rien. Sinon elle ouvre DependancesDialog, qui
+      # installe dans <plugin>/libs sans droits administrateur.
+      # `requis` restreint la verification a un sous-ensemble : celui qui
+      # n exporte jamais en DXF n a aucune raison de se voir proposer ezdxf
+      # pour fusionner des PDF, et reciproquement. QGIS fournit deja pypdf
+      # dans plusieurs de ses versions : le cas courant est qu il n y ait
+      # rien a installer.
+      # A refaire apres une mise a jour du plugin : QGIS remplace alors tout
+      # son dossier, libs/ comprise.
     }
 
     projet_bet: "projet_bet «module»" {
@@ -1375,7 +1450,9 @@ bet: "CanaPlan" {
       "-_notify_finished()": ""
       "-_reset()": ""
       # Note : PDF multi-pages — pre-rendu de toutes les images avant
-      # ouverture QPrinter (evite les interactions rendu/PDF Qt5).
+      # ouverture QPrinter (evite les interactions rendu/PDF de Qt).
+      # Constate sous Qt 5 ; la precaution est conservee sous Qt 6, ou elle
+      # ne coute rien.
       # Jobs QgsMapRendererParallelJob tous lances en simultane (latences
       # WMS/ortho recouvertes), attente via QProgressDialog annulable
       # (plus de waitForFinished bloquant). Images liberees au fil de
@@ -1407,9 +1484,10 @@ bet: "CanaPlan" {
       #   cx_c = cx + (carto_h_m/2)*sin(rot),
       #   cy_c = cy + (carto_h_m/2)*cos(rot).
       # painter.save()/restore() obligatoire autour du dessin des
-      # polygones semi-transparents (contours feuilles) : Qt5 PDF writer
-      # ouvre un transparency group pour alpha<255 et ne le ferme pas sans
-      # restore(), causant un voile blanc.
+      # polygones semi-transparents (contours feuilles) : le PDF writer de
+      # Qt ouvre un transparency group pour alpha<255 et ne le ferme pas
+      # sans restore(), causant un voile blanc. Constate sous Qt 5, la
+      # precaution est conservee sous Qt 6.
     }
 
     AnnotationTool: {
@@ -1849,6 +1927,10 @@ bet.tools.coupe_type -> bet.gui.CoupeTransversaleDialog: "moteur de rendu (non a
 bet.tools.cadrage_auto -> bet.gui.etiquettes: "pal_settings (mesure des etiquettes)" {class: depend}
 bet.tools.PrintTool -> bet.tools.dxf_export: "run_export_dxf_with_ui()" {class: depend}
 bet.tools.dxf_export -> bet.tools.dxf_postprocess: "decorations etiquettes / symboles" {class: depend}
+bet.tools.dxf_export -> bet.tools.dependances: "assurer() — ezdxf, fontTools, pyparsing" {class: depend}
+bet.tools.dxf_postprocess -> bet.tools.dependances: "assurer() — ezdxf" {class: depend}
+bet.ReseauAssainissementPlugin -> bet.tools.dependances: "assurer(requis=REQUIS_PDF) avant le PDF complet" {class: depend}
+bet.tools.dependances -> bet.gui.DependancesDialog: "ouvre si des librairies manquent" {class: depend}
 bet.gui.StarDtDialog -> bet.tools.star_dt_import: "scan_star_dt / sort_output_types" {class: depend}
 bet.gui.StarEauExportDialog -> bet.tools.stareau_values: "alimente toutes les combos" {class: depend}
 bet.gui.StarEauExportDialog -> bet.tools.stareau_export: "check_conformity / source_layers / file_name" {class: depend}

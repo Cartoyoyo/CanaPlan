@@ -29,13 +29,13 @@ MAX_PAR_SITE = 3
 _compteurs = {}
 
 
-def ignored(err, contexte, level=Qgis.Info):
+def ignored(err, contexte, level=Qgis.MessageLevel.Info):
     """Trace une exception que l'appelant choisit d'ignorer.
 
     err      : l'exception attrapée
     contexte : identifiant stable du site, « module.fonction:ligne ». Sert
                aussi de clé de plafonnement : chaque site a son propre quota.
-    level    : Qgis.Info par défaut — c'est un échec attendu, pas un incident.
+    level    : Qgis.MessageLevel.Info par défaut — c'est un échec attendu, pas un incident.
     """
     # Cette fonction ne doit JAMAIS lever. Elle est appelée depuis des blocs
     # `except`, et certains de ces blocs existent justement parce que

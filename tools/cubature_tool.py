@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-import sip
-from qgis.core import QgsPointXY, QgsGeometry, QgsWkbTypes
+from qgis.PyQt import sip
+from qgis.core import Qgis, QgsPointXY, QgsGeometry, QgsWkbTypes
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
@@ -45,18 +45,18 @@ class CubatureTool(QgsMapTool):
 
     def activate(self):
         super().activate()
-        self.canvas.setCursor(Qt.CrossCursor)
+        self.canvas.setCursor(Qt.CursorShape.CrossCursor)
         if self._axe_mode:
             self.iface.messageBar().pushMessage(
                 i18n.tr('msg_cubature_titre'),
                 i18n.tr('po_aide_axe'),
-                level=0, duration=0,
+                level=Qgis.MessageLevel.Info, duration=0,
             )
         else:
             self.iface.messageBar().pushMessage(
                 i18n.tr('msg_cubature_titre'),
                 i18n.tr('ot_aide_cubature_regards'),
-                level=0, duration=0,
+                level=Qgis.MessageLevel.Info, duration=0,
             )
 
     def deactivate(self):
@@ -83,7 +83,7 @@ class CubatureTool(QgsMapTool):
         self._clear_band('_hover_band')
 
     def canvasReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             if self._axe_mode:
                 self._points.append(self.toMapCoordinates(event.pos()))
                 self._update_band(self.toMapCoordinates(event.pos()))
@@ -112,29 +112,29 @@ class CubatureTool(QgsMapTool):
                     self._compute_bfs(self._start, feat, reseau)
                     self._reset()
 
-        elif event.button() == Qt.RightButton:
+        elif event.button() == Qt.MouseButton.RightButton:
             if self._axe_mode and len(self._points) >= 2:
                 self._compute_axe()
                 self._reset()
 
     def canvasDoubleClickEvent(self, event):
-        if event.button() == Qt.LeftButton and self._axe_mode:
+        if event.button() == Qt.MouseButton.LeftButton and self._axe_mode:
             if len(self._points) >= 2:
                 self._compute_axe()
             self._reset()
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self._reset()
 
     # ------------------------------------------------------------------ axe drawing
 
     def _update_band(self, cursor_pt=None):
         if self._band is None:
-            self._band = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+            self._band = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
             self._band.setColor(QColor(255, 120, 0, 200))
             self._band.setWidth(2)
-        self._band.reset(QgsWkbTypes.LineGeometry)
+        self._band.reset(QgsWkbTypes.GeometryType.LineGeometry)
         for p in self._points:
             self._band.addPoint(p, False)
         if cursor_pt is not None:
@@ -454,10 +454,10 @@ class CubatureTool(QgsMapTool):
     # ------------------------------------------------------------------ helpers
 
     def _make_pt_band(self, color):
-        rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
+        rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
         rb.setColor(color)
         rb.setIconSize(14)
-        rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+        rb.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
         return rb
 
     def _clear_band(self, attr):

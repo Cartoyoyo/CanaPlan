@@ -35,7 +35,7 @@ from qgis.core import (
     QgsGeometry, QgsMemoryProviderUtils, QgsPointXY, QgsProject,
     QgsSpatialIndex, QgsVectorFileWriter, QgsWkbTypes,
 )
-from qgis.PyQt.QtCore import QDateTime, QVariant
+from qgis.PyQt.QtCore import QDateTime, QMetaType
 
 from . import i18n
 from . import layer_ok
@@ -241,118 +241,118 @@ def _fields(*specs):
 # Colonnes heritees de stareau_principale.champ_commun, portees par tous les
 # objets du modele. Les NOT NULL du standard sont toujours ecrits.
 _CHAMP_COMMUN = (
-    ("type_reseau",      QVariant.String),
-    ("fictif",           QVariant.Bool),
-    ("etat_service",     QVariant.String),
-    ("insee_commune",    QVariant.String),
-    ("localisation",     QVariant.String),
-    ("maitre_ouvrage",   QVariant.String),
-    ("exploitant",       QVariant.String),
-    ("entreprise_pose",  QVariant.String),
-    ("precision_xy",     QVariant.String),
-    ("precision_z",      QVariant.String),
-    ("an_pose_sup",      QVariant.Int),
-    ("an_service_sup",   QVariant.Int),
-    ("date_creation",    QVariant.DateTime),
-    ("origine_creation", QVariant.String),
-    ("date_maj",         QVariant.DateTime),
-    ("origine_maj",      QVariant.String),
-    ("commentaire",      QVariant.String),
+    ("type_reseau",      QMetaType.Type.QString),
+    ("fictif",           QMetaType.Type.Bool),
+    ("etat_service",     QMetaType.Type.QString),
+    ("insee_commune",    QMetaType.Type.QString),
+    ("localisation",     QMetaType.Type.QString),
+    ("maitre_ouvrage",   QMetaType.Type.QString),
+    ("exploitant",       QMetaType.Type.QString),
+    ("entreprise_pose",  QMetaType.Type.QString),
+    ("precision_xy",     QMetaType.Type.QString),
+    ("precision_z",      QMetaType.Type.QString),
+    ("an_pose_sup",      QMetaType.Type.Int),
+    ("an_service_sup",   QMetaType.Type.Int),
+    ("date_creation",    QMetaType.Type.QDateTime),
+    ("origine_creation", QMetaType.Type.QString),
+    ("date_maj",         QMetaType.Type.QDateTime),
+    ("origine_maj",      QMetaType.Type.QString),
+    ("commentaire",      QMetaType.Type.QString),
 )
 
 # Colonnes heritees de stareau_principale.dimension.
 _DIMENSION = (
-    ("forme",              QVariant.String),
-    ("hauteur_interieure", QVariant.Double),
-    ("largeur_interieure", QVariant.Double),
+    ("forme",              QMetaType.Type.QString),
+    ("hauteur_interieure", QMetaType.Type.Double),
+    ("largeur_interieure", QMetaType.Type.Double),
 )
 
 # Colonnes heritees de stareau_principale.canalisation.
 _CANALISATION = (
-    ("mode_circulation",     QVariant.String),
-    ("type_pose",            QVariant.String),
-    ("raison_pose",          QVariant.String),
-    ("materiau",             QVariant.String),
-    ("revetement_interieur", QVariant.String),
-    ("diametre_equivalent",  QVariant.Int),
-    ("longueur_terrain",     QVariant.Double),
-    ("sensible",             QVariant.Bool),
-    ("noeudinitial",         QVariant.String),
-    ("noeudterminal",        QVariant.String),
+    ("mode_circulation",     QMetaType.Type.QString),
+    ("type_pose",            QMetaType.Type.QString),
+    ("raison_pose",          QMetaType.Type.QString),
+    ("materiau",             QMetaType.Type.QString),
+    ("revetement_interieur", QMetaType.Type.QString),
+    ("diametre_equivalent",  QMetaType.Type.Int),
+    ("longueur_terrain",     QMetaType.Type.Double),
+    ("sensible",             QMetaType.Type.Bool),
+    ("noeudinitial",         QMetaType.Type.QString),
+    ("noeudterminal",        QMetaType.Type.QString),
 )
 
 
 def _schema_canalisation():
     return _fields(
-        ("id_canalisation",         QVariant.String),
-        ("id_ass_canalisation",     QVariant.String),
+        ("id_canalisation",         QMetaType.Type.QString),
+        ("id_ass_canalisation",     QMetaType.Type.QString),
         *_CHAMP_COMMUN, *_CANALISATION, *_DIMENSION,
-        ("fonction_canalisation",   QVariant.String),
-        ("contenu_canalisation",    QVariant.String),
-        ("visitable",               QVariant.String),
-        ("altitude_fil_eau_amont",  QVariant.Double),
-        ("altitude_fil_eau_aval",   QVariant.Double),
+        ("fonction_canalisation",   QMetaType.Type.QString),
+        ("contenu_canalisation",    QMetaType.Type.QString),
+        ("visitable",               QMetaType.Type.QString),
+        ("altitude_fil_eau_amont",  QMetaType.Type.Double),
+        ("altitude_fil_eau_aval",   QMetaType.Type.Double),
     )
 
 
 def _schema_canalisation_branchement():
     return _fields(
-        ("id_canalisation",                  QVariant.String),
-        ("id_ass_canalisation_branchement",  QVariant.String),
+        ("id_canalisation",                  QMetaType.Type.QString),
+        ("id_ass_canalisation_branchement",  QMetaType.Type.QString),
         *_CHAMP_COMMUN, *_CANALISATION, *_DIMENSION,
-        ("fonction_canalisation",   QVariant.String),
-        ("contenu_canalisation",    QVariant.String),
-        ("altitude_fil_eau_amont",  QVariant.Double),
-        ("altitude_fil_eau_aval",   QVariant.Double),
+        ("fonction_canalisation",   QMetaType.Type.QString),
+        ("contenu_canalisation",    QMetaType.Type.QString),
+        ("altitude_fil_eau_amont",  QMetaType.Type.Double),
+        ("altitude_fil_eau_aval",   QMetaType.Type.Double),
     )
 
 
 def _schema_regard():
     return _fields(
-        ("id_noeud_reseau",    QVariant.String),
-        ("id_ass_regard",      QVariant.String),
+        ("id_noeud_reseau",    QMetaType.Type.QString),
+        ("id_ass_regard",      QMetaType.Type.QString),
         *_CHAMP_COMMUN, *_DIMENSION,
-        ("type_regard",        QVariant.String),
-        ("materiau",           QVariant.String),
-        ("position",           QVariant.String),
-        ("type_descente",      QVariant.String),
-        ("z_tampon",           QVariant.Double),
-        ("z_radier",           QVariant.Double),
-        ("profondeur_mesure",  QVariant.Double),
+        ("type_regard",        QMetaType.Type.QString),
+        ("materiau",           QMetaType.Type.QString),
+        ("position",           QMetaType.Type.QString),
+        ("type_descente",      QMetaType.Type.QString),
+        ("z_tampon",           QMetaType.Type.Double),
+        ("z_radier",           QMetaType.Type.Double),
+        ("profondeur_mesure",  QMetaType.Type.Double),
     )
 
 
 def _schema_point_collecte():
     return _fields(
-        ("id_noeud_reseau",     QVariant.String),
-        ("id_point_collecte",   QVariant.String),
+        ("id_noeud_reseau",     QMetaType.Type.QString),
+        ("id_point_collecte",   QMetaType.Type.QString),
         *_CHAMP_COMMUN, *_DIMENSION,
-        ("type_point_collecte", QVariant.String),
-        ("type_usager",         QVariant.String),
-        ("materiau",            QVariant.String),
-        ("z_tampon",            QVariant.Double),
-        ("z_radier",            QVariant.Double),
-        ("profondeur",          QVariant.Double),
+        ("type_point_collecte", QMetaType.Type.QString),
+        ("type_usager",         QMetaType.Type.QString),
+        ("materiau",            QMetaType.Type.QString),
+        ("z_tampon",            QMetaType.Type.Double),
+        ("z_radier",            QMetaType.Type.Double),
+        ("profondeur",          QMetaType.Type.Double),
     )
 
 
 def _schema_raccord():
     return _fields(
-        ("id_noeud_reseau",   QVariant.String),
-        ("id_ass_raccord",    QVariant.String),
+        ("id_noeud_reseau",   QMetaType.Type.QString),
+        ("id_ass_raccord",    QMetaType.Type.QString),
         *_CHAMP_COMMUN,
-        ("type_raccord",      QVariant.String),
-        ("ref_canalisation",  QVariant.String),
+        ("type_raccord",      QMetaType.Type.QString),
+        ("ref_canalisation",  QMetaType.Type.QString),
     )
 
 
 # Nom de couche -> (schema, type de geometrie)
 LAYER_SCHEMAS = {
-    "ass_canalisation":             (_schema_canalisation,             QgsWkbTypes.LineString),
-    "ass_regard":                   (_schema_regard,                   QgsWkbTypes.Point),
-    "ass_canalisation_branchement": (_schema_canalisation_branchement, QgsWkbTypes.LineString),
-    "ass_point_collecte":           (_schema_point_collecte,           QgsWkbTypes.Point),
-    "ass_raccord":                  (_schema_raccord,                  QgsWkbTypes.Point),
+    "ass_canalisation":             (_schema_canalisation,             QgsWkbTypes.Type.LineString),
+    "ass_regard":                   (_schema_regard,                   QgsWkbTypes.Type.Point),
+    "ass_canalisation_branchement": (_schema_canalisation_branchement, QgsWkbTypes.Type.LineString),
+    "ass_point_collecte":           (_schema_point_collecte,           QgsWkbTypes.Type.Point),
+    "ass_raccord":                  (_schema_raccord,                  QgsWkbTypes.Type.Point),
 }
 
 # Ordre d'ecriture dans le GeoPackage : les tables referencees d'abord.
@@ -804,15 +804,15 @@ def export_stareau(params, out_path, project=None, progress=None):
         options.layerName = name
         options.fileEncoding = "UTF-8"
         options.actionOnExistingFile = (
-            QgsVectorFileWriter.CreateOrOverwriteFile if first
-            else QgsVectorFileWriter.CreateOrOverwriteLayer)
+            QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteFile if first
+            else QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer)
 
         result = QgsVectorFileWriter.writeAsVectorFormatV3(
             mem, out_path, QgsProject.instance().transformContext(), options)
         # writeAsVectorFormatV3 retourne (code, message) ou un tuple plus long
         # selon la version de QGIS ; seul le code d'erreur nous interesse.
         code = result[0] if isinstance(result, tuple) else result
-        if code != QgsVectorFileWriter.NoError:
+        if code != QgsVectorFileWriter.WriterError.NoError:
             message = result[1] if isinstance(result, tuple) and len(result) > 1 else ""
             raise RuntimeError(i18n.tr('sec_echec_ecriture', couche=name,
                                        detail=message))

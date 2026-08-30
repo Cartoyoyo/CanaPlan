@@ -27,7 +27,7 @@ except ImportError:
 
 MATERIAUX_CONDUITE = ["PVC", "Fonte", "Béton", "PEHD", "Acier", "Grès", ""]
 MATERIAUX_REMBLAI  = [
-    "Sable", "2/6", "0/31.5", "Tout-venant",
+    "Sable", "2/6", "0/31.5", "Tout-venant", "Recyclé",
     "GB (Grave bitume)", "GC (Grave ciment)", "Enrobé", "",
 ]
 
@@ -61,6 +61,7 @@ def _layer_color(mat):
     if 'sable' in m:                        return '#F5EBB0'
     if '2/6' in m:                          return '#D5D5D5'
     if '0/31' in m or 'tout-venant' in m:  return '#AFAFAF'
+    if 'recycl' in m:                       return '#A8BBA3'
     if 'gb' in m or 'bitume' in m:         return '#646464'
     if 'gc' in m or 'ciment' in m:         return '#B4B4B9'
     if 'enrobé' in m or 'enrobe' in m:     return '#323232'
@@ -96,7 +97,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
         self.setWindowTitle(i18n.tr('coupe_tranchee_composee'))
         self.setMinimumSize(1050, 680)
         self.resize(1300, 750)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         self._tranches = []
         self._current  = -1
@@ -118,7 +119,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
         root = QHBoxLayout(self)
         root.setContentsMargins(6, 6, 6, 6)
 
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # ── Panneau gauche ───────────────────────────────────────────────────
         left = QWidget()
@@ -129,7 +130,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
         ll.setSpacing(4)
 
         lbl = QLabel(i18n.tr('dt_tranches'))
-        lbl.setFont(QFont("", -1, QFont.Bold))
+        lbl.setFont(QFont("", -1, QFont.Weight.Bold))
         ll.addWidget(lbl)
 
         self._list = QListWidget()
@@ -155,7 +156,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
         # Formulaire scrollable
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._form_widget = QWidget()
         self._form_vbox   = QVBoxLayout(self._form_widget)
         self._form_vbox.setContentsMargins(2, 2, 2, 2)
@@ -186,7 +187,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
         if HAS_MPL:
             self._fig    = Figure(facecolor='white')
             self._canvas = FigureCanvas(self._fig)
-            self._canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self._canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             rl.addWidget(self._canvas)
         else:
             rl.addWidget(QLabel(i18n.tr('dt_matplotlib')))
@@ -373,7 +374,7 @@ class CoupeTrancheeComposeeDialog(QDialog):
         except Exception as err:
             QgsMessageLog.logMessage(
                 "Config de cubature illisible, tranche créée avec les valeurs "
-                f"par défaut : {err}", "CanaPlan", Qgis.Warning)
+                f"par défaut : {err}", "CanaPlan", Qgis.MessageLevel.Warning)
         self._tranches.append(t)
         self._refresh_list()
         self._list.setCurrentRow(len(self._tranches) - 1)

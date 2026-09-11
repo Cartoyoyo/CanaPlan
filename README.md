@@ -13,7 +13,7 @@
 **Plugin QGIS de dessin topologique de réseaux d'assainissement — EU / EP, du tracé terrain à la livraison StaR-Eau**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.40%2B%20%7C%204.x-green?logo=qgis&logoColor=white)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-1.9-blue)](#-changelog)
+[![Version](https://img.shields.io/badge/version-2.0-blue)](#-changelog)
 [![Qt](https://img.shields.io/badge/Qt-5%20%7C%206-brightgreen?logo=qt&logoColor=white)](https://qgis.org)
 [![StaR-Eau](https://img.shields.io/badge/StaR--Eau-V2024%20CNIG%2FASTEE-orange)](#-export-star-eau-cnig--astee-v2024)
 [![Langues](https://img.shields.io/badge/langues-FR%20%7C%20EN%20%7C%20ES%20%7C%20PT%20%7C%20DE-purple)](#-langues--languages)

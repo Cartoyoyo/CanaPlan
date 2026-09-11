@@ -29,10 +29,27 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
 
     _TOPO_MIN_DIST_M = 0.5  # distance minimale entre deux regards (m)
 
-    def __init__(self, canvas, reseau, couches):
+    def __init__(self, canvas, reseau, couches, tol_m=None, differer_ecriture=False):
+        """
+        :param differer_ecriture: ne pas committer apres chaque entite ; l'appelant
+                       tient la session d'edition et commit lui-meme. Defaut `False`,
+                       donc le trace a la souris est inchange : un clic est un geste
+                       isole, qui doit rester annulable et etre ecrit tout de suite.
+
+                       ATTENTION — incompatible avec `_undo_last` et `_cancel`.
+                       `_create_regard` et `_create_troncon` renvoient `feat.id()`,
+                       empile dans `regard_ids` / `conduite_ids` pour l'annulation ;
+                       tant que la session n'est pas commitee, cet identifiant est
+                       provisoire (negatif) et ne designera plus la meme entite apres
+                       le commit. Les deux methodes d'annulation ne sont appelees que
+                       par les evenements souris, jamais par l'API, d'ou l'usage
+                       reserve au trace scripte.
+        """
         super().__init__(canvas)
         self.canvas = canvas
         self.reseau = reseau
+        self._tol_m = tol_m
+        self._differer_ecriture = differer_ecriture
         self.conduite_layer = couches['conduite']
         self.regard_layer = couches['regard']
 
@@ -129,7 +146,8 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
                 from qgis.utils import iface as _iface
                 _iface.messageBar().pushMessage(
                     "Topologie",
-                    i18n.tr('ot_regard_proche', distance=i18n.nombre(SNAP_WARN_M)),
+                    i18n.tr('ot_regard_proche',
+                            distance=i18n.nombre(self._TOPO_MIN_DIST_M, 1)),
                     level=Qgis.MessageLevel.Warning, duration=4,
                 )
             regard_id = self._create_regard(point)
@@ -150,7 +168,8 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
         feat = QgsFeature(self.regard_layer.fields())
         feat.setGeometry(QgsGeometry.fromPointXY(point))
         self.regard_layer.addFeature(feat)
-        self.regard_layer.commitChanges()
+        if not self._differer_ecriture:
+            self.regard_layer.commitChanges()
         return feat.id()
 
     def _create_troncon(self, pt_from, pt_to):
@@ -172,7 +191,8 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
         if not self.conduite_layer.isEditable():
             self.conduite_layer.startEditing()
         self.conduite_layer.addFeature(feat)
-        self.conduite_layer.commitChanges()
+        if not self._differer_ecriture:
+            self.conduite_layer.commitChanges()
         return feat.id()
 
     def _undo_last(self):
@@ -246,6 +266,19 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
         self.regard_ids = []
         self.conduite_ids = []
 
+    def _tol(self, px):
+        """Tolerance de snap en unites carte.
+
+        Par defaut elle vaut `px` pixels ecran, ce qui suit le zoom : c'est le
+        comportement voulu sous la souris, ou l'operateur vise ce qu'il voit.
+        Piloté par script (API, MCP), le zoom n'a plus de sens et devient un
+        parametre cache : `tol_m` fixe alors la tolerance en metres, une fois
+        pour toutes.
+        """
+        if self._tol_m is not None:
+            return self._tol_m
+        return px * self.canvas.mapUnitsPerPixel()
+
     def _find_nearby_regard(self, point):
         """Retourne le premier regard dans _TOPO_MIN_DIST_M, hors tolérance de snap."""
         for feat in self.regard_layer.getFeatures(
@@ -260,7 +293,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
 
     def _snap_to_regard(self, point):
         """Snap au regard le plus proche si dans la tolérance (30 px)."""
-        tolerance = 30 * self.canvas.mapUnitsPerPixel()
+        tolerance = self._tol(30)
         best_point = None
         best_dist = float('inf')
 

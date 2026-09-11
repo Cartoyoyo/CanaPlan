@@ -17,6 +17,7 @@ from qgis.core import (
     QgsProject, QgsMapSettings, QgsMapRendererParallelJob,
 )
 from . import errlog
+from .qt_exec import exec_dialog
 
 # États de l'outil
 _STATE_MOVE   = 0   # rectangle suit la souris (libre ou domino)
@@ -299,7 +300,7 @@ class PrintTool(QgsMapTool):
         else:
             dlg.rb_manuel.setChecked(True)
 
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if exec_dialog(dlg) != QDialog.DialogCode.Accepted:
             self.canvas().unsetMapTool(self)
             return
 

@@ -2,7 +2,7 @@
 name=CanaPlan – Réseau Assainissement
 description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE). [EN] Topological drawing of foul (red) and storm (blue) sewer networks: pipes, service connections, manholes, inspection chambers. Longitudinal profiles, trench volumes, cross sections, multi-sheet PDF printing, DXF export and StaR-Eau (CNIG/ASTEE) GeoPackage export. Scriptable: every tool is callable from Python, and reusable procedures are declared as JSON recipes.
 icon=icon/icon.png
-version=1.9
+version=2.0
 qgisMinimumVersion=3.40
 qgisMaximumVersion=4.99
 author=Yoan Laloux
@@ -35,6 +35,23 @@ about=CanaPlan est un logiciel de dessin projet qui permet de tracer des réseau
     procedures can be declared as JSON recipes and replayed in a single call.
 
 changelog=
+    2.0  TN auto (MNT IGN). Bouton du Tableau de saisie qui releve le
+         terrain naturel des regards et tabourets sur le MNT LiDAR HD
+         (0,50 m), avec repli sur le RGE ALTI (1 m) la ou le LiDAR HD ne
+         couvre pas. Un dialogue d'apercu montre, ouvrage par ouvrage, le TN
+         actuel, le TN propose, l'ecart et la source retenue avant toute
+         ecriture ; par defaut seuls les TN manquants sont coches. Le schema
+         des couches ne portant pas de champ de provenance, la tracabilite
+         passe par un rapport CSV horodate ecrit dans le dossier du projet.
+         L'ecriture du lot tient dans une seule operation (Ctrl+Z l'annule
+         integralement).
+         Pilotage par script etendu. Cinq nouvelles recettes rejouables :
+         coter_mnt, habiller, projet_sur_voie, reseau_de_voie et
+         tracer_reseau.
+         Corrections. Un projet QGIS neuf (CRS geographique par defaut)
+         faisait perdre toute nouvelle couche dessinee. La fenetre de
+         resultats Cubature s'accumulait d'un calcul a l'autre au lieu de
+         remplacer la precedente. Icone du plugin dans le menu Extensions.
     1.9  Pilotage par script. Un module de facade, tools/api.py, expose les
          outils du plugin en verbes appelables depuis la console Python de
          QGIS, un script ou un agent : creer le projet, tracer le collecteur

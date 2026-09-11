@@ -11,6 +11,7 @@ from qgis.PyQt.QtWidgets import (
 from . import i18n
 
 from .graph_utils import _to_float, build_graph, bfs
+from .qt_exec import exec_dialog
 
 _DEFAULTS = {
     'EU': {'regard': 'REU',  'tabouret': 'EU-BRCHT'},
@@ -161,7 +162,7 @@ class RenommerTool(QgsMapTool):
         defaults = _DEFAULTS.get(self.reseau, _DEFAULTS['EU'])
         dlg = _PrefixDialog(defaults['regard'], defaults['tabouret'],
                             self.iface.mainWindow())
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if exec_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
 
         reg_prefix  = dlg.regard_prefix

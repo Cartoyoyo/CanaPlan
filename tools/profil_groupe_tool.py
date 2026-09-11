@@ -12,6 +12,7 @@ from ..gui.profil_dialog import ProfilOptionsDialog
 from ..gui.profil_groupe_dialog import ProfilGroupeDialog
 
 from .graph_utils import _to_float, QGIS_NULL
+from .qt_exec import exec_dialog
 
 BUFFER_DIST = 3.0  # mètres
 
@@ -271,7 +272,7 @@ class ProfilGroupeTool(QgsMapTool):
                 })
 
         opts_dlg = ProfilOptionsDialog(self.iface.mainWindow())
-        if opts_dlg.exec() != QDialog.DialogCode.Accepted:
+        if exec_dialog(opts_dlg) != QDialog.DialogCode.Accepted:
             return
 
         dlg = ProfilGroupeDialog(

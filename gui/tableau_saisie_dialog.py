@@ -2,8 +2,9 @@
 
 import re
 from collections import deque
+from contextlib import contextmanager
 
-from qgis.core import NULL, QgsPointXY, QgsRectangle
+from qgis.core import NULL, Qgis, QgsMessageLog, QgsPointXY, QgsRectangle
 from qgis.gui import QgsMapCanvas
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QTableWidget,
@@ -13,7 +14,7 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor, QKeySequence
 
-from ..tools import i18n
+from ..tools import i18n, layer_ok as _layer_ok
 from ..tools.spatial_utils import nearest_point_feature
 from ..tools.stareau_values import materiaux_labels as _materiaux_labels
 from .chain_profile_widget import ChainProfileWidget
@@ -29,6 +30,9 @@ _NUM_TOKEN_RE = re.compile(r'[+-]?\d*\.?\d+')
 
 _COLOR_MISSING = QColor(181, 50, 42)
 _COLOR_DERIVED = QColor(128, 128, 128)
+
+_TAG = 'CanaPlan'
+_UNDO_MAX = 200   # opérations conservées dans la pile d'annulation
 
 
 def _fnum(val):
@@ -115,7 +119,12 @@ class TableauSaisieDialog(QDialog):
         self._branch_by_cond = {}  # fid conduite -> [fid branchement piqués dessus]
         self._in_piquage = False   # garde anti-récursion des cascades de piquage
         self._sort_state = {}      # role -> (col, ascendant)
-        self._undo_stack = []      # [{'layer','role','fid','fname','old'}]
+        self._ref_courante = None  # (role, fid) visé par le panneau d'aperçu
+        self._undo_stack = []      # [[{'layer','role','fid','fname','old'}, ...]]
+        self._op_depth = 0         # imbrication des opérations groupées
+        self._op_layers = []       # couches mises en édition par l'opération
+        self._op_undo = {}         # (layer_id, fid, fname) -> entrée d'annulation
+        self._op_record = True
         self._batch_items = []
         self._batch_table = None
         self._chain_nodes = None      # [(role, fid), ...] regard1 -> ... -> regard2
@@ -129,6 +138,20 @@ class TableauSaisieDialog(QDialog):
                              | Qt.WindowType.WindowMinimizeButtonHint)
         self.resize(1350, 600)
         self._build_ui()
+        self._set_mini_map_layers()
+        self._reload_all()
+
+    def set_couches(self, couches_eu, couches_ep):
+        """Raccroche le tableau a de nouvelles couches et le recharge.
+
+        Appele apres l'enregistrement du projet : les couches memoire
+        affichees ici ont ete detruites et remplacees par les couches GPKG,
+        toute ecriture ulterieure partirait sur des objets morts.
+        """
+        self.couches = {'EU': couches_eu, 'EP': couches_ep}
+        self._undo_stack = []
+        self._batch_items = []
+        self._batch_table = None
         self._set_mini_map_layers()
         self._reload_all()
 
@@ -164,6 +187,11 @@ class TableauSaisieDialog(QDialog):
         btn_next_missing.setToolTip(i18n.tr('ts_next_missing_tip'))
         btn_next_missing.clicked.connect(self._goto_next_missing)
         top.addWidget(btn_next_missing)
+
+        btn_tn_auto = QPushButton(i18n.tr('tn_bouton'))
+        btn_tn_auto.setToolTip(i18n.tr('tn_bouton_tip'))
+        btn_tn_auto.clicked.connect(self._remplir_tn_auto)
+        top.addWidget(btn_tn_auto)
         layout.addLayout(top)
 
         self.tabs = QTabWidget()
@@ -242,6 +270,13 @@ class TableauSaisieDialog(QDialog):
         self.mini_canvas.setCanvasColor(QColor(255, 255, 255))
         self.mini_canvas.setMinimumWidth(150)
         right.addWidget(self.mini_canvas)
+
+        self.btn_zoom_entite = QPushButton(i18n.tr('ts_zoom_entite'))
+        self.btn_zoom_entite.setToolTip(i18n.tr('ts_zoom_entite_tip'))
+        self.btn_zoom_entite.setEnabled(False)
+        self.btn_zoom_entite.clicked.connect(self._zoom_ref_courante)
+        right.addWidget(self.btn_zoom_entite)
+
         splitter.addWidget(right_widget)
 
         splitter.setStretchFactor(0, 3)
@@ -276,11 +311,14 @@ class TableauSaisieDialog(QDialog):
         self._cond_state = {}
         self._branch_state = {}
         self._branch_by_cond = {}
-        self._load_regard_tabouret('regard')
-        self._load_regard_tabouret('tabouret')
-        self._load_conduites()
-        self._load_branchements()
-        self._update_status()
+        self._set_ref_courante(None)   # les fid affichés vont être reconstruits
+        # Les chargeurs recalent en base les longueurs manquantes : réparation
+        # de chargement, groupée et hors pile d'annulation.
+        with self._operation(record_undo=False):
+            self._load_regard_tabouret('regard')
+            self._load_regard_tabouret('tabouret')
+            self._load_conduites()
+            self._load_branchements()
         self._apply_filter(self.search.text())
         self._populate_chain_combos()
 
@@ -613,24 +651,85 @@ class TableauSaisieDialog(QDialog):
                 return role
         return None
 
+    @contextmanager
+    def _operation(self, record_undo=True):
+        """Regroupe toutes les écritures d'une action utilisateur.
+
+        Sans ce regroupement, chaque cellule ouvrait puis validait sa propre
+        transaction (startEditing/commitChanges), soit deux accès disque par
+        valeur — une cascade de chaîne sur 40 regards en déclenchait 160 — et
+        poussait sa propre entrée d'annulation, si bien que Ctrl+Z ne défaisait
+        qu'un fragment de l'opération.
+
+        Ici : une validation par couche et une seule entrée d'annulation, qui
+        rassemble toutes les valeurs touchées, dérivées comprises. Les appels
+        imbriqués se greffent sur l'opération en cours ; seul l'appel le plus
+        externe valide et empile.
+
+        Seules les couches que l'opération a elle-même mises en édition sont
+        validées : si l'utilisateur avait déjà ouvert une session d'édition
+        sur une couche, on ne valide pas ses modifications à sa place.
+        """
+        if self._op_depth:
+            self._op_depth += 1
+            try:
+                yield
+            finally:
+                self._op_depth -= 1
+            return
+
+        self._op_depth = 1
+        self._op_layers = []
+        self._op_undo = {}
+        self._op_record = record_undo and not self._undoing
+        try:
+            yield
+        finally:
+            self._op_depth = 0
+            layers, undo = self._op_layers, self._op_undo
+            self._op_layers, self._op_undo = [], {}
+            for layer in layers:
+                if not layer.commitChanges():
+                    QgsMessageLog.logMessage(
+                        "Ecriture refusee sur {} : {}".format(
+                            layer.name(), ' ; '.join(layer.commitErrors())),
+                        _TAG, Qgis.MessageLevel.Warning)
+                    layer.rollBack()
+            if undo:
+                self._undo_stack.append(list(undo.values()))
+                if len(self._undo_stack) > _UNDO_MAX:
+                    self._undo_stack.pop(0)
+            self._update_status()
+
     def _write_attr(self, layer, fid, fname, value, role=None, record_undo=True):
         idx = layer.fields().indexOf(fname)
         if idx < 0:
             return
-        if record_undo and not self._undoing:
-            feat = layer.getFeature(fid)
-            old = feat[fname] if feat.isValid() else None
-            old = None if old == NULL else old
-            self._undo_stack.append({
-                'layer': layer, 'role': role or self._role_for_layer(layer),
-                'fid': fid, 'fname': fname, 'old': old,
-            })
-            if len(self._undo_stack) > 200:
-                self._undo_stack.pop(0)
+
+        if not self._op_depth:
+            # Écriture isolée (combo matériau, appel direct) : on lui ouvre
+            # sa propre opération pour qu'elle soit validée malgré tout.
+            with self._operation():
+                self._write_attr(layer, fid, fname, value, role, record_undo)
+            return
+
+        if record_undo and self._op_record:
+            cle = (layer.id(), fid, fname)
+            if cle not in self._op_undo:
+                # Première écriture de cette valeur dans l'opération : c'est
+                # celle-là qui porte l'état à restaurer.
+                feat = layer.getFeature(fid)
+                old = feat[fname] if feat.isValid() else None
+                self._op_undo[cle] = {
+                    'layer': layer, 'role': role or self._role_for_layer(layer),
+                    'fid': fid, 'fname': fname,
+                    'old': None if old == NULL else old,
+                }
+
         if not layer.isEditable():
             layer.startEditing()
+            self._op_layers.append(layer)
         layer.changeAttributeValue(fid, idx, value)
-        layer.commitChanges()
 
     def _sort_feats(self, role, feats, attr_map):
         """Trie `feats` (liste de QgsFeature) selon self._sort_state[role].
@@ -674,14 +773,13 @@ class TableauSaisieDialog(QDialog):
             item.setForeground(_COLOR_MISSING if value is None else QColor(0, 0, 0))
             self._updating = False
 
-        self._write_attr(layer, fid, fname, value)
+        with self._operation():
+            self._write_attr(layer, fid, fname, value)
 
-        if role in ('regard', 'tabouret') and fname in ('tn', 'profondeur', _FE_FIELD[role]):
-            table = self.tables[role]
-            self._autofill_row(role, table, item.row())
-            self._propagate_ouvrage(role, fid)
-
-        self._update_status()
+            if role in ('regard', 'tabouret') and fname in ('tn', 'profondeur', _FE_FIELD[role]):
+                table = self.tables[role]
+                self._autofill_row(role, table, item.row())
+                self._propagate_ouvrage(role, fid)
 
     def _handle_conduite_edit(self, item):
         """Cellule éditée dans le tableau des conduites : Longueur, Pente,
@@ -703,38 +801,36 @@ class TableauSaisieDialog(QDialog):
 
         st = self._cond_state.get(fid)
 
-        if fname in ('__fe_amont', '__fe_aval'):
-            # Édition directe du FE amont/aval : on écrit sur l'ouvrage lié,
-            # puis on propage (rafraîchit son onglet + recalcule les conduites
-            # connectées, dont potentiellement celle-ci selon le sens actif).
-            if not st:
+        with self._operation():
+            if fname in ('__fe_amont', '__fe_aval'):
+                # Édition directe du FE amont/aval : on écrit sur l'ouvrage lié,
+                # puis on propage (rafraîchit son onglet + recalcule les conduites
+                # connectées, dont potentiellement celle-ci selon le sens actif).
+                if not st:
+                    return
+                ref = st['amont'] if fname == '__fe_amont' else st['aval']
+                if ref is None:
+                    return
+                role, ouvrage_fid, _old_fe, _nom, fe_field = ref
+                self._write_attr(self.couches[self.reseau][role], ouvrage_fid,
+                                  fe_field, value)
+                self._refresh_ouvrage_item(role, ouvrage_fid, fe_field, value)
+                self._propagate_ouvrage(role, ouvrage_fid)
                 return
-            ref = st['amont'] if fname == '__fe_amont' else st['aval']
-            if ref is None:
-                return
-            role, ouvrage_fid, _old_fe, _nom, fe_field = ref
-            self._write_attr(self.couches[self.reseau][role], ouvrage_fid,
-                              fe_field, value)
-            self._refresh_ouvrage_item(role, ouvrage_fid, fe_field, value)
-            self._propagate_ouvrage(role, ouvrage_fid)
-            self._update_status()
-            return
 
-        layer = self.couches[self.reseau]['conduite']
+            layer = self.couches[self.reseau]['conduite']
 
-        if fname == 'pente':
-            # La pente n'est écrite directement en base que si elle pilote le
-            # calcul (mode 'pente_aval' ou 'pente_amont') ; en mode 'fe' elle
-            # reste une valeur dérivée réécrite par _recalc_cond_row.
-            if st and st['mode'] in ('pente_aval', 'pente_amont'):
+            if fname == 'pente':
+                # La pente n'est écrite directement en base que si elle pilote le
+                # calcul (mode 'pente_aval' ou 'pente_amont') ; en mode 'fe' elle
+                # reste une valeur dérivée réécrite par _recalc_cond_row.
+                if st and st['mode'] in ('pente_aval', 'pente_amont'):
+                    self._write_attr(layer, fid, fname, value)
+            else:
                 self._write_attr(layer, fid, fname, value)
-        else:
-            self._write_attr(layer, fid, fname, value)
 
-        if st:
-            self._recalc_cond_row(fid)
-
-        self._update_status()
+            if st:
+                self._recalc_cond_row(fid)
 
     def _autofill_row(self, role, table, row):
         fe_field = _FE_FIELD[role]
@@ -812,7 +908,8 @@ class TableauSaisieDialog(QDialog):
         i = self._COND_MODES.index(st['mode'])
         st['mode'] = self._COND_MODES[(i + 1) % len(self._COND_MODES)]
         self._apply_cond_mode_style(fid)
-        self._recalc_cond_row(fid)
+        with self._operation():
+            self._recalc_cond_row(fid)
 
     def _current_ouvrage_fe(self, role, fid):
         fe_field = _FE_FIELD[role]
@@ -898,8 +995,11 @@ class TableauSaisieDialog(QDialog):
         item = self._item_registry.get((role, fid, fname))
         if item is None:
             return
+        # Décimales de la colonne, et non 3 en dur : cette méthode sert aussi
+        # à la profondeur, qui s'affiche à 2 décimales.
+        decimals = item.data(Qt.ItemDataRole.UserRole + 2)
         self._updating = True
-        item.setText(_fmt(value, 3))
+        item.setText(_fmt(value, 3 if decimals is None else decimals))
         item.setForeground(QColor(0, 0, 0))
         self._updating = False
         table = item.tableWidget()
@@ -943,35 +1043,33 @@ class TableauSaisieDialog(QDialog):
 
         st = self._branch_state.get(fid)
 
-        if fname == '__fe_tabouret':
-            # Édition directe de la FE tabouret : on écrit sur l'ouvrage lié,
-            # puis on propage (rafraîchit son onglet + recalcule les branchements
-            # et les conduites connectés).
-            if not st or st['tab'] is None:
+        with self._operation():
+            if fname == '__fe_tabouret':
+                # Édition directe de la FE tabouret : on écrit sur l'ouvrage lié,
+                # puis on propage (rafraîchit son onglet + recalcule les branchements
+                # et les conduites connectés).
+                if not st or st['tab'] is None:
+                    return
+                role, ouvrage_fid, _old_fe, _nom, fe_field = st['tab']
+                self._write_attr(self.couches[self.reseau][role], ouvrage_fid,
+                                  fe_field, value)
+                self._refresh_ouvrage_item(role, ouvrage_fid, fe_field, value)
+                self._propagate_ouvrage(role, ouvrage_fid)
                 return
-            role, ouvrage_fid, _old_fe, _nom, fe_field = st['tab']
-            self._write_attr(self.couches[self.reseau][role], ouvrage_fid,
-                              fe_field, value)
-            self._refresh_ouvrage_item(role, ouvrage_fid, fe_field, value)
-            self._propagate_ouvrage(role, ouvrage_fid)
-            self._update_status()
-            return
 
-        layer = self.couches[self.reseau]['branchement']
+            layer = self.couches[self.reseau]['branchement']
 
-        if fname == 'pente':
-            # La pente n'est écrite directement en base que si elle pilote le
-            # calcul (mode 'pente_fe' ou 'pente_cote') ; en mode 'fe' elle
-            # reste une valeur dérivée réécrite par _recalc_branch_row.
-            if st and st['mode'] in ('pente_fe', 'pente_cote'):
+            if fname == 'pente':
+                # La pente n'est écrite directement en base que si elle pilote le
+                # calcul (mode 'pente_fe' ou 'pente_cote') ; en mode 'fe' elle
+                # reste une valeur dérivée réécrite par _recalc_branch_row.
+                if st and st['mode'] in ('pente_fe', 'pente_cote'):
+                    self._write_attr(layer, fid, fname, value)
+            else:
                 self._write_attr(layer, fid, fname, value)
-        else:
-            self._write_attr(layer, fid, fname, value)
 
-        if st:
-            self._recalc_branch_row(fid)
-
-        self._update_status()
+            if st:
+                self._recalc_branch_row(fid)
 
     _BRANCH_MODES = ('fe', 'pente_fe', 'pente_cote')
     _BRANCH_MODE_LABELS = {
@@ -1008,7 +1106,8 @@ class TableauSaisieDialog(QDialog):
         i = self._BRANCH_MODES.index(st['mode'])
         st['mode'] = self._BRANCH_MODES[(i + 1) % len(self._BRANCH_MODES)]
         self._apply_branch_mode_style(fid)
-        self._recalc_branch_row(fid)
+        with self._operation():
+            self._recalc_branch_row(fid)
 
     def _recalc_branch_row(self, fid):
         """Recalcule la ligne d'un branchement.
@@ -1100,10 +1199,10 @@ class TableauSaisieDialog(QDialog):
             return
 
         cote = round(fe_am + (fe_av - fe_am) * (pk / cond_len), 3)
-        # Valeur entièrement dérivée de la conduite : hors pile d'annulation.
+        # Valeur dérivée, mais consignée dans l'opération en cours : l'annulation
+        # doit restaurer la cote telle qu'elle était, pas la recalculer.
         self._write_attr(self.couches[self.reseau]['branchement'], bfid,
-                          'cote_piquage', cote, role='branchement',
-                          record_undo=False)
+                          'cote_piquage', cote, role='branchement')
         self._updating = True
         st['cote_item'].setText(_fmt(cote, 3))
         st['cote_item'].setForeground(_COLOR_DERIVED)
@@ -1143,10 +1242,11 @@ class TableauSaisieDialog(QDialog):
         """Réécrit toutes les valeurs dérivées du réseau actif à partir des FE des
         ouvrages : pente des conduites, cote de piquage puis pente des branchements.
         Appelé après une action globale de l'onglet « Chaîne regards PENTE »."""
-        for cfid in list(self._cond_state):
-            self._recalc_cond_row(cfid)
-        for bfid in list(self._branch_state):
-            self._recalc_branch_row(bfid)
+        with self._operation(record_undo=False):
+            for cfid in list(self._cond_state):
+                self._recalc_cond_row(cfid)
+            for bfid in list(self._branch_state):
+                self._recalc_branch_row(bfid)
 
     # ------------------------------------------------------------------ sélection multiple / édition groupée
 
@@ -1175,8 +1275,9 @@ class TableauSaisieDialog(QDialog):
         table.blockSignals(False)
 
         role = self._role_of_table(table)
-        for item in items:
-            self._dispatch_cell_edit(role, item)
+        with self._operation():
+            for item in items:
+                self._dispatch_cell_edit(role, item)
 
         self.batch_input.clear()
         self._clear_selection()
@@ -1213,6 +1314,10 @@ class TableauSaisieDialog(QDialog):
                 table.setRowHidden(row, not match)
 
     def _update_status(self):
+        # Balayage complet de tous les onglets : une seule passe en fin
+        # d'opération, pas une par cellule écrite.
+        if self._op_depth:
+            return
         counts = {role: self.tables[role].rowCount() for role in self.tables}
         n_missing = 0
         for table in self.tables.values():
@@ -1236,7 +1341,11 @@ class TableauSaisieDialog(QDialog):
         de la fermeture."""
         for couches_reseau in self.couches.values():
             for layer in couches_reseau.values():
-                layer.removeSelection()
+                # L'enregistrement du projet detruit les couches memoire et les
+                # remplace par des couches GPKG : celles qu'on tient encore ici
+                # peuvent avoir ete supprimees cote C++.
+                if _layer_ok(layer):
+                    layer.removeSelection()
 
     def _select_feature(self, role, fid):
         layer = self.couches[self.reseau][role]
@@ -1257,6 +1366,11 @@ class TableauSaisieDialog(QDialog):
         fid = item.data(Qt.ItemDataRole.UserRole)
         if fid is None:
             return
+        self._zoom_entite(role, fid)
+
+    def _zoom_entite(self, role, fid):
+        """Sélectionne l'entité et centre dessus l'aperçu ET la carte
+        principale de QGIS."""
         self._select_feature(role, fid)
         self._mini_map_zoom(role, fid)
 
@@ -1272,6 +1386,12 @@ class TableauSaisieDialog(QDialog):
         canvas = self.iface.mapCanvas()
         canvas.setExtent(bbox)
         canvas.refresh()
+
+    def _zoom_ref_courante(self):
+        """Bouton « Zoom sur l'entité » du panneau d'aperçu."""
+        if self._ref_courante is None:
+            return
+        self._zoom_entite(*self._ref_courante)
 
     # ------------------------------------------------------------------ mini-carte d'aperçu
 
@@ -1306,20 +1426,30 @@ class TableauSaisieDialog(QDialog):
             self.mini_canvas.setExtent(ext)
         self.mini_canvas.refresh()
 
+    def _set_ref_courante(self, ref):
+        """Entité visée par le panneau d'aperçu ; pilote le bouton de zoom."""
+        self._ref_courante = ref
+        if hasattr(self, 'btn_zoom_entite'):
+            self.btn_zoom_entite.setEnabled(ref is not None)
+
     def _update_mini_map(self, table):
         items = table.selectedItems()
         if not items:
+            self._set_ref_courante(None)
             return
         fid = items[0].data(Qt.ItemDataRole.UserRole)
         if table is getattr(self, 'chain_table', None):
             row = items[0].row()
             if not self._chain_nodes or row >= len(self._chain_nodes):
+                self._set_ref_courante(None)
                 return
             role = self._chain_nodes[row][0]
         else:
             role = self._role_of_table(table)
         if fid is None or role is None:
+            self._set_ref_courante(None)
             return
+        self._set_ref_courante((role, fid))
         self._select_feature(role, fid)
         self._mini_map_zoom(role, fid)
 
@@ -1340,13 +1470,92 @@ class TableauSaisieDialog(QDialog):
         prev = self._sort_state.get(role)
         ascending = not (prev and prev[0] == col and prev[1])
         self._sort_state[role] = (col, ascending)
-        if role in ('regard', 'tabouret'):
-            self._load_regard_tabouret(role)
-        elif role == 'conduite':
-            self._load_conduites()
-        else:
-            self._load_branchements()
+        with self._operation(record_undo=False):
+            if role in ('regard', 'tabouret'):
+                self._load_regard_tabouret(role)
+            elif role == 'conduite':
+                self._load_conduites()
+            else:
+                self._load_branchements()
         self._apply_filter(self.search.text())
+
+    # ------------------------------------------------------------------ TN automatique (MNT IGN)
+
+    # Ce qui suit le TN quand on le change : TN = profondeur + FE, donc en
+    # fixer un impose de recalculer l'une des deux autres valeurs.
+    TN_DERIVE_FE = 'fe'                  # profondeur conservée, FE recalculé
+    TN_DERIVE_PROFONDEUR = 'profondeur'  # fil d'eau conservé, profondeur recalculée
+
+    def _appliquer_tn(self, role, fid, tn, derive=TN_DERIVE_FE):
+        """Écrit le TN d'un ouvrage et rétablit TN = profondeur + FE.
+
+        `_autofill_row` ne dérive que s'il manque exactement une des trois
+        valeurs : quand les trois sont déjà renseignées, un nouveau TN les
+        laisserait incohérentes. On tranche donc explicitement ici.
+
+        `derive` dit laquelle des deux autres suit le TN : le FE (la
+        profondeur de tranchée est conservée, cas d'une profondeur imposée)
+        ou la profondeur (le fil d'eau est conservé, cas d'un calage
+        hydraulique déjà fait). Quand la valeur à conserver est inconnue, on
+        bascule sur l'autre plutôt que de ne rien faire.
+        """
+        layer = self.couches[self.reseau][role]
+        fe_field = _FE_FIELD[role]
+        feat = layer.getFeature(fid)
+        prof = _fnum(feat['profondeur']) if feat.isValid() else None
+        fe = _fnum(feat[fe_field]) if feat.isValid() else None
+
+        tn = round(tn, 3)
+        self._write_attr(layer, fid, 'tn', tn, role=role)
+        self._refresh_ouvrage_item(role, fid, 'tn', tn)
+
+        vers_fe = (derive == self.TN_DERIVE_FE and prof is not None) \
+            or (derive != self.TN_DERIVE_FE and fe is None and prof is not None)
+
+        if vers_fe:
+            val = round(tn - prof, 3)
+            self._write_attr(layer, fid, fe_field, val, role=role)
+            self._refresh_ouvrage_item(role, fid, fe_field, val)
+        elif fe is not None:
+            val = round(tn - fe, 2)
+            self._write_attr(layer, fid, 'profondeur', val, role=role)
+            self._refresh_ouvrage_item(role, fid, 'profondeur', val)
+
+        self._propagate_ouvrage(role, fid)
+
+    def _remplir_tn_auto(self):
+        """Renseigne le TN des regards et tabourets depuis les MNT de l'IGN.
+
+        L'écriture entière tient dans une seule opération : un Ctrl+Z annule
+        tout le lot, et le rapport CSV garde la trace de la source retenue pour
+        chaque ouvrage — le schéma des couches n'ayant pas de champ de
+        provenance."""
+        from .tn_auto_dialog import TnAutoDialog
+        from ..tools import altimetrie_qgis as aq
+        from ..tools.qt_exec import exec_dialog
+
+        dlg = TnAutoDialog(self.couches[self.reseau], self.reseau, parent=self)
+        if not exec_dialog(dlg):
+            return
+
+        retenues = dlg.lignes_retenues
+        if retenues:
+            with self._operation():
+                for ligne in retenues:
+                    self._appliquer_tn(ligne['role'], ligne['fid'], ligne['z'],
+                                        derive=dlg.derive)
+            # L'onglet « Chaîne regards PENTE » lit les couches à la
+            # construction de son tableau : sans ce rafraîchissement il
+            # continuerait d'afficher les anciens TN, FE et pentes.
+            if self._chain_nodes:
+                self._refresh_chain_table()
+
+        chemin = aq.ecrire_rapport(dlg.lignes_rapport, self.reseau)
+
+        msg = i18n.tr('tn_applique', nb=len(retenues))
+        if chemin:
+            msg += "  " + i18n.tr('tn_rapport', chemin=chemin)
+        self.lbl_status.setText(msg)
 
     # ------------------------------------------------------------------ navigation valeurs manquantes
 
@@ -1422,20 +1631,30 @@ class TableauSaisieDialog(QDialog):
                 touched.append(it)
         table.blockSignals(False)
 
-        for it in touched:
-            self._dispatch_cell_edit(role, it)
+        with self._operation():
+            for it in touched:
+                self._dispatch_cell_edit(role, it)
 
     # ------------------------------------------------------------------ annuler (Ctrl+Z)
 
     def _undo(self):
+        """Annule la dernière opération, d'un bloc.
+
+        Une entrée de la pile = une action utilisateur = toutes les valeurs
+        qu'elle avait touchées, y compris les valeurs dérivées en cascade."""
         if not self._undo_stack:
             return
-        entry = self._undo_stack.pop()
+        groupe = self._undo_stack.pop()
         self._undoing = True
         try:
-            self._write_attr(entry['layer'], entry['fid'], entry['fname'],
-                              entry['old'], role=entry['role'], record_undo=False)
-            self._refresh_after_write(entry['role'], entry['fid'], entry['fname'], entry['old'])
+            with self._operation(record_undo=False):
+                for entry in reversed(groupe):
+                    self._write_attr(entry['layer'], entry['fid'], entry['fname'],
+                                      entry['old'], role=entry['role'],
+                                      record_undo=False)
+                for entry in reversed(groupe):
+                    self._refresh_after_write(entry['role'], entry['fid'],
+                                               entry['fname'], entry['old'])
         finally:
             self._undoing = False
 
@@ -1870,13 +2089,12 @@ class TableauSaisieDialog(QDialog):
         self._updating = False
 
         layer = self.couches[self.reseau][role]
-        self._write_attr(layer, fid, fname, value, role=role)
-        self._refresh_after_write(role, fid, fname, value)
-        self._chain_derive_third(role, fid, fname, value)
-
-        self._chain_cascade_from(row)
+        with self._operation():
+            self._write_attr(layer, fid, fname, value, role=role)
+            self._refresh_after_write(role, fid, fname, value)
+            self._chain_derive_third(role, fid, fname, value)
+            self._chain_cascade_from(row)
         self._refresh_chain_table()
-        self._update_status()
 
     def _chain_derive_third(self, role, fid, fname, value):
         """TN, Profondeur et FE sont liés par TN = Profondeur + FE : modifier l'un
@@ -1919,9 +2137,9 @@ class TableauSaisieDialog(QDialog):
         self._updating = False
         if pente is None:
             return
-        self._chain_cascade_from(row)
+        with self._operation():
+            self._chain_cascade_from(row)
         self._refresh_chain_table()
-        self._update_status()
 
     def _chain_cascade_from(self, start_row):
         """Recalcule le FE (et la profondeur si TN connu) des noeuds situés après
@@ -1982,20 +2200,21 @@ class TableauSaisieDialog(QDialog):
                         ouvrage=self.combo_regard1.currentText()), 'error')
             return False
 
-        for i in range(1, len(self._chain_nodes)):
-            role, fid = self._chain_nodes[i]
-            longueur = self._chain_segments[i - 1]
-            fe_new = fe_prev - (pente / 100.0) * longueur
-            layer = self.couches[self.reseau][role]
-            fe_field = _FE_FIELD[role]
-            self._write_attr(layer, fid, fe_field, round(fe_new, 3), role=role)
+        with self._operation():
+            for i in range(1, len(self._chain_nodes)):
+                role, fid = self._chain_nodes[i]
+                longueur = self._chain_segments[i - 1]
+                fe_new = fe_prev - (pente / 100.0) * longueur
+                layer = self.couches[self.reseau][role]
+                fe_field = _FE_FIELD[role]
+                self._write_attr(layer, fid, fe_field, round(fe_new, 3), role=role)
 
-            feat = layer.getFeature(fid)
-            tn = _fnum(feat['tn'])
-            if tn is not None:
-                self._write_attr(layer, fid, 'profondeur', round(tn - fe_new, 2), role=role)
+                feat = layer.getFeature(fid)
+                tn = _fnum(feat['tn'])
+                if tn is not None:
+                    self._write_attr(layer, fid, 'profondeur', round(tn - fe_new, 2), role=role)
 
-            fe_prev = fe_new
+                fe_prev = fe_new
 
         self._reload_all()
         self._recalc_all_derived()
@@ -2046,16 +2265,17 @@ class TableauSaisieDialog(QDialog):
             return
 
         n_skipped = 0
-        for role, fid in self._chain_nodes:
-            layer = self.couches[self.reseau][role]
-            feat = layer.getFeature(fid)
-            self._write_attr(layer, fid, 'profondeur', round(prof, 2), role=role)
-            tn = _fnum(feat['tn'])
-            if tn is not None:
-                fe_field = _FE_FIELD[role]
-                self._write_attr(layer, fid, fe_field, round(tn - prof, 3), role=role)
-            else:
-                n_skipped += 1
+        with self._operation():
+            for role, fid in self._chain_nodes:
+                layer = self.couches[self.reseau][role]
+                feat = layer.getFeature(fid)
+                self._write_attr(layer, fid, 'profondeur', round(prof, 2), role=role)
+                tn = _fnum(feat['tn'])
+                if tn is not None:
+                    fe_field = _FE_FIELD[role]
+                    self._write_attr(layer, fid, fe_field, round(tn - prof, 3), role=role)
+                else:
+                    n_skipped += 1
 
         self._reload_all()
         self._recalc_all_derived()

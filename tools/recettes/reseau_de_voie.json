@@ -1,0 +1,127 @@
+{
+  "nom": "reseau_de_voie",
+  "resume": "Réseau posé sur l'axe OSM d'une voie, avec un branchement par polygone du bâti cadastral proche. Répond à la demande courante « crée un réseau EU PVC 200 dans l'impasse Danton à Cusset à partir du chemin de Champcourt, un branchement par habitation ». Assemblage des blocs `projet_sur_voie`, `tracer_reseau`, `coter_mnt` et `habiller` : les étapes ne sont plus recopiées ici. Le nom de voie est résolu avec tolérance par `voie()`, le type (rue, chemin, impasse, allée) étant ce que l'usager confond le plus et ce qui identifie le moins. `voie_de_raccordement` désigne l'exutoire et oriente numérotation et cotes ; vide, le terrain tranche sur le TN, et le nord seulement à défaut de TN. Le terrain naturel est relevé sur le MNT IGN (`tn_auto`), il n'est plus une constante saisie. Les cotes ne sont PAS obligatoires : sans `coter`, le réseau est tracé, numéroté, stylé, étiqueté, enregistré et ses regards portent leur TN, sans profondeur ni fil d'eau — à reprendre par `coter_mnt` ou `recaler_cotes` avec les valeurs du chantier.",
+  "parametres": {
+    "rue": null,
+    "commune": null,
+    "voie_de_raccordement": "",
+    "seuil_confiance": 0.55,
+    "nom_projet": "CanaPlan",
+    "dossier": "~/Documents/CanaPlan",
+    "demi_emprise": 300.0,
+    "reseau": "EU",
+    "materiau": "PVC",
+    "diametre": 200,
+    "diametre_branchement": 160,
+    "entraxe_max": 50.0,
+    "tol_axe": 0.5,
+    "distance_max": 10.0,
+    "tn_auto": true,
+    "coter": false,
+    "pente": null,
+    "profondeur_aval": null,
+    "profondeur_tabouret": null,
+    "echelle": 200,
+    "taille_etiquettes_mm": 2.5,
+    "etiquettes_branchements": false,
+    "avec_export": false,
+    "format": "A4",
+    "orientation": "portrait"
+  },
+  "etapes": [
+    {
+      "appel": "recette",
+      "nomme": "p",
+      "args": {
+        "nom": "projet_sur_voie",
+        "rue": "$rue",
+        "commune": "$commune",
+        "seuil_confiance": "$seuil_confiance",
+        "nom_projet": "$nom_projet",
+        "dossier": "$dossier",
+        "demi_emprise": "$demi_emprise"
+      },
+      "attendu": {
+        "etat": "ok"
+      }
+    },
+    {
+      "appel": "recette",
+      "nomme": "t",
+      "args": {
+        "nom": "tracer_reseau",
+        "reseau": "$reseau",
+        "axe": "@p.valeurs.axe",
+        "materiau": "$materiau",
+        "diametre": "$diametre",
+        "diametre_branchement": "$diametre_branchement",
+        "entraxe_max": "$entraxe_max",
+        "tol_axe": "$tol_axe",
+        "distance_max": "$distance_max",
+        "voie_de_raccordement": "$voie_de_raccordement",
+        "tn_auto": "$tn_auto"
+      },
+      "attendu": {
+        "etat": "ok"
+      }
+    },
+    {
+      "appel": "recette",
+      "si": "$coter",
+      "args": {
+        "nom": "coter_mnt",
+        "reseau": "$reseau",
+        "voie_de_raccordement": "$voie_de_raccordement",
+        "pente": "$pente",
+        "profondeur_aval": "$profondeur_aval",
+        "profondeur_tabouret": "$profondeur_tabouret"
+      },
+      "attendu": {
+        "etat": "ok"
+      }
+    },
+    {
+      "appel": "recette",
+      "args": {
+        "nom": "habiller",
+        "reseau": "$reseau",
+        "taille_etiquettes_mm": "$taille_etiquettes_mm",
+        "etiquettes_branchements": "$etiquettes_branchements",
+        "echelle": "$echelle"
+      },
+      "attendu": {
+        "etat": "ok"
+      }
+    },
+    {
+      "appel": "verifier",
+      "args": {
+        "reseau": "$reseau"
+      },
+      "attendu": {
+        "conduites_en_contre_pente": {
+          "vide": true
+        }
+      }
+    },
+    {
+      "appel": "enregistrer",
+      "attendu": {
+        "erreurs": {
+          "vide": true
+        }
+      }
+    },
+    {
+      "appel": "exporter_async",
+      "si": "$avec_export",
+      "args": {
+        "dossier": "$dossier",
+        "pdf_complet": true,
+        "echelle": "$echelle",
+        "format": "$format",
+        "orientation": "$orientation"
+      }
+    }
+  ]
+}

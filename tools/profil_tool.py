@@ -8,6 +8,7 @@ from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
 from .graph_utils import _to_float, build_graph, bfs, QGIS_NULL
+from .qt_exec import exec_dialog
 
 
 class ProfilTool(QgsMapTool):
@@ -142,7 +143,7 @@ class ProfilTool(QgsMapTool):
 
         from ..gui.profil_dialog import ProfilDialog, ProfilOptionsDialog
         opts_dlg = ProfilOptionsDialog(self.iface.mainWindow())
-        if opts_dlg.exec() != QDialog.DialogCode.Accepted:
+        if exec_dialog(opts_dlg) != QDialog.DialogCode.Accepted:
             return
         dlg = ProfilDialog(
             {

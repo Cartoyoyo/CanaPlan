@@ -991,6 +991,226 @@ TR = {
         'fr': "Aperçu carte", 'en': "Map preview", 'es': "Vista del mapa",
         'pt': "Pré-visualização do mapa", 'de': "Kartenvorschau",
     },
+    'tn_titre': {
+        'fr': "TN automatique depuis les MNT IGN \u2014 R\u00e9seau {reseau}",
+        'en': "Automatic ground level from IGN DTMs \u2014 {reseau} network",
+        'es': "Cota del terreno autom\u00e1tica desde los MDT IGN \u2014 Red {reseau}",
+        'pt': "Cota do terreno autom\u00e1tica a partir dos MDT IGN \u2014 Rede {reseau}",
+        'de': "Automatische Gel\u00e4ndeh\u00f6he aus IGN-DGM \u2014 Netz {reseau}",
+    },
+    'tn_intro': {
+        'fr': "Altitude relev\u00e9e sur le MNT LiDAR HD (0,50 m), avec repli sur le "
+              "RGE ALTI (1 m) l\u00e0 o\u00f9 le LiDAR HD ne couvre pas. D\u00e9cochez les "
+              "ouvrages \u00e0 ne pas modifier : rien n'est \u00e9crit avant validation.",
+        'en': "Elevation sampled from the LiDAR HD DTM (0.50 m), falling back to "
+              "RGE ALTI (1 m) where LiDAR HD has no coverage. Uncheck the "
+              "structures to leave alone: nothing is written before you confirm.",
+        'es': "Altitud tomada del MDT LiDAR HD (0,50 m), con repliegue en RGE ALTI "
+              "(1 m) donde el LiDAR HD no cubre. Desmarque las estructuras que no "
+              "deban modificarse: nada se escribe antes de validar.",
+        'pt': "Altitude obtida do MDT LiDAR HD (0,50 m), com recurso ao RGE ALTI "
+              "(1 m) onde o LiDAR HD n\u00e3o cobre. Desmarque as estruturas a n\u00e3o "
+              "alterar: nada \u00e9 escrito antes da valida\u00e7\u00e3o.",
+        'de': "H\u00f6he aus dem LiDAR-HD-DGM (0,50 m), ersatzweise RGE ALTI (1 m), wo "
+              "LiDAR HD nicht abdeckt. Nicht zu \u00e4ndernde Bauwerke abw\u00e4hlen: vor "
+              "der Best\u00e4tigung wird nichts geschrieben.",
+    },
+    'tn_col_actuel': {
+        'fr': "TN actuel", 'en': "Current level", 'es': "Cota actual",
+        'pt': "Cota atual", 'de': "Aktuelle H\u00f6he",
+    },
+    'tn_col_propose': {
+        'fr': "TN propos\u00e9", 'en': "Proposed level", 'es': "Cota propuesta",
+        'pt': "Cota proposta", 'de': "Vorgeschlagene H\u00f6he",
+    },
+    'tn_col_ecart': {
+        'fr': "\u00c9cart", 'en': "Difference", 'es': "Diferencia",
+        'pt': "Diferen\u00e7a", 'de': "Differenz",
+    },
+    'tn_col_source': {
+        'fr': "Source", 'en': "Source", 'es': "Fuente",
+        'pt': "Fonte", 'de': "Quelle",
+    },
+    'tn_ecraser': {
+        'fr': "\u00c9craser les TN d\u00e9j\u00e0 renseign\u00e9s",
+        'en': "Overwrite ground levels already filled in",
+        'es': "Sobrescribir las cotas ya introducidas",
+        'pt': "Substituir as cotas j\u00e1 preenchidas",
+        'de': "Bereits erfasste Gel\u00e4ndeh\u00f6hen \u00fcberschreiben",
+    },
+    'tn_ecraser_tip': {
+        'fr': "Par d\u00e9faut seuls les TN vides sont propos\u00e9s : une valeur lev\u00e9e "
+              "ne doit pas \u00eatre remplac\u00e9e par une estimation sans raison.",
+        'en': "By default only empty levels are proposed: a surveyed value "
+              "should not be replaced by an estimate without good reason.",
+        'es': "Por defecto solo se proponen las cotas vac\u00edas: un valor "
+              "levantado no debe sustituirse por una estimaci\u00f3n sin motivo.",
+        'pt': "Por omiss\u00e3o apenas as cotas vazias s\u00e3o propostas: um valor "
+              "levantado n\u00e3o deve ser substitu\u00eddo por uma estimativa sem raz\u00e3o.",
+        'de': "Standardm\u00e4\u00dfig werden nur leere H\u00f6hen vorgeschlagen: ein "
+              "eingemessener Wert sollte nicht grundlos ersetzt werden.",
+    },
+    'tn_derive_label': {
+        'fr': "Apr\u00e8s \u00e9criture du TN, recalculer :",
+        'en': "After writing the level, recompute:",
+        'es': "Tras escribir la cota, recalcular:",
+        'pt': "Ap\u00f3s escrever a cota, recalcular:",
+        'de': "Nach dem Schreiben der H\u00f6he neu berechnen:",
+    },
+    'tn_derive_fe': {
+        'fr': "le FE (profondeur conserv\u00e9e)",
+        'en': "the invert (depth kept)",
+        'es': "la solera (profundidad conservada)",
+        'pt': "a soleira (profundidade mantida)",
+        'de': "die Sohle (Tiefe bleibt)",
+    },
+    'tn_derive_prof': {
+        'fr': "la profondeur (FE conserv\u00e9)",
+        'en': "the depth (invert kept)",
+        'es': "la profundidad (solera conservada)",
+        'pt': "a profundidade (soleira mantida)",
+        'de': "die Tiefe (Sohle bleibt)",
+    },
+    'tn_derive_tip': {
+        'fr': "TN = profondeur + FE : fixer le TN oblige \u00e0 recalculer l'une des "
+              "deux autres valeurs. Conserver la profondeur fait suivre le fil "
+              "d'eau au terrain ; conserver le FE pr\u00e9serve un calage "
+              "hydraulique d\u00e9j\u00e0 fait et reporte l'\u00e9cart sur la profondeur.",
+        'en': "Level = depth + invert: setting the level forces one of the other "
+              "two to be recomputed. Keeping the depth makes the invert follow "
+              "the ground; keeping the invert preserves an existing hydraulic "
+              "design and moves the difference onto the depth.",
+        'es': "Cota = profundidad + solera: fijar la cota obliga a recalcular una "
+              "de las otras dos. Conservar la profundidad hace que la solera siga "
+              "al terreno; conservar la solera preserva un c\u00e1lculo hidr\u00e1ulico "
+              "ya hecho y traslada la diferencia a la profundidad.",
+        'pt': "Cota = profundidade + soleira: fixar a cota obriga a recalcular uma "
+              "das outras duas. Manter a profundidade faz a soleira seguir o "
+              "terreno; manter a soleira preserva um c\u00e1lculo hidr\u00e1ulico j\u00e1 "
+              "feito e transfere a diferen\u00e7a para a profundidade.",
+        'de': "H\u00f6he = Tiefe + Sohle: das Setzen der H\u00f6he erzwingt die "
+              "Neuberechnung einer der beiden anderen. Bleibt die Tiefe, folgt die "
+              "Sohle dem Gel\u00e4nde; bleibt die Sohle, wird eine vorhandene "
+              "hydraulische Auslegung bewahrt und die Differenz auf die Tiefe gelegt.",
+    },
+    'tn_avertissement': {
+        'fr': "Un MNT d\u00e9crit le terrain nu \u00e0 la date du vol : sur une zone "
+              "terrass\u00e9e ou remblay\u00e9e depuis, la valeur ne correspond pas au "
+              "terrain du projet. Aide \u00e0 la saisie d'avant-projet \u2014 pour un DCE, "
+              "faire contr\u00f4ler par un lev\u00e9.",
+        'en': "A DTM describes bare ground at the time of the survey flight: on "
+              "ground reshaped since, the value does not match the project "
+              "terrain. Preliminary-design aid \u2014 have it checked by a survey "
+              "before tender stage.",
+        'es': "Un MDT describe el terreno desnudo en la fecha del vuelo: en una "
+              "zona explanada desde entonces, el valor no corresponde al terreno "
+              "del proyecto. Ayuda para anteproyecto \u2014 verificar con un "
+              "levantamiento antes de licitaci\u00f3n.",
+        'pt': "Um MDT descreve o terreno nu \u00e0 data do voo: numa zona terraplanada "
+              "entretanto, o valor n\u00e3o corresponde ao terreno do projeto. Aux\u00edlio "
+              "de anteprojeto \u2014 verificar com levantamento antes do concurso.",
+        'de': "Ein DGM beschreibt den nackten Boden zum Befliegungszeitpunkt: bei "
+              "seither umgestaltetem Gel\u00e4nde passt der Wert nicht zum "
+              "Projektgel\u00e4nde. Vorentwurfshilfe \u2014 vor der Ausschreibung durch "
+              "eine Vermessung pr\u00fcfen lassen.",
+    },
+    'tn_ecart_tip': {
+        'fr': "\u00c9cart sup\u00e9rieur \u00e0 {seuil} m avec le TN saisi : v\u00e9rifier le lev\u00e9 "
+              "ou l'actualit\u00e9 du MNT sur ce point.",
+        'en': "More than {seuil} m from the entered level: check the survey or "
+              "how current the DTM is here.",
+        'es': "Diferencia superior a {seuil} m con la cota introducida: "
+              "comprobar el levantamiento o la actualidad del MDT.",
+        'pt': "Diferen\u00e7a superior a {seuil} m face \u00e0 cota introduzida: verificar "
+              "o levantamento ou a atualidade do MDT.",
+        'de': "Mehr als {seuil} m Abweichung von der erfassten H\u00f6he: Vermessung "
+              "oder Aktualit\u00e4t des DGM pr\u00fcfen.",
+    },
+    'tn_en_cours': {
+        'fr': "Interrogation des MNT IGN\u2026", 'en': "Querying IGN DTMs\u2026",
+        'es': "Consultando los MDT IGN\u2026", 'pt': "A consultar os MDT IGN\u2026",
+        'de': "IGN-DGM werden abgefragt\u2026",
+    },
+    'tn_resume': {
+        'fr': "{total} ouvrage(s) \u2014 {ok} avec altitude, {hors} hors couverture. {detail}",
+        'en': "{total} structure(s) \u2014 {ok} with elevation, {hors} outside coverage. {detail}",
+        'es': "{total} estructura(s) \u2014 {ok} con altitud, {hors} fuera de cobertura. {detail}",
+        'pt': "{total} estrutura(s) \u2014 {ok} com altitude, {hors} fora de cobertura. {detail}",
+        'de': "{total} Bauwerk(e) \u2014 {ok} mit H\u00f6he, {hors} au\u00dferhalb der Abdeckung. {detail}",
+    },
+    'tn_erreur': {
+        'fr': "\u00c9chec de l'interrogation des MNT : {message}",
+        'en': "DTM query failed: {message}",
+        'es': "Error al consultar los MDT: {message}",
+        'pt': "Falha ao consultar os MDT: {message}",
+        'de': "DGM-Abfrage fehlgeschlagen: {message}",
+    },
+    'tn_aucun_ouvrage': {
+        'fr': "Aucun regard ni tabouret g\u00e9om\u00e9triquement plac\u00e9 sur ce r\u00e9seau.",
+        'en': "No manhole or connection chamber with geometry on this network.",
+        'es': "Ning\u00fan pozo ni arqueta con geometr\u00eda en esta red.",
+        'pt': "Nenhuma caixa de visita ou de ramal com geometria nesta rede.",
+        'de': "Kein Schacht und kein Anschlussschacht mit Geometrie in diesem Netz.",
+    },
+    'tn_tout_cocher': {
+        'fr': "Tout cocher", 'en': "Check all", 'es': "Marcar todo",
+        'pt': "Marcar tudo", 'de': "Alle ausw\u00e4hlen",
+    },
+    'tn_tout_decocher': {
+        'fr': "Tout d\u00e9cocher", 'en': "Uncheck all", 'es': "Desmarcar todo",
+        'pt': "Desmarcar tudo", 'de': "Auswahl aufheben",
+    },
+    'tn_appliquer': {
+        'fr': "Appliquer les TN coch\u00e9s", 'en': "Apply checked levels",
+        'es': "Aplicar las cotas marcadas", 'pt': "Aplicar as cotas marcadas",
+        'de': "Ausgew\u00e4hlte H\u00f6hen \u00fcbernehmen",
+    },
+    'tn_bouton': {
+        'fr': "TN auto (MNT IGN)", 'en': "Auto ground level (IGN DTM)",
+        'es': "Cota auto (MDT IGN)", 'pt': "Cota auto (MDT IGN)",
+        'de': "Auto-Gel\u00e4ndeh\u00f6he (IGN-DGM)",
+    },
+    'tn_bouton_tip': {
+        'fr': "Renseigne le TN des regards et tabourets du r\u00e9seau affich\u00e9 depuis "
+              "le MNT LiDAR HD de l'IGN (RGE ALTI en repli). Aper\u00e7u avant \u00e9criture.",
+        'en': "Fills the ground level of the displayed network's structures from "
+              "IGN's LiDAR HD DTM (RGE ALTI as fallback). Preview before writing.",
+        'es': "Rellena la cota de las estructuras de la red mostrada desde el MDT "
+              "LiDAR HD del IGN (RGE ALTI de repliegue). Vista previa antes de escribir.",
+        'pt': "Preenche a cota das estruturas da rede apresentada a partir do MDT "
+              "LiDAR HD do IGN (RGE ALTI como recurso). Pr\u00e9-visualiza\u00e7\u00e3o antes de escrever.",
+        'de': "F\u00fcllt die Gel\u00e4ndeh\u00f6he der Bauwerke des angezeigten Netzes aus dem "
+              "LiDAR-HD-DGM des IGN (ersatzweise RGE ALTI). Vorschau vor dem Schreiben.",
+    },
+    'tn_applique': {
+        'fr': "{nb} TN renseign\u00e9(s). Ctrl+Z annule l'ensemble.",
+        'en': "{nb} ground level(s) filled in. Ctrl+Z undoes the whole batch.",
+        'es': "{nb} cota(s) rellenada(s). Ctrl+Z deshace todo el lote.",
+        'pt': "{nb} cota(s) preenchida(s). Ctrl+Z anula todo o lote.",
+        'de': "{nb} Gel\u00e4ndeh\u00f6he(n) gef\u00fcllt. Strg+Z macht alles r\u00fcckg\u00e4ngig.",
+    },
+    'tn_rapport': {
+        'fr': "Rapport : {chemin}", 'en': "Report: {chemin}",
+        'es': "Informe: {chemin}", 'pt': "Relat\u00f3rio: {chemin}",
+        'de': "Bericht: {chemin}",
+    },
+    'ts_zoom_entite': {
+        'fr': "Zoom sur l'entité", 'en': "Zoom to feature",
+        'es': "Zoom a la entidad", 'pt': "Zoom na entidade",
+        'de': "Auf Objekt zoomen",
+    },
+    'ts_zoom_entite_tip': {
+        'fr': "Centre l'aperçu et la carte principale de QGIS sur l'entité "
+              "sélectionnée (double-cliquer sur une ligne fait la même chose).",
+        'en': "Centres the preview and the main QGIS map on the selected "
+              "feature (double-clicking a row does the same).",
+        'es': "Centra la vista previa y el mapa principal de QGIS en la entidad "
+              "seleccionada (doble clic en una fila hace lo mismo).",
+        'pt': "Centra a pré-visualização e o mapa principal do QGIS na entidade "
+              "selecionada (duplo clique numa linha faz o mesmo).",
+        'de': "Zentriert die Vorschau und die QGIS-Hauptkarte auf das "
+              "ausgewählte Objekt (Doppelklick auf eine Zeile bewirkt dasselbe).",
+    },
     'ts_longueur_tip': {
         'fr': "Longueur définie par le tracé — non modifiable ici.",
         'en': "Length is set by the geometry — not editable here.",
@@ -3331,17 +3551,17 @@ TR = {
         'fr': "Largeur (m)", 'en': "Width (m)", 'es': "Ancho (m)",
         'pt': "Largura (m)", 'de': "Breite (m)",
     },
-    # En-tÃªtes du tableau de cubature / remblai (Ã©cran, CSV, XLSX)
+    # En-têtes du tableau de cubature / remblai (écran, CSV, XLSX)
     'col_id': {
         'fr': "ID", 'en': "ID", 'es': "ID", 'pt': "ID", 'de': "ID",
     },
     'col_diametre_court': {
-        'fr': "Ã˜ (mm)", 'en': "Ã˜ (mm)", 'es': "Ã˜ (mm)",
-        'pt': "Ã˜ (mm)", 'de': "Ã˜ (mm)",
+        'fr': "Ø (mm)", 'en': "Ø (mm)", 'es': "Ø (mm)",
+        'pt': "Ø (mm)", 'de': "Ø (mm)",
     },
     'col_nom_debut': {
-        'fr': "Nom dÃ©but", 'en': "Start name", 'es': "Nombre inicio",
-        'pt': "Nome inÃ­cio", 'de': "Name Anfang",
+        'fr': "Nom début", 'en': "Start name", 'es': "Nombre inicio",
+        'pt': "Nome início", 'de': "Name Anfang",
     },
     'col_nom_fin': {
         'fr': "Nom fin", 'en': "End name", 'es': "Nombre fin",
@@ -3349,20 +3569,20 @@ TR = {
     },
     'col_long_2d': {
         'fr': "Long. 2D (m)", 'en': "Length 2D (m)", 'es': "Long. 2D (m)",
-        'pt': "Compr. 2D (m)", 'de': "LÃ¤nge 2D (m)",
+        'pt': "Compr. 2D (m)", 'de': "Länge 2D (m)",
     },
     'col_long_3d': {
         'fr': "Long. 3D (m)", 'en': "Length 3D (m)", 'es': "Long. 3D (m)",
-        'pt': "Compr. 3D (m)", 'de': "LÃ¤nge 3D (m)",
+        'pt': "Compr. 3D (m)", 'de': "Länge 3D (m)",
     },
     'col_deblai': {
-        'fr': "DÃ©blai (mÂ³)", 'en': "Excavation (mÂ³)", 'es': "Desmonte (mÂ³)",
-        'pt': "EscavaÃ§Ã£o (mÂ³)", 'de': "Aushub (mÂ³)",
+        'fr': "Déblai (m³)", 'en': "Excavation (m³)", 'es': "Desmonte (m³)",
+        'pt': "Escavação (m³)", 'de': "Aushub (m³)",
     },
     'col_csv_remblai': {
         'fr': "Remblai : {libelle}", 'en': "Backfill: {libelle}",
         'es': "Relleno: {libelle}", 'pt': "Aterro: {libelle}",
-        'de': "VerfÃ¼llung: {libelle}",
+        'de': "Verfüllung: {libelle}",
     },
     # Décomposition du remblai : libellés courts (PDF) et longs (récapitulatif)
     'rap_vol_lit_pose': {
@@ -4177,6 +4397,13 @@ TR = {
         'fr': "Projet enregistré :\n{chemin}", 'en': "Project saved:\n{chemin}",
         'es': "Proyecto guardado:\n{chemin}", 'pt': "Projeto guardado:\n{chemin}",
         'de': "Projekt gespeichert:\n{chemin}",
+    },
+    'pb_enregistre_barre': {
+        'fr': "Projet enregistré : {chemin}",
+        'en': "Project saved: {chemin}",
+        'es': "Proyecto guardado: {chemin}",
+        'pt': "Projeto guardado: {chemin}",
+        'de': "Projekt gespeichert: {chemin}",
     },
     'pb_avertissements': {
         'fr': "Projet enregistré avec des avertissements :\n{details}\n\n"

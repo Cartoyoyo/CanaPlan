@@ -73,6 +73,7 @@ Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne 
 | **Effacer** | Supprime un element et ses etiquettes associees. Lasso possible pour une selection multiple. |
 | **Copier les attributs** | Copie les attributs (diametre, materiau...) d'un element vers un ou plusieurs autres du meme type. |
 | **Tableau de saisie - pente** | Saisie groupee en tableau, par onglets **Regards / Tabourets / Conduites / Branchements**, avec calcul automatique de la pente ou de la cote fil d'eau selon le sens choisi. Apercu carte miniature de l'element selectionne, copier/coller depuis Excel, saisie multi-cellules, historique d'annulation (Ctrl+Z). Un onglet **Chaine** trace le profil simplifie entre deux regards choisis. Sur l'onglet Branchements, la **cote de piquage est interpolee sur la conduite mere** au PK du piquage : modifier un fil d'eau de la conduite met a jour en cascade tous les branchements qui y sont piques (cellule affichee en couleur « valeur derivee »). |
+| **TN auto (MNT IGN)** | Bouton du Tableau de saisie qui releve le terrain naturel des regards et tabourets du reseau affiche sur le **MNT LiDAR HD (0,50 m)**, avec repli sur le **RGE ALTI (1 m)** la ou le LiDAR HD ne couvre pas. Un dialogue d'apercu affiche, ouvrage par ouvrage, le TN actuel, le TN propose, l'ecart et la source retenue avant toute ecriture : seules les lignes cochees sont appliquees (par defaut, uniquement les TN manquants — case **« Ecraser les TN deja renseignes »** pour forcer). Un ecart superieur a 0,50 m est signale, le MNT decrivant le terrain nu a la date du vol et non le terrain du projet. Le TN ecrit recalcule automatiquement le fil d'eau ou la profondeur selon le choix fait dans le dialogue. L'ensemble du lot s'ecrit en une seule operation (Ctrl+Z annule tout). Le schema des couches ne portant pas de champ de provenance, la tracabilite passe par un **rapport CSV horodate** ecrit dans le dossier du projet (`altimetrie_<reseau>_<horodatage>.csv`), qui liste aussi les ouvrages non appliques. |
 
 #### Modes de calcul du Tableau de saisie
 
@@ -359,6 +360,17 @@ calculée ou une profondeur fixe sur toute la chaîne d'un coup.
 
 <div align="center">
   <img src="images/TSP_Pente.png" alt="Onglet Chaîne regards PENTE">
+</div>
+
+#### 🛰️ TN auto (MNT IGN)
+
+Bouton du Tableau de saisie qui relève le terrain naturel sur le MNT LiDAR HD
+(repli RGE ALTI), et propose les valeurs dans un dialogue d'aperçu avant
+écriture : TN actuel, TN proposé, écart et source, ligne par ligne — rien
+n'est appliqué sans validation.
+
+<div align="center">
+  <img src="images/TSP_TN_auto.png" alt="Aperçu du remplissage TN auto">
 </div>
 
 #### 📈 Profil en long
@@ -1263,6 +1275,7 @@ CanaPlan/
 
 | Version | Notes |
 |---------|-------|
+| **2.0** | **TN auto (MNT IGN)** : remplissage du terrain naturel des regards et tabourets depuis le LiDAR HD (repli RGE ALTI), avec aperçu avant écriture et rapport CSV de traçabilité — cinq nouvelles **recettes** de pilotage par script (`coter_mnt`, `habiller`, `projet_sur_voie`, `reseau_de_voie`, `tracer_reseau`) — correction d'un plantage à la création de couche sur un projet neuf en CRS géographique — la fenêtre de résultats Cubature ne s'accumule plus d'un calcul à l'autre — icône du plugin dans le menu Extensions |
 | **1.9** | **Pilotage par script** (`tools/api.py`) et **recettes** rejouables — numérotation des planches suivant le collecteur, de l'aval vers l'amont — taille des étiquettes en millimètres de papier — requêtes BAN et Overpass par la pile réseau de QGIS |
 | **1.8** | Compatibilité **QGIS 4 / Qt 6** — bouton **PDF complet** dans la fenêtre d'export — profils en long toujours orientés regard le plus profond à gauche — seuil de dézoom des étiquettes déduit de l'échelle cible |
 | **1.7.1** | Retrait du paquet des scripts de mise au point du parseur DXF, qui bloquaient la validation de sécurité de plugins.qgis.org |
@@ -1278,6 +1291,32 @@ CanaPlan/
 
 <details>
 <summary>Détail complet des versions</summary>
+
+### 2.0
+
+- **TN auto (MNT IGN).** Bouton du Tableau de saisie qui relève le terrain
+  naturel des regards et tabourets sur le MNT **LiDAR HD** (0,50 m), avec
+  repli sur le **RGE ALTI** (1 m) là où le LiDAR HD ne couvre pas —
+  téléchargement par dalles au format WMS `image/x-bil;bits=32`,
+  interpolation bilinéaire. Un dialogue d'aperçu montre, ouvrage par
+  ouvrage, le TN actuel, le TN proposé, l'écart et la source retenue : rien
+  n'est écrit avant validation, et par défaut seuls les TN manquants sont
+  cochés. Le schéma des couches ne portant pas de champ de provenance, la
+  traçabilité passe par un rapport CSV horodaté écrit dans le dossier du
+  projet. L'écriture du lot tient dans une seule opération (Ctrl+Z l'annule
+  intégralement).
+
+- **Pilotage par script étendu.** Cinq nouvelles recettes rejouables :
+  `coter_mnt` (calage des cotes depuis le MNT), `habiller` (étiquettes et
+  mise en forme), `projet_sur_voie`, `reseau_de_voie` et `tracer_reseau`.
+
+- **Corrections.** Un projet QGIS neuf (CRS géographique par défaut) faisait
+  perdre toute nouvelle couche dessinée, faute de repli sur Lambert 93 —
+  seul l'ancien test « CRS projet invalide » déclenchait le repli, alors que
+  le CRS est valide mais non projeté. La fenêtre de résultats **Cubature**
+  s'accumulait d'un calcul à l'autre au lieu de remplacer la précédente.
+  L'icône du plugin apparaît désormais devant son entrée dans le menu
+  Extensions.
 
 ### 1.9
 

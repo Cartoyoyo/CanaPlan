@@ -1,8 +1,9 @@
 {
   "nom": "recaler_cotes",
-  "resume": "Renumérote de l'amont vers l'aval, repose TN, profondeurs et fils d'eau sur un réseau déjà tracé, contrôle les branchements et vérifie le renseignement. Cotes de chantier (tn, pente, profondeurs) obligatoires : elles changent a chaque affaire.",
+  "resume": "Repose TN, profondeurs et fils d'eau sur un reseau deja trace, puis controle. L'exutoire est OBLIGATOIRE : un TN saisi a plat efface le relief, 'extremites' n'a alors plus rien pour s'orienter et retombe sur le nord, qui designe une extremite au hasard du terrain -- le reseau est cote a contresens sans que rien ne le signale. 'voie_de_raccordement' accepte un nom de voie, un couple [x, y] en Lambert 93 ou une geometrie. 'extremites' est joue avant ET apres la renumerotation : avant pour numeroter de l'amont vers l'aval, apres pour connaitre le nom courant du regard aval qui porte l'ancrage. L'ancrage ne depend donc plus de la renumerotation, qui redevient facultative sans casser la recette. Pour un TN releve sur le MNT plutot que saisi a plat, voir 'coter_mnt'.",
   "parametres": {
     "reseau": "EU",
+    "voie_de_raccordement": null,
     "tn": null,
     "pente": null,
     "profondeur_aval": null,
@@ -11,12 +12,39 @@
   },
   "etapes": [
     {
+      "appel": "extremites",
+      "nomme": "avant",
+      "args": {
+        "reseau": "$reseau",
+        "pres_de": "$voie_de_raccordement"
+      },
+      "attendu": {
+        "regards": {
+          "min": 2
+        }
+      }
+    },
+    {
       "appel": "renumeroter",
-      "nomme": "num",
       "si": "$renumeroter",
       "args": {
         "reseau": "$reseau",
-        "depart": 1
+        "depart": 1,
+        "de": "@avant.amont_fid",
+        "vers": "@avant.aval_fid"
+      }
+    },
+    {
+      "appel": "extremites",
+      "nomme": "ext",
+      "args": {
+        "reseau": "$reseau",
+        "pres_de": "$voie_de_raccordement"
+      },
+      "attendu": {
+        "nommes": {
+          "egal": true
+        }
       }
     },
     {
@@ -26,7 +54,7 @@
         "tn": "$tn",
         "pente": "$pente",
         "ancrage": [
-          "@num.regards[-1]",
+          "@ext.aval",
           "$profondeur_aval"
         ],
         "tabourets": {
@@ -36,15 +64,31 @@
       }
     },
     {
+      "appel": "recalculer_pentes",
+      "args": {
+        "reseau": "$reseau"
+      }
+    },
+    {
       "appel": "controler_branchements",
       "args": {
         "reseau": "$reseau"
+      },
+      "attendu": {
+        "non_cotes": {
+          "vide": true
+        }
       }
     },
     {
       "appel": "verifier",
       "args": {
         "reseau": "$reseau"
+      },
+      "attendu": {
+        "conduites_en_contre_pente": {
+          "vide": true
+        }
       }
     }
   ]

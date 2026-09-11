@@ -1,0 +1,95 @@
+{
+  "nom": "tracer_reseau",
+  "resume": "BLOC. Pose la conduite et ses regards sur un axe fourni, raccorde un branchement par bâtiment proche, relève le terrain naturel sur le MNT, oriente le réseau sur `voie_de_raccordement` (ou sur le terrain à défaut) et numérote de l'amont vers l'aval. Ne cote rien. Rend `ext` et `num` dans `valeurs`.",
+  "parametres": {
+    "reseau": "EU",
+    "axe": null,
+    "materiau": "PVC",
+    "diametre": 200,
+    "diametre_branchement": 160,
+    "entraxe_max": 50.0,
+    "tol_axe": 0.5,
+    "distance_max": 10.0,
+    "voie_de_raccordement": "",
+    "tn_auto": true
+  },
+  "sorties": [
+    "ext",
+    "num"
+  ],
+  "etapes": [
+    {
+      "appel": "tracer_conduite",
+      "args": {
+        "reseau": "$reseau",
+        "axe": "$axe",
+        "entraxe_max": "$entraxe_max",
+        "tol_axe": "$tol_axe",
+        "vider": true,
+        "diametre": "$diametre",
+        "materiau": "$materiau"
+      },
+      "attendu": {
+        "regards": {
+          "min": 2
+        },
+        "troncons": {
+          "min": 1
+        }
+      }
+    },
+    {
+      "appel": "creer_branchements",
+      "args": {
+        "reseau": "$reseau",
+        "distance_max": "$distance_max",
+        "vider": true,
+        "diametre": "$diametre_branchement",
+        "materiau": "$materiau"
+      },
+      "attendu": {
+        "echecs": {
+          "vide": true
+        }
+      }
+    },
+    {
+      "appel": "tn_mnt",
+      "si": "$tn_auto",
+      "args": {
+        "reseau": "$reseau"
+      },
+      "attendu": {
+        "echecs": {
+          "vide": true
+        },
+        "ouvrages": {
+          "min": 2
+        }
+      }
+    },
+    {
+      "appel": "extremites",
+      "nomme": "ext",
+      "args": {
+        "reseau": "$reseau",
+        "pres_de": "$voie_de_raccordement"
+      },
+      "attendu": {
+        "regards": {
+          "min": 2
+        }
+      }
+    },
+    {
+      "appel": "renumeroter",
+      "nomme": "num",
+      "args": {
+        "reseau": "$reseau",
+        "depart": 1,
+        "de": "@ext.amont_fid",
+        "vers": "@ext.aval_fid"
+      }
+    }
+  ]
+}

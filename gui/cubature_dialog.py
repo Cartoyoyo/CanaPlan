@@ -415,10 +415,10 @@ class CubatureDialog(QDialog):
             self.table.setItem(row, 0, label_item)
             self.table.setSpan(row, 0, 1, 7)  # ID, Réseau, Type, Matériau, Ø, Nom début, Nom fin
 
-            subtotal_vals = {7: sous_l2d, 8: sous_l3d, 12: sous_surface}
+            subtotal_vals = {7: sous_l2d, 8: sous_l3d, 12: sous_surface,
+                             13: sous_total}
             for i, c in enumerate(self._VOL_BREAKDOWN):
-                subtotal_vals[13 + i] = sous_vol[c['key']]
-            subtotal_vals[len(self._COLUMNS) - 1] = sous_total
+                subtotal_vals[14 + i] = sous_vol[c['key']]
 
             for col in range(1, len(self._COLUMNS)):
                 text = f"{subtotal_vals[col]:.2f}" if col in subtotal_vals else ""
@@ -446,7 +446,8 @@ class CubatureDialog(QDialog):
         # elles restent masquées depuis le dernier appel avec show_remblai=False.
         active_keys = {c['key'] for c in self._active_vol_cols()}
         for i, c in enumerate(self._VOL_BREAKDOWN):
-            self.table.setColumnHidden(13 + i, c['key'] not in active_keys)
+            # 14 : la décomposition commence après la colonne Déblai (13).
+            self.table.setColumnHidden(14 + i, c['key'] not in active_keys)
 
     def _set_row(self, row, data):
         diam = data.get('diametre')
@@ -464,13 +465,17 @@ class CubatureDialog(QDialog):
             f"{data.get('prof_moy', 0):.2f}" if data.get('prof_moy') is not None else i18n.tr('rap_absence_fe'),
             f"{data.get('largeur', 0):.2f}",
             f"{data.get('surface', 0):.2f}" if data.get('surface') is not None else '—',
+            # Colonne 13 = Déblai : le volume total de la tranchée. Les colonnes
+            # suivantes en sont la décomposition, dont le remblai proprement dit
+            # (déblai moins lit de pose, enrobage, conduite et chaussée). L'ordre
+            # doit suivre _COLUMNS, qui est aussi celui de l'export CSV.
+            f"{data.get('volume', 0):.2f}" if data.get('volume') is not None else '—',
             f"{data.get('vol_lit_pose', 0):.2f}" if data.get('vol_lit_pose') is not None else '—',
             f"{data.get('vol_enrobage', 0):.2f}" if data.get('vol_enrobage') is not None else '—',
             f"{data.get('vol_conduite', 0):.2f}" if data.get('vol_conduite') is not None else '—',
             f"{data.get('vol_chaussee_inf', 0):.2f}" if data.get('vol_chaussee_inf') is not None else '—',
             f"{data.get('vol_chaussee_sup', 0):.2f}" if data.get('vol_chaussee_sup') is not None else '—',
             f"{data.get('vol_remblai', 0):.2f}" if data.get('vol_remblai') is not None else '—',
-            f"{data.get('volume', 0):.2f}" if data.get('volume') is not None else '—',
         ]
         grey = data.get('err_debut') or data.get('err_fin')
         for col, val in enumerate(vals):

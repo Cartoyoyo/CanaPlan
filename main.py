@@ -12,6 +12,7 @@ from qgis.core import (
 
 from .tools import i18n
 from .tools import errlog
+from .tools.qt_exec import exec_dialog
 
 SKETCHES_PREFIX = "CanaPlan/"
 
@@ -38,6 +39,15 @@ class ReseauAssainissementPlugin(QObject):
             purge_temp_dir()
         except Exception as _err:
             errlog.ignored(_err, "main.initGui:38")
+
+        # Purge des dossiers %TEMP%/canaplan_* laisses par les sessions
+        # precedentes : unload() ne peut pas les supprimer tant que le GPKG
+        # extrait est encore ouvert par les couches du projet.
+        try:
+            from .tools.projet_bet import purge_stale_temp_dirs
+            purge_stale_temp_dirs()
+        except Exception as _err:
+            errlog.ignored(_err, "main.initGui:purge_bet")
 
 
         # Groupe pour les outils de dessin (non exclusif pour permettre le toggle)
@@ -290,6 +300,10 @@ class ReseauAssainissementPlugin(QObject):
         # Ajouter aussi dans le menu, organisé par catégories (même
         # regroupement que le panneau latéral)
         self.menu = self.iface.pluginMenu().addMenu("CanaPlan")
+        # Icone du plugin devant l'entree du menu Extensions : c'est ce que
+        # l'utilisateur cherche des yeux quand il deroule la liste.
+        self.menu.setIcon(
+            QIcon(os.path.join(self.plugin_dir, "icon", "icon.png")))
 
         # Bascule affichage/masquage du panneau latéral : c'est la seule
         # interface du plugin, il faut pouvoir le rouvrir après fermeture.
@@ -463,7 +477,7 @@ class ReseauAssainissementPlugin(QObject):
     def show_about_dialog(self):
         from .gui.about_dialog import AboutDialog
         dlg = AboutDialog(self.plugin_dir, self.iface.mainWindow())
-        dlg.exec()
+        exec_dialog(dlg)
 
     # --- Définition des champs par type de couche ---
 
@@ -525,7 +539,7 @@ class ReseauAssainissementPlugin(QObject):
                 return
         from .gui.welcome_dialog import WelcomeDialog
         dlg = WelcomeDialog(self.iface.mainWindow())
-        dlg.exec()
+        exec_dialog(dlg)
         choice = dlg.chosen()
         if choice == WelcomeDialog.NEW:
             self.run_nouveau_projet_assistant()
@@ -630,8 +644,13 @@ class ReseauAssainissementPlugin(QObject):
         """Crée une couche mémoire pour le rôle et le réseau donnés,
         avec la symbologie appropriée."""
         defn = self.LAYER_DEFINITIONS[role]
+        # Toutes les geometries produites par CanaPlan (axe OSM reprojete, MNT
+        # IGN, PCI) sont en metres Lambert 93. Un projet QGIS neuf est en
+        # EPSG:4326 -- valide, donc l'ancien repli "si invalide" ne jouait pas,
+        # et les couches recevaient des metres etiquetes en degres : plus rien
+        # ne s'affichait. On n'herite du CRS projet que s'il est projete.
         crs = QgsProject.instance().crs()
-        crs_str = crs.authid() if crs.isValid() else "EPSG:2154"
+        crs_str = crs.authid() if (crs.isValid() and not crs.isGeographic()) else "EPSG:2154"
 
         uri = f"{defn['geom']}?crs={crs_str}"
         name = f"{role}_{reseau}"
@@ -788,7 +807,7 @@ class ReseauAssainissementPlugin(QObject):
         from .tools.calc_cubature import calculer_cubature_reseau
 
         dlg = CubatureOptionsDialog(self.iface.mainWindow())
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if exec_dialog(dlg) != QDialog.DialogCode.Accepted:
             self.action_dict[key].setChecked(False)
             return
         opts = dlg.options()
@@ -831,7 +850,20 @@ class ReseauAssainissementPlugin(QObject):
                     i18n.tr('msg_aucun_element'))
                 return
 
+            # La fenêtre est un instantané : elle ne se recalcule pas tant
+            # qu'elle est ouverte. On ferme donc celle du tour précédent,
+            # sinon deux fenêtres coexistent et l'ancienne, périmée, reste
+            # lisible — c'est elle qu'on croit voir « ne pas se mettre à
+            # jour ». Même comportement que CubatureTool.
+            ancien = getattr(self, '_cubature_dialog', None)
+            if ancien is not None:
+                try:
+                    ancien.close()
+                except (RuntimeError, AttributeError) as _err:
+                    errlog.ignored(_err, "main.run_cubature: fermeture fenêtre précédente")
+
             dlg_result = CubatureDialog(all_results, config, self.iface.mainWindow())
+            self._cubature_dialog = dlg_result
             dlg_result.show()
             self.action_dict[key].setChecked(False)
 
@@ -894,7 +926,7 @@ class ReseauAssainissementPlugin(QObject):
                 prefs['visibility'][reseau][role] = current_vis.get(reseau, {}).get(role, True)
 
         dlg = EtiquetteAffichageDialog(prefs=prefs, parent=self.iface.mainWindow())
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if exec_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
         new_prefs = dlg.get_prefs()
         self._label_display_prefs = new_prefs
@@ -935,7 +967,7 @@ class ReseauAssainissementPlugin(QObject):
         last_scale = get_label_min_scale(self)
         dlg = EtiquetteTailleDialog(last_mode, last_value, last_scale,
                                     parent=self.iface.mainWindow())
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if exec_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
         mode, value, min_scale = dlg.get_result()
         s.setValue("CanaPlan/label_size_mode",  mode)
@@ -1402,7 +1434,7 @@ class ReseauAssainissementPlugin(QObject):
     def run_nouveau_projet_assistant(self):
         from .gui.project_wizard_dialog import ProjectWizardDialog
         wizard = ProjectWizardDialog(self, self.iface)
-        wizard.exec()
+        exec_dialog(wizard)
 
     def run_enregistrer_projet(self):
         from .tools.projet_bet import save_projet
@@ -1422,7 +1454,7 @@ class ReseauAssainissementPlugin(QObject):
         from .tools.projet_bet import load_projet, recent_projects
 
         dlg = RecentProjectsDialog(recent_projects(), self.iface.mainWindow())
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if exec_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
         bet_path = dlg.selected_path()
         if bet_path:
@@ -1434,7 +1466,7 @@ class ReseauAssainissementPlugin(QObject):
 
         dlg_export = ExportDialog(self.iface.mainWindow(),
                                   default_dir=project_dir())
-        if dlg_export.exec() != QDialog.DialogCode.Accepted:
+        if exec_dialog(dlg_export) != QDialog.DialogCode.Accepted:
             return
         choices = dlg_export.get_choices()
         # Les réglages du plan sont désormais dans la même fenêtre : plus de
@@ -1872,7 +1904,7 @@ class ReseauAssainissementPlugin(QObject):
                                    QMessageBox.ButtonRole.ActionRole)
         box.addButton(QMessageBox.StandardButton.Close)
         box.setDefaultButton(btn_ouvrir)
-        box.exec()
+        exec_dialog(box)
 
         if box.clickedButton() is btn_ouvrir:
             from qgis.PyQt.QtCore import QUrl
@@ -2113,7 +2145,7 @@ class ReseauAssainissementPlugin(QObject):
 
         from .tools.dxf_convert.ui_dialog import CadToGisDialog
         dlg = CadToGisDialog(self.iface)
-        dlg.exec()
+        exec_dialog(dlg)
 
     def run_export_stareau(self):
         """Ouvre le dialogue d'export StaR-Eau (CNIG/ASTEE).
@@ -2175,7 +2207,7 @@ class ReseauAssainissementPlugin(QObject):
         from .gui.star_dt_dialog import StarDtDialog
         from .tools.star_dt_import import import_star_dt
         dlg = StarDtDialog(self.iface.mainWindow())
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if exec_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
         paths = dlg.file_paths()
         out = dlg.output_path()
@@ -2204,7 +2236,7 @@ class ReseauAssainissementPlugin(QObject):
     def show_config_dialog(self):
         from .config_dialog import ConfigDialog
         dialog = ConfigDialog(self.iface)
-        dialog.exec()
+        exec_dialog(dialog)
 
     def show_tableau_saisie(self):
         self._ensure_project_loaded()

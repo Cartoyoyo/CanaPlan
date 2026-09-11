@@ -1,0 +1,30 @@
+{
+  "nom": "projet_sur_voie",
+  "resume": "BLOC. Résout un nom de voie avec tolérance, crée le projet CanaPlan, charge les fonds et attend ceux dont la suite a besoin, puis rend l'axe OSM de la voie. Le projet est centré sur `adresse` si elle est fournie, sinon sur la voie résolue — l'alternative s'écrit avec `si` et `si_non` sur deux appels de `nouveau_projet`. `fonds_attendus` liste les couches WFS à attendre : elles arrivent en tâche de fond et la suite échouerait sans elles. Rend `v` (la voie résolue) et `axe` (la géométrie Lambert 93) dans `valeurs`, pour la recette qui l'appelle.",
+  "parametres": {
+    "rue": null,
+    "commune": null,
+    "adresse": "",
+    "seuil_confiance": 0.55,
+    "nom_projet": "CanaPlan",
+    "dossier": "~/Documents/CanaPlan",
+    "demi_emprise": 300.0,
+    "fonds_attendus": ["PCI - Bati"]
+  },
+  "sorties": ["v", "axe"],
+  "etapes": [
+    {"appel": "voie", "nomme": "v",
+     "args": {"recherche": "$rue", "commune": "$commune", "seuil": "$seuil_confiance"}},
+    {"appel": "nouveau_projet", "si": "$adresse",
+     "args": {"adresse": "$adresse", "dossier": "$dossier",
+              "nom": "$nom_projet", "demi_emprise": "$demi_emprise"}},
+    {"appel": "nouveau_projet", "si_non": "$adresse",
+     "args": {"adresse": "@v.label", "dossier": "$dossier",
+              "nom": "$nom_projet", "demi_emprise": "$demi_emprise"}},
+    {"appel": "attendre_fonds",
+     "args": {"noms": "$fonds_attendus", "delai": 120},
+     "attendu": {"prets": {"non_vide": true}}},
+    {"appel": "axe_de_rue", "nomme": "axe",
+     "args": {"nom_voie": "@v.nom", "commune": "$commune", "insee": "@v.insee"}}
+  ]
+}

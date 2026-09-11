@@ -1,0 +1,17 @@
+{
+  "nom": "habiller",
+  "resume": "BLOC. Applique la symbologie du réseau et pose les étiquettes, toutes forcées, à la taille et à l'échelle demandées.",
+  "parametres": {
+    "reseau": "EU",
+    "taille_etiquettes_mm": 2.5,
+    "etiquettes_branchements": false,
+    "echelle": 200
+  },
+  "etapes": [
+    {"appel": "styles", "args": {"reseau": "$reseau"}},
+    {"appel": "etiquettes",
+     "args": {"reseau": "$reseau", "forcer_toutes": true,
+              "visibilite": {"branchement": "$etiquettes_branchements"},
+              "taille": "$taille_etiquettes_mm", "unite": "mm", "echelle": "$echelle"}}
+  ]
+}

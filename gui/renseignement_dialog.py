@@ -14,6 +14,7 @@ from ..tools import i18n
 from .quick_config_widgets import NETWORK_COLORS
 
 import re
+from ..tools.qt_exec import exec_dialog
 
 _NUM_TOKEN_RE = re.compile(r'[+-]?\d*\.?\d+')
 
@@ -437,7 +438,7 @@ class RenseignementDialog(QDialog):
             btn_fe = msg.addButton(fe_label, QMessageBox.ButtonRole.YesRole)
             btn_tn = msg.addButton('TN',     QMessageBox.ButtonRole.NoRole)
             msg.addButton(i18n.tr('rens_aucune'), QMessageBox.ButtonRole.RejectRole)
-            msg.exec()
+            exec_dialog(msg)
             clicked = msg.clickedButton()
             if clicked == btn_fe:
                 self._set(fe_w, tn_w.value() - p_w.value())

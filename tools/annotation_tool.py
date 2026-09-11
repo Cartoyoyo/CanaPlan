@@ -15,6 +15,7 @@ from qgis.PyQt.QtGui import QFont, QColor
 
 from . import i18n
 from . import errlog
+from .qt_exec import exec_dialog
 
 _TOL_PX = 20
 
@@ -288,7 +289,7 @@ class AnnotationTool(QgsMapTool):
                 self.canvas().refresh()
 
             dlg.applied.connect(_apply_live)
-            accepted = dlg.exec() == QDialog.DialogCode.Accepted
+            accepted = exec_dialog(dlg) == QDialog.DialogCode.Accepted
 
             if accepted:
                 vals = dlg.get_values()
@@ -326,7 +327,7 @@ class AnnotationTool(QgsMapTool):
                 self.canvas().refresh()
 
             dlg.applied.connect(_apply_live_new)
-            accepted = dlg.exec() == QDialog.DialogCode.Accepted
+            accepted = exec_dialog(dlg) == QDialog.DialogCode.Accepted
 
             if accepted:
                 vals = dlg.get_values()

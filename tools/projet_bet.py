@@ -11,10 +11,28 @@ from qgis.core import (QgsProject, QgsVectorLayer, QgsVectorFileWriter,
                        QgsMemoryProviderUtils, QgsFeature, QgsLayerTreeGroup,
                        )
 from qgis.PyQt.QtCore import QSettings, Qt
+from qgis.PyQt import sip
+
 from . import i18n
 from qgis.PyQt.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QProgressDialog, QApplication
 from . import errlog
 from qgis.core import Qgis
+
+
+class _ProgressMuette:
+    """Remplace QProgressDialog en mode silencieux : mêmes appels, sans widget."""
+
+    def value(self):
+        return 0
+
+    def setValue(self, _v):
+        pass
+
+    def setLabelText(self, _t):
+        pass
+
+    def close(self):
+        pass
 
 
 def _copy_to_memory(layer):
@@ -178,18 +196,74 @@ def _ask_bet_path(iface):
     return gpkg_temp, bet_path
 
 
+_TEMP_PREFIX = 'canaplan_'
+
+
+def _supprimer_dossier_temp(chemin):
+    """Supprime un dossier d'extraction, ou renonce s'il est encore verrouillé.
+
+    Le GPKG extrait reste ouvert par les couches du projet : sous Windows,
+    rmtree() échouerait alors à moitié et laisserait un dossier mutilé. On
+    renomme donc d'abord (impossible tant qu'un fichier est ouvert dedans) :
+    si le renommage passe, plus personne ne s'en sert et on peut effacer.
+    Retourne True si le dossier a bien disparu.
+    """
+    if not chemin or not os.path.isdir(chemin):
+        return True
+    tombeau = chemin + '.del'
+    try:
+        if os.path.exists(tombeau):
+            shutil.rmtree(tombeau, ignore_errors=True)
+        os.rename(chemin, tombeau)
+    except OSError as _err:
+        errlog.ignored(_err, "projet_bet._supprimer_dossier_temp")
+        return False
+    shutil.rmtree(tombeau, ignore_errors=True)
+    return not os.path.isdir(tombeau)
+
+
+def purge_stale_temp_dirs():
+    """Efface les dossiers d'extraction .bet laissés par les sessions passées.
+
+    cleanup_plugin_resources() ne suffit pas : QGIS n'appelle pas unload()
+    quand il s'arrête brutalement, et même en fermeture normale le GPKG
+    encore ouvert empêche la suppression. Sans ce rattrapage au chargement,
+    %TEMP% accumule un dossier canaplan_* (plusieurs Mo) par projet ouvert.
+    Les dossiers d'une autre instance de QGIS en cours restent verrouillés,
+    donc intacts.
+    """
+    racine = tempfile.gettempdir()
+    try:
+        noms = os.listdir(racine)
+    except OSError as _err:
+        errlog.ignored(_err, "projet_bet.purge_stale_temp_dirs")
+        return
+    for nom in noms:
+        if not nom.startswith(_TEMP_PREFIX):
+            continue
+        chemin = os.path.join(racine, nom)
+        if os.path.isdir(chemin):
+            _supprimer_dossier_temp(chemin)
+
+
 def cleanup_plugin_resources(plugin):
     """Supprime le dossier temporaire d'extraction si présent. Appeler depuis unload()."""
     tmp_dir = getattr(plugin, '_bet_temp_dir', None)
-    if tmp_dir and os.path.isdir(tmp_dir):
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+    if tmp_dir:
+        _supprimer_dossier_temp(tmp_dir)
     plugin._bet_temp_dir = None
 
 
-def _do_save(plugin, iface, gpkg_temp, bet_path):
+def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
     """Corps commun de la sauvegarde.
     gpkg_temp : chemin du GPKG intermédiaire (sera supprimé après archivage).
     bet_path  : chemin du fichier .bet final (archive ZIP).
+    silencieux : ni barre de progression, ni compte rendu modal. Réservé au
+        pilotage par script (voir tools/api.py). Ce n'est pas qu'une question
+        d'affichage : chaque `processEvents()` de la barre sert aussi les
+        rendus de fond en attente (ortho, WMS), ce qui peut faire durer une
+        sauvegarde de quelques secondes plusieurs minutes. Les erreurs ne sont
+        pas perdues pour autant : elles sont retournées.
     """
     plugin._cleanup_tools()
 
@@ -203,19 +277,25 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
     n_layers    = len(_ROLES) * len(_RESEAUX)
     total_steps = n_layers * 4 + 2   # copie + retrait + écriture + rechargement + zip + extrait
 
-    progress = QProgressDialog(i18n.tr('bet_sauvegarde'), None, 0, total_steps,
-                               iface.mainWindow())
-    progress.setWindowTitle(i18n.tr('enregistrer_projet'))
-    progress.setWindowModality(Qt.WindowModality.WindowModal)
-    progress.setMinimumDuration(0)
-    progress.setMinimumWidth(380)
-    progress.setValue(0)
-    QApplication.processEvents()
+    if silencieux:
+        progress = _ProgressMuette()
 
-    def step(label):
-        progress.setValue(progress.value() + 1)
-        progress.setLabelText(label)
+        def step(label):
+            pass
+    else:
+        progress = QProgressDialog(i18n.tr('bet_sauvegarde'), None, 0, total_steps,
+                                   iface.mainWindow())
+        progress.setWindowTitle(i18n.tr('enregistrer_projet'))
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setMinimumWidth(380)
+        progress.setValue(0)
         QApplication.processEvents()
+
+        def step(label):
+            progress.setValue(progress.value() + 1)
+            progress.setLabelText(label)
+            QApplication.processEvents()
 
     # État des étiquettes avant de toucher aux couches
     from .layer_keys import get_layer_id, set_layer_id
@@ -431,11 +511,21 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
         if full_prefs.get('fields'):
             apply_label_fields(plugin, full_prefs['fields'])
 
+    # Le tableau de saisie eventuellement ouvert pointe encore sur les couches
+    # memoire detruites en phase 2 : on le raccroche aux couches rechargees,
+    # sinon sa prochaine ecriture (ou sa fermeture) tombe sur un objet mort.
+    dlg = getattr(plugin, '_tableau_saisie_dialog', None)
+    if dlg is not None and not sip.isdeleted(dlg):
+        dlg.set_couches(plugin._get_couches("EU"), plugin._get_couches("EP"))
+
     progress.setValue(total_steps)
     progress.close()
 
     _set_current(bet_path)
     iface.mapCanvas().refresh()
+
+    if silencieux:
+        return errors
 
     if errors:
         QMessageBox.warning(
@@ -443,9 +533,13 @@ def _do_save(plugin, iface, gpkg_temp, bet_path):
             i18n.tr('pb_avertissements', details=chr(10).join(errors),
                     chemin=bet_path))
     else:
-        QMessageBox.information(
-            iface.mainWindow(), i18n.tr('enregistrer_projet'),
-            i18n.tr('pb_enregistre', chemin=bet_path))
+        # Enregistrement nominal : rien a decider pour l'utilisateur, donc pas
+        # de modale a acquitter — l'information part dans le bandeau de QGIS.
+        # Les avertissements ci-dessus restent bloquants : eux se lisent.
+        iface.messageBar().pushMessage(
+            i18n.tr('enregistrer_projet'),
+            i18n.tr('pb_enregistre_barre', chemin=bet_path),
+            level=Qgis.MessageLevel.Info, duration=8)
 
 
 def _remove_temp_gpkg(gpkg_path):

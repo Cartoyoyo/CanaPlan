@@ -11,6 +11,7 @@ from qgis.PyQt.QtGui import QColor, QCursor
 from . import i18n
 from . import layer_ok as _ok
 from .spatial_utils import nearest_point_feature, nearest_line_feature
+from .qt_exec import exec_dialog
 
 
 class RenseignementTool(QgsMapTool):
@@ -78,7 +79,7 @@ class RenseignementTool(QgsMapTool):
             )
             pos = QCursor.pos()
             dlg.move(pos.x() + 20, pos.y() - 100)
-            if dlg.exec() == QDialog.DialogCode.Accepted:
+            if exec_dialog(dlg) == QDialog.DialogCode.Accepted:
                 vals = dlg.get_values()
                 from qgis.core import QgsProject, QgsAnnotationPointTextItem
                 ann_layer = QgsProject.instance().mainAnnotationLayer()
@@ -106,7 +107,7 @@ class RenseignementTool(QgsMapTool):
         # Positionner le dialogue à droite du clic pour ne pas masquer l'élément
         pos = QCursor.pos()
         dlg.move(pos.x() + 20, pos.y() - 100)
-        dlg.exec()
+        exec_dialog(dlg)
         self._clear_hover()
 
     # ------------------------------------------------------------------ survol

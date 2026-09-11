@@ -15,6 +15,7 @@ from qgis.PyQt.QtGui import QColor, QCursor
 from . import i18n
 
 from .spatial_utils import nearest_point_feature, nearest_line_feature
+from .qt_exec import exec_dialog
 
 
 class DrawBranchementTool(QgsMapToolEmitPoint):
@@ -25,16 +26,27 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
     """
     finished = pyqtSignal()  # signal émis quand l'outil a terminé
 
-    def __init__(self, canvas, reseau, couches):
+    def __init__(self, canvas, reseau, couches, tol_m=None, differer_ecriture=False):
         """
         :param canvas: QgsMapCanvas
         :param reseau: "EU" ou "EP"
         :param couches: dict avec les clés 'conduite', 'regard', 'tabouret', 'branchement'
                        contenant les QgsVectorLayer correspondants.
+        :param differer_ecriture: ne pas committer apres chaque entite ; l'appelant
+                       tient la session d'edition et commit lui-meme. Sous la souris
+                       un branchement est un geste isole : ouvrir et fermer la session
+                       a chaque fois est le comportement voulu, et le defaut ne change
+                       pas. En pose de masse (API `creer_branchements`), ce couple
+                       startEditing/commitChanges revient une fois par entite et par
+                       couche : mesure au profileur sur 22 branchements, 46 couples a
+                       ~110 ms, soit 5,0 s des 7,1 s de l'appel. Le calcul geometrique,
+                       lui, en coute 0,004.
         """
         super().__init__(canvas)
         self.canvas = canvas
         self.reseau = reseau
+        self._tol_m = tol_m
+        self._differer_ecriture = differer_ecriture
         self.conduite_layer = couches['conduite']       # couche des conduites principales
         self.regard_layer = couches['regard']           # couche des regards
         self.tabouret_layer = couches['tabouret']       # couche des tabourets
@@ -178,8 +190,8 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         self.snap_ticks.reset(QgsWkbTypes.GeometryType.LineGeometry)
         self.highlight_band.reset(QgsWkbTypes.GeometryType.LineGeometry)
 
-        detect_tol = 200 * self.canvas.mapUnitsPerPixel()
-        regard_tol  =  10 * self.canvas.mapUnitsPerPixel()
+        detect_tol = self._tol(200)
+        regard_tol  = self._tol(10)
 
         # ── Priorité regard à 5 px ──────────────────────────────────────────
         r_feat, _ = nearest_point_feature(
@@ -325,12 +337,25 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         self._create_branchement()
         self._reset()
 
+    def _tol(self, px):
+        """Tolerance de snap en unites carte.
+
+        Par defaut elle vaut `px` pixels ecran, ce qui suit le zoom : c'est le
+        comportement voulu sous la souris, ou l'operateur vise ce qu'il voit.
+        Piloté par script (API, MCP), le zoom n'a plus de sens et devient un
+        parametre cache : `tol_m` fixe alors la tolerance en metres, une fois
+        pour toutes.
+        """
+        if self._tol_m is not None:
+            return self._tol_m
+        return px * self.canvas.mapUnitsPerPixel()
+
     def _snap_to_regard(self, point):
         """
         Accroche au regard le plus proche (10 px). Trouve la conduite connectée
         et retourne (point_regard, id_conduite, pk) ou None.
         """
-        tol_regard   = 10  * self.canvas.mapUnitsPerPixel()
+        tol_regard   = self._tol(10)
         tol_connexion = 0.5  # 50 cm pour relier regard ↔ extrémité conduite
 
         r_feat, _ = nearest_point_feature(self.regard_layer, point, tol_regard)
@@ -353,8 +378,8 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         Cherche la conduite la plus proche. Priorité regard à 5 px.
         Retourne (point_projeté, id_conduite, pk) ou None.
         """
-        tolerance  = 200 * self.canvas.mapUnitsPerPixel()
-        regard_tol =  10 * self.canvas.mapUnitsPerPixel()
+        tolerance  = self._tol(200)
+        regard_tol = self._tol(10)
 
         # ── Priorité regard à 5 px ──────────────────────────────────────────
         r_feat, _ = nearest_point_feature(self.regard_layer, point, regard_tol)
@@ -384,7 +409,7 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         Cherche l'ouvrage (regard ou tabouret) le plus proche.
         Retourne le point de l'ouvrage ou None si hors tolérance.
         """
-        tolerance = 200 * self.canvas.mapUnitsPerPixel()
+        tolerance = self._tol(200)
         best_point = None
         best_dist = float('inf')
         for layer in (self.regard_layer, self.tabouret_layer):
@@ -408,7 +433,8 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         feat = QgsFeature(self.tabouret_layer.fields())
         feat.setGeometry(QgsGeometry.fromPointXY(point))
         self.tabouret_layer.addFeature(feat)
-        self.tabouret_layer.commitChanges()
+        if not self._differer_ecriture:
+            self.tabouret_layer.commitChanges()
 
     def _create_regard(self, point):
         """Crée un regard au point donné (avec formulaire simplifié)."""
@@ -426,7 +452,7 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         buttons.rejected.connect(dlg.reject)
         layout.addRow(buttons)
 
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if exec_dialog(dlg) == QDialog.DialogCode.Accepted:
             try:
                 tn = float(tn_edit.text())
                 fe = float(fe_edit.text())
@@ -502,7 +528,8 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
         if not self.branchement_layer.isEditable():
             self.branchement_layer.startEditing()
         self.branchement_layer.addFeature(feat)
-        self.branchement_layer.commitChanges()
+        if not self._differer_ecriture:
+            self.branchement_layer.commitChanges()
 
         self.finished.emit()
 

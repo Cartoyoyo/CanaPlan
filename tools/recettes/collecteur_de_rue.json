@@ -1,140 +1,68 @@
 {
   "nom": "collecteur_de_rue",
-  "resume": "Projet à une adresse, collecteur posé sur l'axe OSM de la rue, branchements aux bâtiments proches, numérotation, cotes, étiquettes, enregistrement et plan PDF. Cotes de chantier (tn, pente, profondeurs) obligatoires : elles changent a chaque affaire.",
+  "resume": "Chantier complet à une adresse, jusqu'au plan PDF : projet, collecteur sur l'axe OSM de la rue, un branchement par bâtiment proche, terrain naturel relevé sur le MNT IGN, cotes, symbologie, étiquettes, enregistrement et export asynchrone — le ticket est dans la dernière étape. Assemblage des blocs `projet_sur_voie`, `tracer_reseau`, `coter_mnt` et `habiller` : ses étapes ne sont plus recopiées ici. Diffère de `reseau_de_voie` sur deux points seulement : le projet est centré sur une `adresse` donnée plutôt que sur la voie, et le PDF part par défaut. Les cotes de chantier (pente, profondeurs) changent à chaque affaire et restent obligatoires tant que `coter` vaut vrai ; `voie_de_raccordement` désigne l'exutoire et oriente numérotation et cotes.",
   "parametres": {
     "adresse": null,
     "rue": null,
     "commune": null,
+    "voie_de_raccordement": "",
+    "seuil_confiance": 0.55,
     "nom_projet": "CanaPlan",
     "dossier": "~/Documents/CanaPlan",
+    "demi_emprise": 300.0,
     "reseau": "EU",
-    "diametre": 200,
     "materiau": "PVC",
+    "diametre": 200,
+    "diametre_branchement": 160,
     "entraxe_max": 50.0,
     "tol_axe": 0.5,
-    "distance_max": 8.0,
-    "diametre_branchement": 160,
-    "tn": null,
+    "distance_max": 10.0,
+    "tn_auto": true,
+    "coter": true,
     "pente": null,
     "profondeur_aval": null,
     "profondeur_tabouret": null,
     "echelle": 200,
-    "format": "A4",
-    "orientation": "portrait",
+    "taille_etiquettes_mm": 2.5,
     "etiquettes_branchements": false,
-    "taille_etiquettes_mm": 2.5
+    "avec_export": true,
+    "format": "A4",
+    "orientation": "portrait"
   },
   "etapes": [
-    {
-      "appel": "nouveau_projet",
-      "args": {
-        "adresse": "$adresse",
-        "dossier": "$dossier",
-        "nom": "$nom_projet"
-      }
-    },
-    {
-      "appel": "attendre_fonds",
-      "args": {
-        "noms": [
-          "PCI - Bati",
-          "PCI - Parcelles"
-        ],
-        "delai": 120
-      }
-    },
-    {
-      "appel": "axe_de_rue",
-      "nomme": "axe",
-      "args": {
-        "nom_voie": "$rue",
-        "commune": "$commune"
-      }
-    },
-    {
-      "appel": "tracer_conduite",
-      "args": {
-        "reseau": "$reseau",
-        "axe": "@axe",
-        "entraxe_max": "$entraxe_max",
-        "tol_axe": "$tol_axe",
-        "vider": true,
-        "diametre": "$diametre",
-        "materiau": "$materiau"
-      }
-    },
-    {
-      "appel": "creer_branchements",
-      "args": {
-        "reseau": "$reseau",
-        "distance_max": "$distance_max",
-        "vider": true,
-        "diametre": "$diametre_branchement",
-        "materiau": "$materiau"
-      }
-    },
-    {
-      "appel": "renumeroter",
-      "nomme": "num",
-      "args": {
-        "reseau": "$reseau",
-        "depart": 1
-      }
-    },
-    {
-      "appel": "caler_cotes",
-      "args": {
-        "reseau": "$reseau",
-        "tn": "$tn",
-        "pente": "$pente",
-        "ancrage": [
-          "@num.regards[-1]",
-          "$profondeur_aval"
-        ],
-        "tabourets": {
-          "tn": "$tn",
-          "profondeur": "$profondeur_tabouret"
-        }
-      }
-    },
-    {
-      "appel": "controler_branchements",
-      "args": {
-        "reseau": "$reseau"
-      }
-    },
-    {
-      "appel": "etiquettes",
-      "args": {
-        "reseau": "$reseau",
-        "forcer_toutes": true,
-        "visibilite": {
-          "branchement": "$etiquettes_branchements"
-        },
-        "taille": "$taille_etiquettes_mm",
-        "unite": "mm",
-        "echelle": "$echelle"
-      }
-    },
-    {
-      "appel": "verifier",
-      "args": {
-        "reseau": "$reseau"
-      }
-    },
-    {
-      "appel": "enregistrer"
-    },
-    {
-      "appel": "exporter_async",
-      "args": {
-        "dossier": "$dossier",
-        "pdf_complet": true,
-        "echelle": "$echelle",
-        "format": "$format",
-        "orientation": "$orientation",
-        "cadrage": "auto"
-      }
-    }
+    {"appel": "recette", "nomme": "p",
+     "args": {"nom": "projet_sur_voie", "rue": "$rue", "commune": "$commune",
+              "adresse": "$adresse", "seuil_confiance": "$seuil_confiance",
+              "nom_projet": "$nom_projet", "dossier": "$dossier",
+              "demi_emprise": "$demi_emprise",
+              "fonds_attendus": ["PCI - Bati", "PCI - Parcelles"]},
+     "attendu": {"etat": "ok"}},
+    {"appel": "recette", "nomme": "t",
+     "args": {"nom": "tracer_reseau", "reseau": "$reseau",
+              "axe": "@p.valeurs.axe", "materiau": "$materiau",
+              "diametre": "$diametre", "diametre_branchement": "$diametre_branchement",
+              "entraxe_max": "$entraxe_max", "tol_axe": "$tol_axe",
+              "distance_max": "$distance_max", "tn_auto": "$tn_auto",
+              "voie_de_raccordement": "$voie_de_raccordement"},
+     "attendu": {"etat": "ok"}},
+    {"appel": "recette", "si": "$coter",
+     "args": {"nom": "coter_mnt", "reseau": "$reseau",
+              "voie_de_raccordement": "$voie_de_raccordement",
+              "pente": "$pente", "profondeur_aval": "$profondeur_aval",
+              "profondeur_tabouret": "$profondeur_tabouret"},
+     "attendu": {"etat": "ok"}},
+    {"appel": "recette",
+     "args": {"nom": "habiller", "reseau": "$reseau",
+              "taille_etiquettes_mm": "$taille_etiquettes_mm",
+              "etiquettes_branchements": "$etiquettes_branchements",
+              "echelle": "$echelle"},
+     "attendu": {"etat": "ok"}},
+    {"appel": "verifier", "args": {"reseau": "$reseau"},
+     "attendu": {"conduites_en_contre_pente": {"vide": true}}},
+    {"appel": "enregistrer", "attendu": {"erreurs": {"vide": true}}},
+    {"appel": "exporter_async", "si": "$avec_export",
+     "args": {"dossier": "$dossier", "pdf_complet": true, "echelle": "$echelle",
+              "format": "$format", "orientation": "$orientation",
+              "cadrage": "auto"}}
   ]
 }

@@ -45,6 +45,7 @@ Usage
 import json
 import math
 import os
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -71,9 +72,56 @@ _UA = {"User-Agent": "QGIS-CanaPlan/1.8 (assainissement)"}
 
 _taches = {}
 
-#: Axes de rue deja rapatries d'Overpass, par (voie, commune, insee). Une
-#: requete coute ~2,5 s et l'axe ne bouge pas d'un appel a l'autre.
+#: Axes de rue deja rapatries d'Overpass, par (voie, commune, insee, rayon).
+#: Une requete coute quelques secondes et l'axe ne bouge pas d'un appel a
+#: l'autre. Le cache est double : en memoire pour la session, sur disque pour
+#: les suivantes — Overpass est un service public qui limite le debit, et une
+#: mise au point qui rejoue dix fois la meme recette finit par se voir servir
+#: des reponses vides. Une voie deja vue ne doit plus jamais etre redemandee.
 _axes = {}
+_CACHE_AXES = None
+
+
+def _fichier_cache_axes():
+    from qgis.core import QgsApplication
+    dossier = os.path.join(QgsApplication.qgisSettingsDirPath(), "CanaPlan")
+    os.makedirs(dossier, exist_ok=True)
+    return os.path.join(dossier, "cache_axes.json")
+
+
+def _cache_axes():
+    """Le cache disque des axes, charge une fois par session."""
+    global _CACHE_AXES
+    if _CACHE_AXES is None:
+        try:
+            with open(_fichier_cache_axes(), encoding="utf-8") as flux:
+                _CACHE_AXES = json.load(flux)
+        except Exception:
+            _CACHE_AXES = {}
+    return _CACHE_AXES
+
+
+def _cache_axes_ecrire(cle, geom, complet, info):
+    cache = _cache_axes()
+    cache["|".join(str(m) for m in cle)] = {
+        "axe": geom.asWkt(), "complet": complet.asWkt(),
+        "info": {k: v for k, v in info.items() if k != "complet"}}
+    try:
+        with open(_fichier_cache_axes(), "w", encoding="utf-8") as flux:
+            json.dump(cache, flux, ensure_ascii=False)
+    except (OSError, TypeError, ValueError):
+        pass                      # un cache qui ne s'ecrit pas n'est pas une panne
+
+
+def _cache_axes_lire(cle):
+    fiche = _cache_axes().get("|".join(str(m) for m in cle))
+    if not fiche:
+        return None
+    geom = QgsGeometry.fromWkt(fiche["axe"])
+    if geom.isEmpty():
+        return None
+    info = dict(fiche["info"], complet=QgsGeometry.fromWkt(fiche["complet"]))
+    return geom, info
 
 
 # ───────────────────────────────────────────────────────────── infrastructure
@@ -322,6 +370,7 @@ def fermer(detruire=True):
                 w.setParent(None)
                 w.deleteLater()
     plugin._tableau_saisie_dialog = None
+    plugin._cubature_dialog = None
     try:
         plugin._cleanup_tools()
     except (AttributeError, RuntimeError):
@@ -361,41 +410,283 @@ def adresse(recherche):
     p = _to_l93(lon, lat)
     return {"label": f["properties"]["label"], "score": f["properties"]["score"],
             "insee": f["properties"].get("citycode"),
+            "ville": f["properties"].get("city"),
+            "type": f["properties"].get("type"),
             "lon": lon, "lat": lat, "x": p.x(), "y": p.y()}
 
 
-def axe_de_rue(nom_voie, commune=None, insee=None, rafraichir=False):
-    """Axe de chaussée d'une rue, en Lambert 93, depuis OpenStreetMap.
+_TYPES_VOIE = (
+    "impasse", "chemin", "rue", "allee", "route", "avenue", "boulevard",
+    "place", "square", "voie", "passage", "sentier", "quai", "cours",
+    "lotissement", "montee", "traverse", "venelle", "esplanade", "rond point",
+    "faubourg", "promenade", "residence", "clos", "hameau", "lieu dit",
+)
+_LIAISONS = ("de la", "de l", "des", "du", "de", "d", "le", "la", "les", "l")
 
-    L'axe OSM est l'axe de la voie : une conduite posée dessus est centrée
-    dans la rue par construction. Retourne une `QgsGeometry` de type ligne.
 
-    Le résultat est mis en cache pour la session : rappeler la fonction avec
-    les mêmes arguments ne refait pas la requête Overpass (~2,5 s). Passer
+def _sans_accents(texte):
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", texte or "")
+                   if unicodedata.category(c) != "Mn")
+
+
+def _noyau(nom):
+    """Le nom d'une voie reduit a ce qui l'identifie vraiment.
+
+    « Impasse Danton », « Allee Danton » et « allee danton » ont le meme
+    noyau : *danton*. Le type de voie est precisement ce que l'usager confond,
+    et l'article qui le suit n'apporte rien — les comparer reviendrait a
+    declarer differentes deux facons de nommer la meme rue.
+    """
+    t = re.sub(r"[^a-z0-9 ]+", " ", _sans_accents(nom or "").lower())
+    t = " ".join(t.split())
+    for type_voie in _TYPES_VOIE:
+        if t == type_voie:
+            return t
+        if t.startswith(type_voie + " "):
+            t = t[len(type_voie) + 1:]
+            break
+    for liaison in _LIAISONS:
+        if t.startswith(liaison + " "):
+            t = t[len(liaison) + 1:]
+            break
+    return t.strip()
+
+
+def _similitude(demande, trouve):
+    """Proximite de deux noms de voie, entre 0 et 1, types de voie ignores."""
+    from difflib import SequenceMatcher
+    a, b = _noyau(demande), _noyau(trouve)
+    if not a or not b:
+        return 0.0
+    if a == b:
+        return 1.0
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def _nom_de_label(label):
+    """Le nom de voie seul, extrait d'un label BAN « Nom 03300 Commune »."""
+    coupe = re.split(r"\s\d{5}\s", label or "", maxsplit=1)
+    return coupe[0].strip()
+
+
+def voie(recherche, commune=None, insee=None, seuil=0.55):
+    """Resout un nom de voie approximatif en son nom officiel, avec un score.
+
+    L'usager dit « chemin de Champcourt » ou « impasse Danton » ; le cadastre
+    dit « Rue de Champcourt » et « Allee Danton ». **Le type de voie est ce
+    qui se confond le plus souvent**, et c'est ce qui compte le moins : le nom
+    propre suffit a designer la voie. Refuser la demande sur ce mot-la serait
+    refuser une demande juste.
+
+    La resolution est donc probabiliste. Deux mesures s'ajoutent :
+
+    * `score_ban`   — la confiance de la Base Adresse Nationale sur la requete
+                      complete, type de voie compris. Elle chute des que
+                      l'usager se trompe de type : 0,53 pour « impasse
+                      Danton » alors que la voie existe bel et bien.
+    * `similitude`  — la ressemblance des deux noyaux, type de voie et article
+                      retires. Elle vaut 1,0 sur ce meme exemple.
+
+    `confiance` est leur moyenne, et c'est elle qui decide : sous `seuil`, la
+    demande ne designe rien de connu et la fonction leve, plutot que de tracer
+    un reseau dans la mauvaise rue. Au-dessus, `corrige` dit si le nom a du
+    etre redresse — l'information remonte dans le compte rendu de la recette,
+    pour que la correction soit lue et non subie.
+
+    Sans `commune`, la recherche porte sur la France entiere : « Chemin de
+    Champcourt » seul rend alors une voie du Tampon, a La Reunion.
+    """
+    requete = recherche if not commune else "%s, %s" % (recherche, commune)
+    info = adresse(requete)
+    nom = _nom_de_label(info["label"])
+    sim = _similitude(recherche, nom)
+    confiance = round((float(info["score"]) + sim) / 2.0, 3)
+    verdict = ("sure" if confiance >= 0.80 else
+               "probable" if confiance >= 0.65 else
+               "douteuse" if confiance >= seuil else "rejetee")
+    res = {"demande": recherche, "nom": nom, "noyau": _noyau(nom),
+           "ville": info.get("ville"), "insee": insee or info["insee"],
+           "score_ban": round(float(info["score"]), 3),
+           "similitude": round(sim, 3), "confiance": confiance,
+           "verdict": verdict,
+           "corrige": (_sans_accents(nom).lower().split()
+                       != _sans_accents(recherche or "").lower().split()),
+           "label": info["label"], "x": info["x"], "y": info["y"],
+           "lon": info["lon"], "lat": info["lat"]}
+    if confiance < seuil:
+        raise RuntimeError(
+            "Voie non reconnue : « %s » -> « %s » (confiance %.2f < %.2f). "
+            "Preciser la commune ou le nom exact."
+            % (recherche, nom, confiance, seuil))
+    return res
+
+
+_MIROIRS_OVERPASS = (
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.osm.ch/api/interpreter",
+)
+
+
+def _overpass(requete):
+    """Interroge Overpass, en repliant sur un miroir si le premier flanche.
+
+    Le serveur public rend regulierement un 504 aux heures chargees, et une
+    recette de quinze etapes qui echoue a la quatrieme pour cette raison est
+    une recette qui n'aboutit jamais : les miroirs ne sont pas un luxe.
+
+    **Un miroir vide n'est pas une reponse.** Mesure sur `overpass.osm.ch` :
+    la meme requete rend 0 element, sans erreur, la ou le serveur principal en
+    rend un. Un repli qui prendrait ce vide pour argent comptant declarerait
+    « voie introuvable » sur une voie qui existe — l'echec le plus couteux
+    possible, puisqu'il est silencieux et credible. Un resultat vide fait donc
+    passer au miroir suivant ; « introuvable » n'est prononce qu'apres les
+    avoir tous vus vides.
+    """
+    derniere, vide, brides = None, None, []
+    for url in _MIROIRS_OVERPASS:
+        hote = url.split("/")[2]
+        try:
+            reponse = _get_json(url, urllib.parse.urlencode({"data": requete}).encode())
+        except Exception as err:
+            derniere = "%s : %s" % (hote, err)
+            continue
+        if reponse.get("elements"):
+            return reponse
+        # Overpass annonce un bridage dans `remark`, avec un corps par ailleurs
+        # valide et vide. Le prendre pour une reponse ferait dire « voie
+        # introuvable » a un serveur qui n'a simplement pas voulu chercher.
+        if reponse.get("remark"):
+            brides.append("%s : %s" % (hote, reponse["remark"]))
+            continue
+        vide = reponse
+    if brides:
+        raise RuntimeError("Overpass a refuse de repondre (debit limite) — "
+                           "reessayer dans quelques minutes. %s"
+                           % " | ".join(brides))
+    if vide is not None:
+        return vide
+    raise RuntimeError("Overpass injoignable sur %d miroirs : %s"
+                       % (len(_MIROIRS_OVERPASS), derniere))
+
+
+def _ligne_fusionnee(lignes):
+    """Une seule polyligne continue a partir des troncons OSM d'une voie.
+
+    OSM ne decrit presque jamais une rue par une ligne unique : elle est
+    coupee a chaque carrefour, a chaque changement de revetement, et les
+    troncons remontent dans un ordre quelconque. Enchainer leurs points bout a
+    bout — ce que faisait la version precedente — fabrique une ligne en
+    zigzag qui traverse le quartier, et les regards implantes dessus tombent
+    hors de la chaussee.
+
+    `mergeLines` recoud ce qui se touche ; ce qui reste separe est un homonyme
+    ou un troncon detache, et c'est le plus long qui fait l'axe.
+    """
+    collection = QgsGeometry.collectGeometry(lignes)
+    fusion = collection.mergeLines()
+    if fusion.isEmpty():
+        fusion = collection
+    parties = (fusion.asGeometryCollection() if fusion.isMultipart()
+               else [fusion])
+    parties = sorted((QgsGeometry(p) for p in parties),
+                     key=lambda g: -g.length())
+    return parties[0], parties[1:]
+
+
+def axe_de_rue(nom_voie, commune=None, insee=None, rafraichir=False,
+               rayon=1500.0, detail=False):
+    """Axe de chaussee d'une voie, en Lambert 93, depuis OpenStreetMap.
+
+    L'axe OSM est l'axe de la voie : une conduite posee dessus est centree
+    dans la rue par construction. Retourne une `QgsGeometry` de type ligne, ou
+    le detail complet de la resolution avec `detail=True`.
+
+    **Le nom est resolu avec tolerance.** Si OSM ne connait pas le nom demande,
+    la recherche reprend sur le nom officiel rendu par `voie()`, puis sur le
+    seul noyau du nom, type de voie retire. « Impasse Danton » trouve donc
+    l'allee Danton — et l'inverse joue aussi : OSM connait « Chemin de
+    Champcourt » la ou la BAN ne connait que « Rue de Champcourt ». Aucune des
+    deux sources n'a raison seule, d'ou les trois essais.
+
+    **La recherche porte sur un rayon, non sur la commune.** L'ancienne
+    version filtrait par `area["ref:INSEE"]`, ce qui coutait deux fois : le
+    troncon d'une voie passe en limite communale sortait du filtre, et les
+    miroirs Overpass dont l'index de zones est incomplet rendaient un resultat
+    vide sans erreur. Le rayon est centre sur le geocodage BAN de la voie.
+
+    **Les trois graphies partent dans la meme requete.** Les essayer l'une
+    apres l'autre coutait jusqu'a neuf allers-retours — trois graphies, et
+    chacune repliee sur trois miroirs quand la premiere rend vide, a 25 s
+    piece. Overpass sait filtrer sur une alternative : une seule requete
+    ramene les voies portant l'une quelconque des trois, et le tri se fait
+    ici, sur des donnees deja recues.
+
+    Le resultat est mis en cache pour la session : rappeler la fonction avec
+    les memes arguments ne refait pas la requete Overpass. Passer
     `rafraichir=True` pour forcer un nouvel appel.
     """
-    cle = (nom_voie.strip().lower(), (commune or "").strip().lower(), insee or "")
-    if not rafraichir and cle in _axes:
-        return QgsGeometry(_axes[cle])
-    if not insee:
-        insee = adresse("%s, %s" % (nom_voie, commune or ""))["insee"]
-    requete = (
-        '[out:json][timeout:40];\n'
-        'area["ref:INSEE"="%s"][admin_level=8]->.a;\n'
-        'way[highway][name~"%s",i](area.a);\n'
-        'out geom;' % (insee, nom_voie.replace('"', ''))
-    )
-    data = _get_json("https://overpass-api.de/api/interpreter",
-                     urllib.parse.urlencode({"data": requete}).encode())
-    elements = data.get("elements") or []
+    cle = (nom_voie.strip().lower(), (commune or "").strip().lower(),
+           insee or "", round(float(rayon)))
+    if not rafraichir:
+        garde = _axes.get(cle) or _cache_axes_lire(cle)
+        if garde:
+            geom, info = garde
+            _axes[cle] = garde
+            return (dict(info, axe=QgsGeometry(geom)) if detail
+                    else QgsGeometry(geom))
+
+    fiche = voie(nom_voie, commune, insee)
+
+    graphies = []
+    for motif in (nom_voie, fiche["nom"], fiche["noyau"]):
+        if motif and motif not in graphies:
+            graphies.append(motif)
+    alternative = "|".join(m.replace('"', "").replace("|", " ") for m in graphies)
+    requete = ('[out:json][timeout:25];\n'
+               'way[highway][name~"%s",i](around:%.0f,%.6f,%.6f);\n'
+               'out geom;' % (alternative, rayon, fiche["lat"], fiche["lon"]))
+    elements = _overpass(requete).get("elements") or []
     if not elements:
-        raise RuntimeError("Rue introuvable dans OSM : %s" % nom_voie)
-    pts = []
+        raise RuntimeError(
+            "Aucune voie nommee %s dans un rayon de %.0f m autour de %s. "
+            "Si la voie existe, c'est qu'Overpass n'a rien voulu rendre : "
+            "reessayer plus tard, ou elargir `rayon`."
+            % (" / ".join(graphies), rayon, fiche["label"]))
+
+    # Une seule voie a la fois : les homonymes du rayon sont ecartes ici.
+    par_nom = {}
     for e in elements:
-        pts.extend(_to_l93(p["lon"], p["lat"]) for p in e["geometry"])
-    geom = QgsGeometry.fromPolylineXY(pts)
-    _axes[cle] = QgsGeometry(geom)
-    return geom
+        nom_osm = (e.get("tags") or {}).get("name") or ""
+        par_nom.setdefault(nom_osm, []).append(QgsGeometry.fromPolylineXY(
+            [_to_l93(p["lon"], p["lat"]) for p in e["geometry"]]))
+
+    def _rang(nom_osm):
+        """La graphie OSM la plus proche de la demande gagne, la BAN ensuite."""
+        plat = _sans_accents(nom_osm).lower()
+        if plat == _sans_accents(nom_voie).lower():
+            return (0, 0.0)
+        if plat == _sans_accents(fiche["nom"]).lower():
+            return (1, 0.0)
+        return (2, -_similitude(nom_voie, nom_osm))
+
+    retenu = sorted(par_nom, key=_rang)[0]
+    lignes = par_nom[retenu]
+    geom, ecartees = _ligne_fusionnee(lignes)
+    complet = QgsGeometry.collectGeometry(lignes)
+
+    info = {"demande": nom_voie, "nom_osm": retenu, "graphies": graphies,
+            "nom_ban": fiche["nom"], "confiance": fiche["confiance"],
+            "homonymes": {n: len(v) for n, v in par_nom.items() if n != retenu},
+            "troncons_osm": len(lignes),
+            "longueur": round(geom.length(), 1),
+            "longueur_totale": round(complet.length(), 1),
+            "ecartees": [round(g.length(), 1) for g in ecartees],
+            "complet": complet}
+    _axes[cle] = (QgsGeometry(geom), info)
+    _cache_axes_ecrire(cle, geom, complet, info)
+    return dict(info, axe=geom) if detail else geom
 
 
 # ────────────────────────────────────────────────────────────────── projet
@@ -420,6 +711,9 @@ def nouveau_projet(adresse=None, dossier=None, nom=None, fonds=None,
 
     infos = {}
     canvas = iface.mapCanvas()
+    # Le CRS du PROJET, pas seulement celui du canevas : _create_layer en
+    # herite pour les couches metier, et un projet neuf reste sinon en 4326.
+    QgsProject.instance().setCrs(QgsCoordinateReferenceSystem(L93))
     canvas.setDestinationCrs(QgsCoordinateReferenceSystem(L93))
     if adresse:
         infos = globals()["adresse"](adresse)
@@ -546,11 +840,17 @@ def tracer_conduite(reseau, axe=None, points=None, entraxe_max=50.0,
     _cadrer(points)
     with _defauts_temporaires("conduite_%s" % reseau.lower(),
                               diametre=diametre, materiau=materiau) as pose:
-        with sans_fenetre() as sf:
+        with sans_fenetre() as sf, _edition_groupee(jeu["regard"],
+                                                    jeu["conduite"]) as ed:
             outil = DrawConduiteTool(_iface().mapCanvas(), reseau, jeu,
-                                     tol_m=TOL_SNAP_M)
+                                     tol_m=TOL_SNAP_M, differer_ecriture=True)
             for p in points:
                 outil._add_point(p)
+
+    # Le commit a lieu en sortant du `with` : les relectures qui suivent portent
+    # donc sur des entites ecrites, pas sur le tampon d'edition.
+    if ed.erreurs:
+        raise RuntimeError("Trace non enregistre : %s" % " | ".join(ed.erreurs))
 
     longueurs = [f.geometry().length() for f in jeu["conduite"].getFeatures()]
     return {"regards": jeu["regard"].featureCount(),
@@ -604,13 +904,14 @@ def creer_branchements(reseau, distance_max=10.0, couche_bati="PCI - Bati",
 
     faits, echecs = 0, []
     with _defauts_temporaires("branchement_%s" % reseau.lower(),
-                              diametre=diametre, materiau=materiau) as pose,             sans_fenetre() as sf:
+                              diametre=diametre, materiau=materiau) as pose,             sans_fenetre() as sf, _edition_groupee(jeu["tabouret"],
+                                                     jeu["branchement"]) as ed:
         for fid, g in cibles:
             seg = reseau_geom.shortestLine(g).asPolyline()
             pa, pb = QgsPointXY(seg[0]), QgsPointXY(seg[1])
             _cadrer([pa, pb], marge=5.0)
             outil = DrawBranchementTool(_iface().mapCanvas(), reseau, jeu,
-                                        tol_m=TOL_SNAP_M)
+                                        tol_m=TOL_SNAP_M, differer_ecriture=True)
             res = outil._snap_to_conduite(pa)
             if not res:
                 echecs.append({"bati": fid, "cause": "piquage impossible"})
@@ -625,6 +926,11 @@ def creer_branchements(reseau, distance_max=10.0, couche_bati="PCI - Bati",
             else:
                 echecs.append({"bati": fid, "cause": "refus topologique"})
 
+    # Un echec de commit groupe perdrait la pose entiere en silence : il rejoint
+    # `echecs`, que l'`attendu` des recettes controle deja.
+    for err in ed.erreurs:
+        echecs.append({"bati": None, "cause": "commit refuse : %s" % err})
+
     lb = [f.geometry().length() for f in jeu["branchement"].getFeatures()]
     return {"batis_retenus": len(cibles), "branchements": faits,
             "tabourets": jeu["tabouret"].featureCount(),
@@ -633,6 +939,52 @@ def creer_branchements(reseau, distance_max=10.0, couche_bati="PCI - Bati",
             "longueur_max": round(max(lb), 2) if lb else None,
             "diametre": pose.get("diametre"), "materiau": pose.get("materiau"),
             "echecs": echecs, "messages": sf.messages}
+
+
+class _edition_groupee:
+    """Tient une session d'édition ouverte sur plusieurs couches, le temps d'une pose.
+
+    Les outils de dessin sont écrits pour la souris : chaque entité ouvre sa
+    session, l'écrit et la referme, ce qui est le bon geste pour un branchement
+    isolé. Répété en pose de masse, ce couple domine tout le reste — profilé sur
+    22 branchements, `startEditing` et `commitChanges` valent 46 appels et 5,0 s
+    des 7,1 s de `creer_branchements`, quand le calcul géométrique en coûte
+    0,004. Une session par couche au lieu d'une par entité ramène 46 couples à 2.
+
+    Ce que le regroupement ne change pas : `getFeatures` et `featureCount` sur
+    une couche en édition voient le tampon, entités non commitées comprises.
+    Le contrôle topologique de `_finish` (qui cherche le tabouret qu'il vient de
+    poser) et le compteur avant/après de `creer_branchements` gardent donc le
+    même comportement.
+
+    Le commit a lieu dans `__exit__`, donc aussi quand le bloc sort sur
+    exception : ce qui a été posé avant l'échec est conservé, comme avec les
+    commits unitaires. Un `rollBack` serait plus propre en apparence, mais
+    changerait la sémantique sans qu'on l'ait demandé.
+
+    Les couches déjà en édition à l'entrée sont laissées telles quelles et ne
+    sont pas commitées en sortie : la session appartient alors à quelqu'un
+    d'autre — un utilisateur qui édite à la main, par exemple — et ce n'est pas
+    à une pose scriptée de valider son travail en cours.
+    """
+
+    def __init__(self, *couches):
+        self.couches = couches
+        self.ouvertes = []
+        self.erreurs = []
+
+    def __enter__(self):
+        for c in self.couches:
+            if not c.isEditable():
+                c.startEditing()
+                self.ouvertes.append(c)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        for c in self.ouvertes:
+            if not c.commitChanges():
+                self.erreurs.append("%s : %s" % (c.name(), "; ".join(c.commitErrors())))
+        return False
 
 
 class _defauts_temporaires:
@@ -676,14 +1028,97 @@ def _vider(couche):
 
 # ───────────────────────────────────────────────────── numérotation et cotes
 
+def extremites(reseau, pres_de=None):
+    """Les deux regards d'extremite du reseau, orientes par un repere.
+
+    `pres_de` designe le point de raccordement — l'exutoire, presque toujours
+    le collecteur de la voie voisine : « a partir du chemin de Champcourt »
+    ne dit pas ou passe le reseau, mais par ou il s'en va. L'extremite la plus
+    proche de ce repere devient `aval`, l'autre `amont`.
+
+    Il accepte une `QgsGeometry` (l'axe rendu par `axe_de_rue`), un couple
+    [x, y] en Lambert 93, ou un nom de voie — « Rue de Champcourt, Cusset » —
+    resolu par `voie()` puis `axe_de_rue()`. Vide ou absent, le terrain
+    tranche quand le TN est renseigne — l'extremite la plus basse devient
+    `aval`, un reseau gravitaire s'en allant par le bas ; a defaut de TN, le
+    nord fait l'amont, comme dans `renumeroter`.
+
+    Rend les noms des deux regards tels qu'ils sont **avant** renumerotation :
+    les passer a `renumeroter(de=..., vers=...)` oriente la numerotation dans
+    le sens de l'ecoulement.
+    """
+    jeu = _couches(reseau)
+    conduite, regard = jeu["conduite"], jeu["regard"]
+    regards = list(regard.getFeatures())
+    if len(regards) < 2:
+        raise RuntimeError("Il faut au moins deux regards.")
+
+    ordre = _chaine_regards(conduite, regard)
+    if len(ordre) < 2:
+        ordre = sorted(regards, key=lambda f: -f.geometry().asPoint().y())
+    a, b = ordre[0], ordre[-1]
+
+    repere, geom = None, None
+    if isinstance(pres_de, QgsGeometry):
+        repere, geom = "geometrie fournie", pres_de
+    elif isinstance(pres_de, (list, tuple)) and len(pres_de) == 2:
+        repere = "point %s" % (list(pres_de),)
+        geom = QgsGeometry.fromPointXY(
+            QgsPointXY(float(pres_de[0]), float(pres_de[1])))
+    elif isinstance(pres_de, str) and pres_de.strip():
+        nom_voie, _, commune = pres_de.partition(",")
+        # Le nom brut, pas celui redresse par la BAN : `axe_de_rue` essaie les
+        # deux, et c'est souvent la graphie de l'usager qu'OSM porte.
+        d = axe_de_rue(nom_voie.strip(), commune.strip() or None, detail=True)
+        # Un repere se prend entier : une voie coupee en troncons disjoints
+        # verrait sinon son seul plus long morceau servir de reference, et le
+        # raccordement se ferait a l'autre bout du quartier.
+        geom = d["complet"]
+        repere = "%s (%s, %.0f m)" % (d["nom_osm"], d["demande"],
+                                      d["longueur_totale"])
+
+    if geom is not None:
+        da, db = geom.distance(a.geometry()), geom.distance(b.geometry())
+        if da < db:
+            a, b, da, db = b, a, db, da
+        distances = (round(da, 2), round(db, 2))
+    elif not _vide(a["tn"]) and not _vide(b["tn"]) \
+            and float(a["tn"]) != float(b["tn"]):
+        # Le terrain avant le nord. Un reseau gravitaire s'en va par le bas :
+        # orienter au nord pouvait poser l'amont sur l'extremite basse, et
+        # `caler_cotes` cotait alors le reseau a l'envers sans rien signaler.
+        # Tant que le TN valait une constante, rien ne pouvait le montrer.
+        repere = "terrain (TN)"
+        a, b = sorted([a, b], key=lambda f: -float(f["tn"]))
+        distances = (None, None)
+    else:
+        repere = "nord"
+        a, b = sorted([a, b], key=lambda f: -f.geometry().asPoint().y())
+        distances = (None, None)
+
+    # Les identifiants en plus des noms : au sortir de `tracer_conduite` les
+    # regards ne sont pas encore nommes, et `@ext.amont` ne valait que NULL.
+    return {"amont": a["nom"], "aval": b["nom"],
+            "amont_fid": a.id(), "aval_fid": b.id(),
+            "nommes": not (_vide(a["nom"]) or _vide(b["nom"])),
+            "repere": repere,
+            "distance_amont": distances[0], "distance_aval": distances[1],
+            "regards": len(regards)}
+
+
 def renumeroter(reseau, prefixe_regard=None, prefixe_tabouret=None, depart=1,
                 de=None, vers=None):
     """Renumérote regards et tabourets de l'amont vers l'aval.
 
     Appelle l'outil du plugin, donc hérite de sa numérotation en parcours de
     graphe et de l'ordonnancement des tabourets par tronçon puis par pk de
-    piquage. `de` et `vers` sont des noms de regards ; à défaut, les deux
-    extrémités du réseau sont prises (le nord comme amont).
+    piquage. `de` et `vers` designent chacun un regard, par son nom ou par
+    son identifiant (`amont_fid` / `aval_fid` de `extremites`) ; à défaut, les
+    deux extrémités du réseau sont prises (le nord comme amont).
+
+    Fournir l'un sans l'autre, ou un repere vide, est refuse : le repli
+    silencieux sur le nord faisait passer une orientation demandee pour une
+    orientation appliquee.
     """
     from . import renommer_tool as rt
     jeu = _couches(reseau)
@@ -691,14 +1126,26 @@ def renumeroter(reseau, prefixe_regard=None, prefixe_tabouret=None, depart=1,
     if len(regards) < 2:
         raise RuntimeError("Il faut au moins deux regards.")
 
-    def _par_nom(nom):
+    def _regard(repere):
+        if isinstance(repere, int) and not isinstance(repere, bool):
+            for f in regards:
+                if f.id() == repere:
+                    return f
+            raise RuntimeError("Regard d'identifiant %d introuvable." % repere)
         for f in regards:
-            if f["nom"] == nom:
+            if f["nom"] == repere:
                 return f
-        raise RuntimeError("Regard « %s » introuvable." % nom)
+        raise RuntimeError("Regard « %s » introuvable." % repere)
 
-    if de and vers:
-        amont, aval = _par_nom(de), _par_nom(vers)
+    vide_de, vide_vers = _vide(de), _vide(vers)
+    if vide_de != vide_vers:
+        raise RuntimeError(
+            "`de` et `vers` vont par paire : %s est renseigne, l'autre non."
+            % ("de" if not vide_de else "vers"))
+    if not vide_de:
+        amont, aval = _regard(de), _regard(vers)
+        if amont.id() == aval.id():
+            raise RuntimeError("`de` et `vers` designent le meme regard.")
     else:
         tri = sorted(regards, key=lambda f: -f.geometry().asPoint().y())
         amont, aval = tri[0], tri[-1]
@@ -732,6 +1179,64 @@ def renumeroter(reseau, prefixe_regard=None, prefixe_tabouret=None, depart=1,
             "messages": sf.messages}
 
 
+def tn_mnt(reseau, roles=("regard", "tabouret"), ecraser=True):
+    """Renseigne le TN de chaque ouvrage depuis le MNT IGN.
+
+    La source la plus fine disponible est prise ouvrage par ouvrage — LiDAR HD
+    quand la dalle existe, RGE ALTI sinon — et son nom est rendu pour chacune :
+    un TN calcule doit pouvoir se justifier.
+
+    C'est le verbe qui manquait aux recettes. Faute de lui, `caler_cotes`
+    recevait un `tn` unique — 100.0 dans `reseau_de_voie` — et le reseau etait
+    cote sur un terrain plat fictif.
+
+    `ecraser=False` preserve un TN deja renseigne : un leve de geometre ne se
+    remplace pas par un modele.
+    """
+    from . import altimetrie_qgis as alt
+    jeu = _couches(reseau)
+    roles = tuple(roles)
+    infos, mesures = alt.echantillonner_reseau(jeu, roles=roles)
+    if not mesures:
+        raise RuntimeError("Aucun ouvrage a echantillonner sur le reseau %s."
+                           % reseau)
+
+    ecrits, gardes, sources, echecs = 0, [], {}, []
+    touchees = set()
+    for (role, fid), mesure in mesures.items():
+        couche = jeu.get(role)
+        if couche is None:
+            continue
+        idx = couche.fields().indexOf("tn")
+        if idx < 0:
+            continue
+        nom = (infos.get((role, fid)) or {}).get("nom")
+        z = mesure.get("z") if isinstance(mesure, dict) else None
+        if z is None:
+            echecs.append(nom)
+            continue
+        if not ecraser and not _vide(couche.getFeature(fid)["tn"]):
+            gardes.append(nom)
+            continue
+        if not couche.isEditable():
+            couche.startEditing()
+        couche.changeAttributeValue(fid, idx, round(float(z), 3))
+        source = mesure.get("source", "inconnue")
+        sources[source] = sources.get(source, 0) + 1
+        touchees.add(role)
+        ecrits += 1
+
+    for role in touchees:
+        jeu[role].commitChanges()
+
+    zs = [m["z"] for m in mesures.values()
+          if isinstance(m, dict) and m.get("z") is not None]
+    return {"reseau": reseau, "ouvrages": ecrits, "sources": sources,
+            "tn_min": round(min(zs), 2) if zs else None,
+            "tn_max": round(max(zs), 2) if zs else None,
+            "conserves": gardes, "echecs": echecs}
+
+
 def caler_cotes(reseau, tn=None, ancrage=None, pente=None, tabourets=None):
     """Renseigne TN, profondeurs et fils d'eau.
 
@@ -744,7 +1249,9 @@ def caler_cotes(reseau, tn=None, ancrage=None, pente=None, tabourets=None):
                   valeur négative crée une contre-pente.
 
     Si l'ancrage est le point bas (cas courant : l'exutoire), le calcul remonte
-    le réseau. Sinon il descend.
+    le réseau. Sinon il descend. Le sens d'ecoulement est etabli sur le TN des
+    deux extremites quand il est renseigne — le seul ordre de la chaine ne dit
+    rien de l'amont et de l'aval.
 
     Les branchements sont cotés dans la foulée : poser les fils d'eau des
     regards sans propager la cote de piquage laissait le réseau à moitié coté
@@ -767,7 +1274,14 @@ def caler_cotes(reseau, tn=None, ancrage=None, pente=None, tabourets=None):
             _ecrire(regard, f.id(), "tn", float(tn))
     if tabourets:
         for f in tabouret.getFeatures():
-            t = float(tabourets.get("tn", tn or 0))
+            # Sans TN impose, on garde celui du tabouret : `tn_mnt` vient de
+            # l'ecrire ouvrage par ouvrage, l'ancien `tn or 0` le remettait a 0.
+            if "tn" in tabourets:
+                t = float(tabourets["tn"])
+            elif tn is not None:
+                t = float(tn)
+            else:
+                t = 0.0 if _vide(f["tn"]) else float(f["tn"])
             p = float(tabourets["profondeur"])
             _ecrire(tabouret, f.id(), "tn", t)
             _ecrire(tabouret, f.id(), "profondeur", p)
@@ -787,6 +1301,28 @@ def caler_cotes(reseau, tn=None, ancrage=None, pente=None, tabourets=None):
 
     # Chaîne des regards dans l'ordre du réseau, par proximité des extrémités.
     ordre = _chaine_regards(conduite, regard)
+    # ...puis orientee amont -> aval. `_chaine_regards` part d'une extremite
+    # arbitraire : prendre son ordre pour le sens d'ecoulement faisait coter
+    # le reseau a l'envers des que cette extremite etait le point bas, sans
+    # aucun signalement.
+    #
+    # Le TN tranche quand il varie. Il ne varie pas toujours : un `tn` unique
+    # passe a cette meme fonction aplatit le terrain avant qu'on l'interroge.
+    # La numerotation prend alors le relais — `renumeroter` va de l'amont vers
+    # l'aval, REU01 est donc l'amont.
+    if len(ordre) >= 2:
+        inverser = None
+        tn_tete, tn_pied = ordre[0]["tn"], ordre[-1]["tn"]
+        if not _vide(tn_tete) and not _vide(tn_pied) \
+                and float(tn_tete) != float(tn_pied):
+            inverser = float(tn_tete) < float(tn_pied)
+        else:
+            num_tete, num_pied = _numero(ordre[0]["nom"]), _numero(ordre[-1]["nom"])
+            if num_tete is not None and num_pied is not None \
+                    and num_tete != num_pied:
+                inverser = num_tete > num_pied
+        if inverser:
+            ordre = list(reversed(ordre))
     noms = [f["nom"] for f in ordre]
     if nom_ancre not in noms:
         raise RuntimeError("L'ancrage n'est pas sur la chaîne principale.")
@@ -1652,6 +2188,40 @@ def verifier(reseau="EU"):
 # reprend par son nom.
 
 
+def _vide(valeur):
+    """Vrai pour None, un NULL de champ QGIS, ou une chaine vide / "NULL".
+
+    Un champ `nom` jamais renseigne revient en NULL : passe tel quel a
+    `renumeroter`, il valait faux et l'orientation demandee etait ignoree sans
+    un mot. Il faut donc un test explicite, partout ou une valeur peut venir
+    d'un attribut.
+    """
+    if valeur is None:
+        return True
+    try:
+        if hasattr(valeur, "isNull") and valeur.isNull():
+            return True
+    except (AttributeError, TypeError, RuntimeError):
+        pass
+    if isinstance(valeur, str) and (not valeur.strip()
+                                    or valeur.strip().upper() == "NULL"):
+        return True
+    return False
+
+
+def _numero(nom):
+    """Le nombre qui termine un nom d'ouvrage : REU12 -> 12, sinon None."""
+    if _vide(nom):
+        return None
+    chiffres = ""
+    for c in reversed(str(nom)):
+        if c.isdigit():
+            chiffres = c + chiffres
+        else:
+            break
+    return int(chiffres) if chiffres else None
+
+
 def _appel_public(nom):
     """La fonction publique `nom`, ou une erreur si elle n'existe pas.
 
@@ -1733,7 +2303,184 @@ def _serialisable(valeur, rang=0):
     return repr(valeur)[:200]
 
 
-def suite(etapes, parametres=None, arret_si_erreur=True):
+def _references(valeur, sortie):
+    """Collecte tous les "$param" et "@etape.chemin" d'une valeur d'etape."""
+    if isinstance(valeur, dict):
+        for v in valeur.values():
+            _references(v, sortie)
+    elif isinstance(valeur, (list, tuple)):
+        for v in valeur:
+            _references(v, sortie)
+    elif isinstance(valeur, str) and len(valeur) >= 2 and valeur[0] in "$@":
+        sortie.append(valeur)
+
+
+OPERATEURS_ATTENDU = ("egal", "vide", "non_vide", "min", "max",
+                      "contient", "taille")
+
+
+def _confronter(resultat, attentes):
+    """Confronte le resultat d'une etape a ce qu'elle promettait.
+
+    Sans cela une recette pouvait conclure "ok" en rendant n'importe quoi :
+    `coter_mnt` a rendu un reseau a quatre contre-pentes et six metres de
+    profondeur en tete, etat `ok`, parce que personne ne regardait le
+    resultat de l'etape `verifier` qu'elle venait de jouer.
+
+    Chaque cle est un chemin dans le resultat ("branchements.anomalies"),
+    chaque valeur une regle : soit une valeur attendue telle quelle, soit un
+    dict d'operateurs — egal, vide, non_vide, min, max, contient, taille.
+    """
+    manques = []
+    for chemin, regle in (attentes or {}).items():
+        try:
+            obtenu = _chemin_valeur(resultat, chemin)
+        except Exception as err:
+            manques.append("%s : absent du resultat (%s)" % (chemin, err))
+            continue
+        if not isinstance(regle, dict):
+            regle = {"egal": regle}
+        for op, ref in regle.items():
+            if op == "egal" and obtenu != ref:
+                manques.append("%s : %r attendu, %r obtenu" % (chemin, ref, obtenu))
+            elif op == "vide" and bool(ref) != (not obtenu):
+                manques.append("%s : %s attendu, %r obtenu"
+                               % (chemin, "vide" if ref else "non vide", obtenu))
+            elif op == "non_vide" and bool(ref) != bool(obtenu):
+                manques.append("%s : %s attendu, %r obtenu"
+                               % (chemin, "non vide" if ref else "vide", obtenu))
+            elif op == "min" and (obtenu is None or float(obtenu) < float(ref)):
+                manques.append("%s : au moins %s attendu, %r obtenu" % (chemin, ref, obtenu))
+            elif op == "max" and (obtenu is None or float(obtenu) > float(ref)):
+                manques.append("%s : au plus %s attendu, %r obtenu" % (chemin, ref, obtenu))
+            elif op == "contient" and ref not in (obtenu or []):
+                manques.append("%s : %r absent de %r" % (chemin, ref, obtenu))
+            elif op == "taille" and len(obtenu or []) != int(ref):
+                manques.append("%s : %s elements attendus, %d obtenus"
+                               % (chemin, ref, len(obtenu or [])))
+    return manques
+
+
+def _params_requis(etapes, valeurs):
+    """Les parametres que les etapes REELLEMENT jouees vont consommer.
+
+    Exiger tout ce qui est declare obligeait a fournir les cotes de chantier
+    meme pour une recette lancee sans coter, dont l'etape `caler_cotes` allait
+    etre sautee. Une etape ecartee par son `si` n'exige plus rien.
+    """
+    requis = set()
+    for etape in etapes:
+        condition, negation = etape.get("si"), etape.get("si_non")
+        ecartee = False
+        try:
+            if condition is not None and not _resoudre(condition, valeurs, {}):
+                ecartee = True
+            if negation is not None and _resoudre(negation, valeurs, {}):
+                ecartee = True
+        except (RuntimeError, KeyError, AttributeError, TypeError, IndexError):
+            pass                          # indecidable : on suppose l'etape jouee
+        if ecartee:
+            continue
+        refs = []
+        _references(etape.get("args") or {}, refs)
+        _references(condition, refs)
+        _references(negation, refs)
+        for ref in refs:
+            if ref[0] == "$":
+                requis.add(ref[1:])
+    return requis
+
+
+def _controler_etapes(etapes, parametres):
+    """Verifie verbes, "$param" et "@etape" AVANT d'enregistrer une recette.
+
+    Une faute de frappe dans un "$diametre" ne se voyait qu'a l'execution,
+    apres les deux minutes de telechargement des fonds : le controle se fait
+    donc a l'ecriture, ou il ne coute rien.
+
+    Rend (erreurs, avertissements). Un "@etape" nomme sous condition `si` est
+    un avertissement : la reference tient tant que la condition tient.
+    """
+    declares = set(parametres or {})
+    erreurs, avertis = [], []
+    nommes, nommes_si, utilises = set(), set(), set()
+    for rang, etape in enumerate(etapes, 1):
+        try:
+            _appel_public(etape.get("appel"))
+        except RuntimeError as err:
+            erreurs.append("etape %d : %s" % (rang, err))
+        for chemin, regle in (etape.get("attendu") or {}).items():
+            if isinstance(regle, dict):
+                for op in regle:
+                    if op not in OPERATEURS_ATTENDU:
+                        erreurs.append(
+                            "etape %d : operateur inconnu dans attendu.%s : %s "
+                            "(connus : %s)" % (rang, chemin, op,
+                                               ", ".join(OPERATEURS_ATTENDU)))
+        refs = []
+        _references(etape.get("args") or {}, refs)
+        _references(etape.get("attendu") or {}, refs)
+        _references(etape.get("si"), refs)
+        _references(etape.get("si_non"), refs)
+        for ref in refs:
+            if ref[0] == "$":
+                cle = ref[1:]
+                utilises.add(cle)
+                if cle not in declares:
+                    erreurs.append(
+                        "etape %d : parametre non declare %s (declares : %s)"
+                        % (rang, ref, ", ".join(sorted(declares)) or "aucun"))
+            else:
+                base = ref[1:].partition(".")[0]
+                if base in nommes_si:
+                    avertis.append(
+                        "etape %d : %s vient d'une etape conditionnelle ; la "
+                        "reference casse si la condition est fausse"
+                        % (rang, ref))
+                elif base not in nommes:
+                    erreurs.append(
+                        "etape %d : %s ne designe aucune etape nommee avant "
+                        "elle (nommees : %s)"
+                        % (rang, ref,
+                           ", ".join(sorted(nommes | nommes_si)) or "aucune"))
+        if etape.get("nomme"):
+            conditionnelle = (etape.get("si") is not None
+                              or etape.get("si_non") is not None)
+            cible = nommes_si if conditionnelle else nommes
+            cible.add(etape["nomme"])
+    for cle in sorted(declares - utilises):
+        avertis.append("parametre declare jamais utilise : $%s" % cle)
+    return erreurs, avertis
+
+
+def valider_recette(nom=None):
+    """Controle une recette enregistree, ou toutes : verbes, $param, @etapes.
+
+    Sert d'abord aux recettes ecrites avant que ce controle n'existe.
+    """
+    fiches = _charger_recettes()
+    if nom is not None and nom not in fiches:
+        raise RuntimeError("Recette inconnue : %s (connues : %s)"
+                           % (nom, ", ".join(sorted(fiches)) or "aucune"))
+    cibles = ([fiches[nom]] if nom is not None
+              else sorted(fiches.values(), key=lambda f: f["nom"]))
+    rapport = []
+    for fiche in cibles:
+        if fiche.get("erreur"):
+            rapport.append({"nom": fiche["nom"], "etat": "illisible",
+                            "erreurs": [fiche["erreur"]],
+                            "avertissements": []})
+            continue
+        err, avert = _controler_etapes(fiche.get("etapes") or [],
+                                       fiche.get("parametres") or {})
+        rapport.append({"nom": fiche["nom"], "origine": fiche.get("origine"),
+                        "etat": "erreur" if err else "ok",
+                        "erreurs": err, "avertissements": avert})
+    return rapport[0] if nom is not None else rapport
+
+
+def suite(etapes, parametres=None, arret_si_erreur=True, sorties=None,
+          reprendre_a=1):
     """Exécute une liste d'appels de l'API en un seul échange.
 
     Chaque étape est un dict :
@@ -1742,7 +2489,20 @@ def suite(etapes, parametres=None, arret_si_erreur=True):
          "args": {"reseau": "EU", "axe": "@axe"},
          "nomme": "conduite",               # pour s'y référer plus loin
          "si": "$avec_export",              # étape sautée si la valeur est fausse
+         "si_non": "$adresse",              # ...ou si la valeur est vraie
+         "attendu": {"regards": {"min": 2}},  # sinon l'étape est en échec
          "ignorer_erreur": false}
+
+    `sorties` nomme les étapes dont le résultat brut est rendu dans
+    `valeurs` : c'est ce qui permet à une recette d'en appeler une autre et
+    d'en récupérer une géométrie, que la sérialisation du compte rendu
+    réduirait à sa description.
+
+    `reprendre_a` reprend à l'étape de ce rang, les précédentes étant
+    déclarées sautées — utile après un échec tardif, pour ne pas rejouer
+    deux minutes de téléchargement de fonds. Les valeurs nommées par les
+    étapes sautées n'existent alors pas : une référence `@` vers elles
+    échoue.
 
     Rend le compte rendu de chaque étape — appel résolu, durée, résultat — et
     l'état final. Sans `arret_si_erreur`, la suite continue et l'erreur reste
@@ -1754,9 +2514,18 @@ def suite(etapes, parametres=None, arret_si_erreur=True):
     for rang, etape in enumerate(etapes, 1):
         nom = etape.get("appel")
         cr = {"rang": rang, "appel": nom}
+        if rang < int(reprendre_a or 1):
+            cr["etat"] = "sautee (reprise)"
+            comptes.append(cr)
+            continue
         try:
             condition = etape.get("si")
             if condition is not None and not _resoudre(condition, parametres, nommes):
+                cr["etat"] = "sautee"
+                comptes.append(cr)
+                continue
+            negation = etape.get("si_non")
+            if negation is not None and _resoudre(negation, parametres, nommes):
                 cr["etat"] = "sautee"
                 comptes.append(cr)
                 continue
@@ -1768,6 +2537,19 @@ def suite(etapes, parametres=None, arret_si_erreur=True):
             cr["secondes"] = round(time.perf_counter() - t0, 2)
             cr["etat"] = "ok"
             cr["resultat"] = _serialisable(resultat)
+            attendu = etape.get("attendu")
+            if attendu:
+                manques = _confronter(resultat,
+                                      _resoudre(attendu, parametres, nommes))
+                if manques:
+                    cr["etat"] = "attente non tenue"
+                    cr["attentes"] = manques
+                    comptes.append(cr)
+                    if arret_si_erreur and not etape.get("ignorer_erreur"):
+                        return {"etapes": comptes, "etat": "erreur",
+                                "secondes": round(time.perf_counter() - t_total, 2),
+                                "echouee": rang}
+                    continue
             if etape.get("nomme"):
                 nommes[etape["nomme"]] = resultat
         except Exception as err:
@@ -1780,9 +2562,17 @@ def suite(etapes, parametres=None, arret_si_erreur=True):
                         "echouee": rang}
             continue
         comptes.append(cr)
-    return {"etapes": comptes, "etat": "ok",
-            "secondes": round(time.perf_counter() - t_total, 2),
-            "nommees": sorted(nommes)}
+    final = {"etapes": comptes, "etat": "ok",
+             "secondes": round(time.perf_counter() - t_total, 2),
+             "nommees": sorted(nommes)}
+    if sorties:
+        # Brut, non serialise : c'est par la qu'une geometrie passe d'une
+        # recette a celle qui l'appelle.
+        final["valeurs"] = {c: nommes[c] for c in sorties if c in nommes}
+        absents = [c for c in sorties if c not in nommes]
+        if absents:
+            final["sorties_absentes"] = absents
+    return final
 
 
 def _dossiers_recettes():
@@ -1819,6 +2609,112 @@ def _charger_recettes():
     return fiches
 
 
+def _resume_court(texte, limite=220):
+    """La premiere phrase d'un resume, pour un sommaire lisible."""
+    texte = " ".join((texte or "").split())
+    if not texte:
+        return ""
+    # Accumuler jusqu'a une phrase qui dise quelque chose : un resume ouvert
+    # par « BLOC. » se serait resume a « BLOC. ».
+    coupe, garde = 0, 0
+    while 0 <= coupe < limite:
+        coupe = texte.find(". ", coupe + 1)
+        if coupe < 0:
+            break
+        garde = coupe + 1
+        if garde >= 40:
+            break
+    if garde < 40:
+        garde = 0          # une seule phrase, ou trop courte : tout garder
+    if 0 < garde <= limite:
+        return texte[:garde]
+    return texte if len(texte) <= limite else texte[:limite - 1].rstrip() + "…"
+
+
+def _fiche_courte(fiche):
+    """Une recette en sommaire : ce qu'elle fait, ce qu'elle exige, un exemple.
+
+    Distinguer les parametres exiges de ceux qui ont un defaut evite d'avoir
+    a ouvrir la fiche complete pour savoir quoi fournir.
+    """
+    params = fiche.get("parametres") or {}
+    etapes = fiche.get("etapes") or []
+    sans_valeur = {c for c, v in params.items() if v is None}
+    # Ce que le moteur exigera vraiment : une etape ecartee par son `si`
+    # n'exige rien. Annoncer autre chose ferait mentir le sommaire.
+    try:
+        consommes = _params_requis(etapes, params)
+    except Exception:
+        consommes = set(params)
+    requis = sorted(sans_valeur & consommes)
+    conditionnels = sorted(sans_valeur - consommes)
+    exemple = ", ".join(['%s=…' % c for c in requis])
+    return {"nom": fiche["nom"],
+            "resume": _resume_court(fiche.get("resume", "")),
+            "requis": requis,
+            "requis_si_active": conditionnels,
+            "optionnels": {c: v for c, v in params.items() if v is not None},
+            "etapes": len(fiche.get("etapes", [])),
+            "origine": fiche.get("origine"),
+            "exemple": 'api.recette("%s"%s)' % (fiche["nom"],
+                                                ", " + exemple if exemple else "")}
+
+
+GRAMMAIRE_RECETTE = {
+    "principe": "Une recette est une suite d'appels rangee dans un JSON, avec "
+                "ses parametres et leurs valeurs par defaut. Elle se rejoue, "
+                "se compose et se controle ; un enchainement ecrit a la main "
+                "ne fait rien de tout cela.",
+    "fiche": {
+        "nom": "identifiant, egal au nom du fichier",
+        "resume": "ce que la recette fait, et ce qu'elle laisse a faire",
+        "parametres": "valeurs par defaut ; null = a fournir a l'appel",
+        "sorties": "noms d'etapes dont le resultat BRUT est rendu dans "
+                   "`valeurs` — c'est par la qu'une geometrie passe a la "
+                   "recette appelante, la serialisation la reduirait sinon "
+                   "a sa description",
+        "etapes": "la liste des appels",
+    },
+    "etape": {
+        "appel": "un verbe public, et lui seul (cf. aide()) — pas d'acces "
+                 "arbitraire au module depuis un fichier de recette",
+        "args": "les arguments de l'appel",
+        "nomme": "nom sous lequel s'y referer plus loin, via @nom",
+        "si": "etape sautee si la valeur est fausse ; ses parametres ne sont "
+              "alors plus exiges",
+        "si_non": "l'inverse — etape sautee si la valeur est vraie. Les deux "
+                  "ensemble ecrivent une alternative : meme appel, deux "
+                  "etapes, conditions opposees",
+        "attendu": "ce que le resultat doit verifier, sinon l'etape echoue",
+        "ignorer_erreur": "poursuivre malgre l'echec de cette etape",
+    },
+    "references": {
+        "$parametre": "la valeur d'un parametre de la recette",
+        "@etape.chemin": "un morceau du resultat d'une etape nommee : "
+                         "@ext.aval_fid, @num.regards[-1], @p.valeurs.axe",
+    },
+    "attendu": {
+        "egal": "valeur exacte", "vide": "true = doit etre vide",
+        "non_vide": "true = ne doit pas etre vide",
+        "min": "borne inferieure", "max": "borne superieure",
+        "contient": "doit contenir cet element",
+        "taille": "nombre d'elements attendu",
+    },
+    "composition": "Une etape peut appeler `recette` : les blocs "
+                   "projet_sur_voie, tracer_reseau, coter_mnt et habiller "
+                   "s'assemblent ainsi, au lieu de recopier leurs etapes.",
+    "outils": {
+        "recettes()": "le sommaire ; recettes(nom) la fiche complete",
+        "recette(nom, **params)": "jouer une recette",
+        "recette(..., reprendre_a=N)": "reprendre au rang N sans rejouer le "
+                                       "debut (les fonds, surtout)",
+        "valider_recette()": "controler verbes, $param et @etape",
+        "enregistrer_recette(nom, etapes, resume, parametres)": "figer une "
+            "sequence eprouvee ; elle est controlee avant d'etre ecrite",
+    },
+}
+
+
 def recettes(nom=None):
     """Les procédures enregistrées : nom, résumé, paramètres, nombre d'étapes.
 
@@ -1832,14 +2728,11 @@ def recettes(nom=None):
             raise RuntimeError("Recette inconnue : %s (connues : %s)"
                                % (nom, ", ".join(sorted(fiches)) or "aucune"))
         return fiches[nom]
-    return [{"nom": f["nom"], "resume": f.get("resume", ""),
-             "parametres": f.get("parametres", {}),
-             "etapes": len(f.get("etapes", [])),
-             "origine": f["origine"]}
+    return [_fiche_courte(f)
             for f in sorted(fiches.values(), key=lambda f: f["nom"])]
 
 
-def recette(nom, arret_si_erreur=True, **parametres):
+def recette(nom, arret_si_erreur=True, reprendre_a=1, **parametres):
     """Joue une recette enregistrée, ses paramètres complétés par défaut.
 
         api.recette("collecteur_de_rue", adresse="Rue …, 03250 …",
@@ -1857,11 +2750,15 @@ def recette(nom, arret_si_erreur=True, **parametres):
         raise RuntimeError("Paramètre(s) hors recette : %s (attendus : %s)"
                            % (", ".join(inconnus), ", ".join(sorted(attendus))))
     attendus.update(parametres)
-    manquants = [p for p, v in attendus.items() if v is None]
+    etapes = fiche.get("etapes") or []
+    requis = _params_requis(etapes, attendus)
+    manquants = sorted(p for p in requis if attendus.get(p) is None)
     if manquants:
-        raise RuntimeError("Paramètre(s) sans valeur : %s" % ", ".join(sorted(manquants)))
-    cr = suite(fiche.get("etapes") or [], parametres=attendus,
-               arret_si_erreur=arret_si_erreur)
+        raise RuntimeError(
+            "Paramètre(s) sans valeur, exigés par les étapes qui vont être "
+            "jouées : %s" % ", ".join(manquants))
+    cr = suite(etapes, parametres=attendus, arret_si_erreur=arret_si_erreur,
+               sorties=fiche.get("sorties"), reprendre_a=reprendre_a)
     cr["recette"] = nom
     cr["parametres"] = _serialisable(attendus)
     return cr
@@ -1878,8 +2775,10 @@ def enregistrer_recette(nom, etapes, resume=None, parametres=None):
         raise RuntimeError("Nom de recette invalide : %r" % nom)
     if not isinstance(etapes, (list, tuple)) or not etapes:
         raise RuntimeError("`etapes` doit être une liste non vide.")
-    for etape in etapes:
-        _appel_public(etape.get("appel"))          # refus immédiat d'un verbe inconnu
+    erreurs, avertis = _controler_etapes(etapes, parametres)
+    if erreurs:
+        raise RuntimeError("Recette refusee :\n  - %s"
+                           % "\n  - ".join(erreurs))
     dossier = _dossiers_recettes()[1][1]
     os.makedirs(dossier, exist_ok=True)
     chemin = os.path.join(dossier, nom + ".json")
@@ -1887,19 +2786,21 @@ def enregistrer_recette(nom, etapes, resume=None, parametres=None):
              "parametres": dict(parametres or {}), "etapes": list(etapes)}
     with open(chemin, "w", encoding="utf-8") as flux:
         json.dump(fiche, flux, ensure_ascii=False, indent=2)
-    return {"nom": nom, "fichier": chemin, "etapes": len(etapes)}
+    return {"nom": nom, "fichier": chemin, "etapes": len(etapes),
+            "avertissements": avertis}
 
 
 DOMAINES = {
     "Lecture et séance": ["etat", "lire", "verifier", "aide", "fermer",
                           "dependances_manquantes"],
-    "Données externes": ["adresse", "axe_de_rue"],
+    "Données externes": ["adresse", "voie", "axe_de_rue"],
     "Projet": ["nouveau_projet", "charger", "enregistrer", "enregistrer_sous",
                "projets_recents"],
     "Fonds de plan": ["fonds", "attendre_fonds"],
     "Dessin": ["implanter_regards", "tracer_conduite", "creer_branchements",
                "inserer_regard", "supprimer", "vider"],
-    "Attributs et cotes": ["saisir", "renumeroter", "caler_cotes",
+    "Attributs et cotes": ["saisir", "extremites", "renumeroter", "tn_mnt",
+                           "caler_cotes",
                            "recalculer_pentes", "controler_branchements"],
     "Présentation": ["styles", "etiquettes", "config"],
     "Calculs": ["cubature", "coupe_type"],
@@ -1908,19 +2809,52 @@ DOMAINES = {
                 "exporter_stareau"],
     "Imports": ["importer_dxf", "importer_star_dt"],
     "Enchaînement": ["chantier"],
-    "Recettes": ["suite", "recette", "recettes", "enregistrer_recette"],
+    "Recettes": ["suite", "recette", "recettes", "enregistrer_recette",
+                 "valider_recette"],
 }
 
 
 def aide(domaine=None):
-    """Sommaire des fonctions publiques, par domaine : appel et résumé.
+    """Sommaire du module : par ou commencer, les recettes, puis les verbes.
 
-    Point d'entrée conseillé pour un agent qui découvre le module : il donne
-    la signature exacte et la première ligne de docstring de chaque fonction,
-    sans avoir à lire les sources.
+    Point d'entree pour qui decouvre le module. Il mene d'abord aux recettes
+    — la reponse est souvent deja ecrite — puis donne la signature exacte et
+    la premiere ligne de docstring de chaque verbe.
+
+    L'ordre compte : un annuaire de cinquante verbes, recettes reléguées en
+    fin de liste, se lit comme une invitation a reconstruire a la main une
+    sequence qui existe deja, testee.
+
+    `domaine` filtre sur le titre : aide("recette") rend la grammaire seule,
+    aide("cotes") les verbes de cotation.
     """
     import inspect
     res = {}
+    veut_recettes = not domaine or domaine.lower() in "recettes"
+
+    if veut_recettes:
+        res["demarrage"] = [
+            "1. recettes() — la sequence demandee est peut-etre deja ecrite.",
+            "2. recettes(nom) — sa fiche : parametres exiges et etapes.",
+            "3. recette(nom, **params) — la jouer ; le compte rendu donne "
+            "chaque etape, sa duree et son resultat.",
+            "4. Les verbes ci-dessous ne servent que pour ce qu'aucune "
+            "recette ne couvre — ou pour composer une nouvelle recette, "
+            "qu'on fige ensuite par enregistrer_recette().",
+            "5. suite(etapes) joue une liste d'appels en un seul echange : "
+            "toujours preferable a autant d'allers-retours que d'appels.",
+        ]
+        try:
+            res["recettes"] = recettes()
+        except Exception as err:
+            res["recettes"] = {"erreur": "%s: %s" % (type(err).__name__, err)}
+        res["grammaire"] = GRAMMAIRE_RECETTE
+        if domaine and domaine.lower() in "recettes":
+            res["Recettes"] = [
+                {"appel": n + str(inspect.signature(globals()[n])),
+                 "resume": (inspect.getdoc(globals()[n]) or "").split("\n")[0]}
+                for n in DOMAINES["Recettes"] if globals().get(n)]
+            return res
     for titre, noms in DOMAINES.items():
         if domaine and domaine.lower() not in titre.lower():
             continue

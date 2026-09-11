@@ -19,6 +19,7 @@ du plugin, et la logique d'import existante n'a pas à changer.
 
 import os
 import sys
+from .qt_exec import exec_dialog
 
 # Même liste que requirements-libs.txt, mêmes versions. --no-deps est
 # volontaire : ezdxf déclare numpy en dépendance dure, or QGIS le fournit
@@ -176,5 +177,5 @@ def assurer(parent=None, requis=None):
         return True
     from ..gui.dependances_dialog import DependancesDialog
     dlg = DependancesDialog(manquants(requis), parent)
-    dlg.exec()
+    exec_dialog(dlg)
     return tout_est_la(requis)

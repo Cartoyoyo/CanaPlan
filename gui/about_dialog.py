@@ -100,6 +100,17 @@ class AboutDialog(QDialog):
         about.setAlignment(Qt.AlignmentFlag.AlignJustify)
         layout.addWidget(about)
 
+        from ..tools import avertissement
+        avert = QLabel("<b>%s</b> — %s" % (i18n.tr('avert_titre'),
+                                           avertissement.texte()))
+        self.lbl_avertissement = avert
+        avert.setWordWrap(True)
+        avert.setAlignment(Qt.AlignmentFlag.AlignJustify)
+        avert.setStyleSheet(
+            "background:#FFF4E5; color:#6B4200; border:1px solid #E0A040;"
+            "border-radius:4px; padding:8px;")
+        layout.addWidget(avert)
+
         layout.addWidget(self._sep())
 
         self._meta = meta

@@ -437,6 +437,12 @@ TR = {
         'pt': "Mapa base do projeto (6 camadas)",
         'de': "Projekt-Hintergrundkarte (6 Layer)",
     },
+    'panel_fond_projet_int': {
+        'fr': "Fond de projet (3 couches)", 'en': "Project basemap (3 layers)",
+        'es': "Mapa base del proyecto (3 capas)",
+        'pt': "Mapa base do projeto (3 camadas)",
+        'de': "Projekt-Hintergrundkarte (3 Layer)",
+    },
     'osm_desature': {
         'fr': "OSM Desature", 'en': "Desaturated OSM", 'es': "OSM desaturado",
         'pt': "OSM dessaturado", 'de': "OSM entsättigt",
@@ -5956,5 +5962,297 @@ TR = {
               "Escavação total: {deblai} m³",
         'de': "{nb} Element(e)  —  Offene Fläche gesamt: {surface} m²  —  "
               "Aushub gesamt: {deblai} m³",
+    },
+
+    # ── Territoire : France / International ─────────────────────────────
+    'wz_territoire': {
+        'fr': "Territoire du projet :", 'en': "Project territory:",
+        'es': "Territorio del proyecto:", 'pt': "Território do projeto:",
+        'de': "Projektgebiet:",
+    },
+    'wz_territoire_france': {
+        'fr': "France", 'en': "France", 'es': "Francia", 'pt': "França",
+        'de': "Frankreich",
+    },
+    'wz_territoire_international': {
+        'fr': "International", 'en': "International", 'es': "Internacional",
+        'pt': "Internacional", 'de': "International",
+    },
+    'wz_territoire_aide_int': {
+        'fr': "Hors de France : adresses et bâti OpenStreetMap, photo aérienne "
+              "Esri. Pas de cadastre, pas de TN automatique, pas d'export "
+              "StaR-Eau.",
+        'en': "Outside France: OpenStreetMap addresses and buildings, Esri "
+              "aerial imagery. No cadastre, no automatic ground level, no "
+              "StaR-Eau export.",
+        'es': "Fuera de Francia: direcciones y edificios OpenStreetMap, "
+              "imagen aérea Esri. Sin catastro, sin cota de terreno automática, "
+              "sin exportación StaR-Eau.",
+        'pt': "Fora de França: endereços e edifícios OpenStreetMap, imagem "
+              "aérea Esri. Sem cadastro, sem cota de terreno automática, sem "
+              "exportação StaR-Eau.",
+        'de': "Außerhalb Frankreichs: Adressen und Gebäude aus OpenStreetMap, "
+              "Luftbild Esri. Kein Kataster, keine automatische Geländehöhe, "
+              "kein StaR-Eau-Export.",
+    },
+    'wz_crs_label': {
+        'fr': "Système de coordonnées :", 'en': "Coordinate system:",
+        'es': "Sistema de coordenadas:", 'pt': "Sistema de coordenadas:",
+        'de': "Koordinatensystem:",
+    },
+    'wz_crs_aide': {
+        'fr': "Proposé d'après l'adresse (zone UTM). Remplacez-le si le pays "
+              "impose un système national. Il doit être en mètres.",
+        'en': "Suggested from the address (UTM zone). Replace it if the "
+              "country requires a national system. It must be in metres.",
+        'es': "Propuesto según la dirección (zona UTM). Sustitúyalo si el "
+              "país impone un sistema nacional. Debe estar en metros.",
+        'pt': "Proposto a partir do endereço (zona UTM). Substitua-o se o país "
+              "impuser um sistema nacional. Deve estar em metros.",
+        'de': "Aus der Adresse vorgeschlagen (UTM-Zone). Ersetzen Sie es, wenn "
+              "das Land ein nationales System vorschreibt. Es muss in Metern "
+              "sein.",
+    },
+    'wz_recap_territoire': {
+        'fr': "Territoire et système de coordonnées :",
+        'en': "Territory and coordinate system:",
+        'es': "Territorio y sistema de coordenadas:",
+        'pt': "Território e sistema de coordenadas:",
+        'de': "Gebiet und Koordinatensystem:",
+    },
+    'wz_crs_titre': {
+        'fr': "Système de coordonnées", 'en': "Coordinate system",
+        'es': "Sistema de coordenadas", 'pt': "Sistema de coordenadas",
+        'de': "Koordinatensystem",
+    },
+    'wz_crs_continuer': {
+        'fr': "{message}\n\nContinuer quand même ?",
+        'en': "{message}\n\nContinue anyway?",
+        'es': "{message}\n\n¿Continuar de todos modos?",
+        'pt': "{message}\n\nContinuar mesmo assim?",
+        'de': "{message}\n\nTrotzdem fortfahren?",
+    },
+    'wz_fond_osm_int': {
+        'fr': "OpenStreetMap", 'en': "OpenStreetMap", 'es': "OpenStreetMap",
+        'pt': "OpenStreetMap", 'de': "OpenStreetMap",
+    },
+    'wz_fond_esri': {
+        'fr': "Photo aérienne (Esri World Imagery)",
+        'en': "Aerial imagery (Esri World Imagery)",
+        'es': "Imagen aérea (Esri World Imagery)",
+        'pt': "Imagem aérea (Esri World Imagery)",
+        'de': "Luftbild (Esri World Imagery)",
+    },
+    'wz_fond_bati_osm': {
+        'fr': "Bâti OpenStreetMap", 'en': "OpenStreetMap buildings",
+        'es': "Edificios OpenStreetMap", 'pt': "Edifícios OpenStreetMap",
+        'de': "Gebäude OpenStreetMap",
+    },
+    'wz_fond_aide_int': {
+        'fr': "Le bâti sert à poser un branchement par habitation. Sans "
+              "cadastre, le tabouret est placé contre la façade.",
+        'en': "Buildings are used to lay one service connection per dwelling. "
+              "Without a cadastre, the inspection chamber is placed against "
+              "the façade.",
+        'es': "Los edificios sirven para colocar una acometida por vivienda. "
+              "Sin catastro, la arqueta se coloca junto a la fachada.",
+        'pt': "Os edifícios servem para colocar um ramal por habitação. Sem "
+              "cadastro, a caixa de ligação fica junto à fachada.",
+        'de': "Die Gebäude dienen dazu, je Wohnhaus einen Hausanschluss zu "
+              "legen. Ohne Kataster wird der Anschlussschacht an die Fassade "
+              "gesetzt.",
+    },
+    'osm_rechercher': {
+        'fr': "Rechercher une adresse, un quartier, une ville (OpenStreetMap)...",
+        'en': "Search for an address, district or city (OpenStreetMap)...",
+        'es': "Buscar una dirección, un barrio, una ciudad (OpenStreetMap)...",
+        'pt': "Procurar um endereço, bairro ou cidade (OpenStreetMap)...",
+        'de': "Adresse, Viertel oder Stadt suchen (OpenStreetMap) …",
+    },
+    # Fond de plan : sections France / International, et fonds du monde
+    'grp_fond_france': {
+        'fr': "France", 'en': "France", 'es': "Francia", 'pt': "França",
+        'de': "Frankreich",
+    },
+    'grp_fond_international': {
+        'fr': "International", 'en': "International", 'es': "Internacional",
+        'pt': "Internacional", 'de': "International",
+    },
+    'monde_osm': {
+        'fr': "OpenStreetMap", 'en': "OpenStreetMap", 'es': "OpenStreetMap",
+        'pt': "OpenStreetMap", 'de': "OpenStreetMap",
+    },
+    'monde_esri': {
+        'fr': "Photo aérienne Esri", 'en': "Esri aerial imagery",
+        'es': "Imagen aérea Esri", 'pt': "Imagem aérea Esri",
+        'de': "Luftbild Esri",
+    },
+    'monde_bati_osm': {
+        'fr': "Bâti OpenStreetMap", 'en': "OpenStreetMap buildings",
+        'es': "Edificios OpenStreetMap", 'pt': "Edifícios OpenStreetMap",
+        'de': "Gebäude OpenStreetMap",
+    },
+    'osm_bati_emprise_trop_grande': {
+        'fr': "{couche} : emprise trop grande pour OpenStreetMap, zoomez sur le "
+              "chantier (5 km de côté au plus).",
+        'en': "{couche}: area too large for OpenStreetMap, zoom in on the site "
+              "(5 km across at most).",
+        'es': "{couche}: extensión demasiado grande para OpenStreetMap, acerque "
+              "la obra (5 km de lado como máximo).",
+        'pt': "{couche}: área demasiado grande para o OpenStreetMap, aproxime "
+              "a obra (5 km de lado no máximo).",
+        'de': "{couche}: Ausschnitt zu groß für OpenStreetMap, auf die Baustelle "
+              "zoomen (höchstens 5 km Kantenlänge).",
+    },
+    'crs_msg_geographique': {
+        'fr': "Le système de coordonnées {crs} est en degrés : longueurs, "
+              "pentes et cubatures seraient fausses. Choisissez un système en "
+              "mètres ({conseil} pour ce chantier).",
+        'en': "The coordinate system {crs} is in degrees: lengths, slopes and "
+              "volumes would be wrong. Choose a system in metres ({conseil} "
+              "for this site).",
+        'es': "El sistema de coordenadas {crs} está en grados: longitudes, "
+              "pendientes y cubicaciones serían erróneas. Elija un sistema en "
+              "metros ({conseil} para esta obra).",
+        'pt': "O sistema de coordenadas {crs} está em graus: comprimentos, "
+              "declives e volumes estariam errados. Escolha um sistema em "
+              "metros ({conseil} para esta obra).",
+        'de': "Das Koordinatensystem {crs} ist in Grad: Längen, Gefälle und "
+              "Massen wären falsch. Wählen Sie ein System in Metern "
+              "({conseil} für diese Baustelle).",
+    },
+    'crs_msg_invalide': {
+        'fr': "Aucun système de coordonnées valide n'est choisi.",
+        'en': "No valid coordinate system is selected.",
+        'es': "No se ha elegido ningún sistema de coordenadas válido.",
+        'pt': "Nenhum sistema de coordenadas válido foi escolhido.",
+        'de': "Es ist kein gültiges Koordinatensystem gewählt.",
+    },
+    'crs_msg_deforme': {
+        'fr': "Le système de coordonnées {crs} n'est pas adapté à ce chantier : "
+              "les longueurs y sont faussées de {ecart} %, et avec elles les "
+              "pentes, profils et cubatures. Système conseillé : {conseil}.",
+        'en': "The coordinate system {crs} does not suit this site: lengths "
+              "are off by {ecart}%, and so are slopes, profiles and volumes. "
+              "Recommended system: {conseil}.",
+        'es': "El sistema de coordenadas {crs} no es adecuado para esta obra: "
+              "las longitudes se falsean un {ecart} %, y con ellas pendientes, "
+              "perfiles y cubicaciones. Sistema recomendado: {conseil}.",
+        'pt': "O sistema de coordenadas {crs} não é adequado a esta obra: os "
+              "comprimentos são falseados em {ecart} %, e com eles declives, "
+              "perfis e volumes. Sistema recomendado: {conseil}.",
+        'de': "Das Koordinatensystem {crs} passt nicht zu dieser Baustelle: "
+              "Längen weichen um {ecart} % ab, ebenso Gefälle, Profile und "
+              "Massen. Empfohlenes System: {conseil}.",
+    },
+    'crs_msg_non_metrique': {
+        'fr': "Le système de coordonnées {crs} n'est pas en mètres (pieds, par "
+              "exemple) : CanaPlan calcule longueurs, pentes et cubatures en "
+              "mètres. Choisissez un système en mètres ({conseil} pour ce "
+              "chantier).",
+        'en': "The coordinate system {crs} is not in metres (feet, for "
+              "instance): CanaPlan computes lengths, slopes and volumes in "
+              "metres. Choose a system in metres ({conseil} for this site).",
+        'es': "El sistema de coordenadas {crs} no está en metros (pies, por "
+              "ejemplo): CanaPlan calcula longitudes, pendientes y "
+              "cubicaciones en metros. Elija un sistema en metros ({conseil} "
+              "para esta obra).",
+        'pt': "O sistema de coordenadas {crs} não está em metros (pés, por "
+              "exemplo): o CanaPlan calcula comprimentos, declives e volumes "
+              "em metros. Escolha um sistema em metros ({conseil} para esta "
+              "obra).",
+        'de': "Das Koordinatensystem {crs} ist nicht in Metern (z. B. Fuß): "
+              "CanaPlan rechnet Längen, Gefälle und Massen in Metern. Wählen "
+              "Sie ein System in Metern ({conseil} für diese Baustelle).",
+    },
+    'crs_msg_hors_domaine': {
+        'fr': "Le système de coordonnées {crs} n'est pas prévu pour la région "
+              "du chantier : les coordonnées et l'orientation du nord y sont "
+              "faussées, même si les longueurs restent proches. Système "
+              "conseillé : {conseil}.",
+        'en': "The coordinate system {crs} is not meant for the site's "
+              "region: coordinates and north orientation are distorted, even "
+              "if lengths stay close. Recommended system: {conseil}.",
+        'es': "El sistema de coordenadas {crs} no está previsto para la región "
+              "de la obra: las coordenadas y la orientación del norte se "
+              "falsean, aunque las longitudes sigan próximas. Sistema "
+              "recomendado: {conseil}.",
+        'pt': "O sistema de coordenadas {crs} não se destina à região da "
+              "obra: as coordenadas e a orientação do norte ficam falseadas, "
+              "mesmo que os comprimentos se mantenham próximos. Sistema "
+              "recomendado: {conseil}.",
+        'de': "Das Koordinatensystem {crs} ist nicht für die Region der "
+              "Baustelle vorgesehen: Koordinaten und Nordausrichtung sind "
+              "verfälscht, auch wenn die Längen nahe bleiben. Empfohlenes "
+              "System: {conseil}.",
+    },
+    # ── Avertissement d'usage ───────────────────────────────────────────
+    'avert_titre': {
+        'fr': "Avertissement", 'en': "Disclaimer", 'es': "Advertencia",
+        'pt': "Aviso", 'de': "Hinweis",
+    },
+    'avert_texte': {
+        'fr': "Les résultats produits par CanaPlan (métrés, cubatures, profils "
+              "en long, cotes, pentes) sont fournis à titre indicatif. Ils "
+              "doivent être vérifiés par l'utilisateur, par ses propres moyens, "
+              "et ne se substituent pas à une étude de conception complète "
+              "menée par un professionnel qualifié. L'auteur ne peut être tenu "
+              "responsable de l'usage qui en est fait.",
+        'en': "The results produced by CanaPlan (quantities, earthwork volumes, "
+              "longitudinal profiles, levels, slopes) are provided for "
+              "information only. They must be checked by the user, by their own "
+              "means, and do not replace a complete design study carried out by "
+              "a qualified professional. The author cannot be held liable for "
+              "the use made of them.",
+        'es': "Los resultados producidos por CanaPlan (mediciones, cubicaciones, "
+              "perfiles longitudinales, cotas, pendientes) se facilitan a título "
+              "indicativo. Deben ser verificados por el usuario, por sus propios "
+              "medios, y no sustituyen un estudio de diseño completo realizado "
+              "por un profesional cualificado. El autor no se hace responsable "
+              "del uso que se haga de ellos.",
+        'pt': "Os resultados produzidos pelo CanaPlan (medições, volumes de "
+              "escavação, perfis longitudinais, cotas, declives) são fornecidos "
+              "a título indicativo. Devem ser verificados pelo utilizador, pelos "
+              "seus próprios meios, e não substituem um estudo de projeto "
+              "completo realizado por um profissional qualificado. O autor não "
+              "pode ser responsabilizado pela utilização que deles seja feita.",
+        'de': "Die von CanaPlan erzeugten Ergebnisse (Mengen, Erdmassen, "
+              "Längsschnitte, Höhen, Gefälle) dienen nur zur Information. Sie "
+              "müssen vom Nutzer mit eigenen Mitteln geprüft werden und ersetzen "
+              "keine vollständige Planung durch eine qualifizierte Fachkraft. "
+              "Der Autor haftet nicht für ihre Verwendung.",
+    },
+    'avert_court': {
+        'fr': "Document indicatif — résultats à vérifier par vos propres moyens ; "
+              "ne se substitue pas à une étude complète.",
+        'en': "For information only — results to be checked by your own means; "
+              "does not replace a complete study.",
+        'es': "Documento indicativo — resultados que deben verificarse por sus "
+              "propios medios; no sustituye a un estudio completo.",
+        'pt': "Documento indicativo — resultados a verificar pelos seus próprios "
+              "meios; não substitui um estudo completo.",
+        'de': "Nur zur Information — Ergebnisse mit eigenen Mitteln prüfen; "
+              "ersetzt keine vollständige Planung.",
+    },
+    'avert_compris': {
+        'fr': "J'ai compris", 'en': "I understand", 'es': "Entendido",
+        'pt': "Compreendi", 'de': "Verstanden",
+    },
+    'avert_question': {
+        'fr': "Cliquez sur « J'ai compris » pour poursuivre. Ce message ne "
+              "s'affichera plus.",
+        'en': "Click “I understand” to continue. This message will not be "
+              "shown again.",
+        'es': "Pulse «Entendido» para continuar. Este mensaje no volverá a "
+              "mostrarse.",
+        'pt': "Clique em «Compreendi» para continuar. Esta mensagem não voltará "
+              "a ser mostrada.",
+        'de': "Klicken Sie auf „Verstanden“, um fortzufahren. Diese Meldung "
+              "wird nicht mehr angezeigt.",
+    },
+    'pt_sources': {
+        'fr': "Fonds : {sources}", 'en': "Basemaps: {sources}",
+        'es': "Fondos: {sources}", 'pt': "Fundos: {sources}",
+        'de': "Hintergrund: {sources}",
     },
 }

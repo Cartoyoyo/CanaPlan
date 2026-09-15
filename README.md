@@ -13,7 +13,7 @@
 **Plugin QGIS de dessin topologique de réseaux d'assainissement — EU / EP, du tracé terrain à la livraison StaR-Eau**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.40%2B%20%7C%204.x-green?logo=qgis&logoColor=white)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-2.0-blue)](#-changelog)
+[![Version](https://img.shields.io/badge/version-2.1-blue)](#-changelog)
 [![Qt](https://img.shields.io/badge/Qt-5%20%7C%206-brightgreen?logo=qt&logoColor=white)](https://qgis.org)
 [![StaR-Eau](https://img.shields.io/badge/StaR--Eau-V2024%20CNIG%2FASTEE-orange)](#-export-star-eau-cnig--astee-v2024)
 [![Langues](https://img.shields.io/badge/langues-FR%20%7C%20EN%20%7C%20ES%20%7C%20PT%20%7C%20DE-purple)](#-langues--languages)
@@ -30,6 +30,21 @@
 
 **CanaPlan** est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement **EU** (Eaux Usées) et **EP** (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement.
 
+> ### ⚠️ CanaPlan n'est **pas** un outil de saisie manuelle
+>
+> Il s'utilise de deux façons, **également complètes** : à la souris, et **par script**. Un chantier entier — création du projet, chargement des fonds, tracé du collecteur sur l'axe OSM de la voie, un branchement par habitation jusqu'à la limite de parcelle, terrain naturel relevé sur le MNT IGN, cotes, étiquettes, plan PDF — se joue **en un seul appel, sans aucun clic**.
+>
+> ```python
+> from CanaPlan.tools import api
+> api.aide()        # sommaire : verbes disponibles et recettes livrées
+> ```
+>
+> `api.aide()` est auto-descriptif : il rend les recettes, leurs paramètres requis et un exemple d'appel pour chacune. **C'est le seul point d'entrée à connaître** — depuis la console Python de QGIS, un script, un serveur MCP ou un agent. Voir [🤖 Pilotage par script](#-pilotage-par-script).
+
+> ### 🌍 En France et à l'international
+>
+> Un projet est **France** — Lambert 93, BAN, cadastre, orthophoto et MNT IGN, StaR-Eau — ou **International** : adresses et bâti **OpenStreetMap**, photo aérienne **Esri World Imagery**, système de coordonnées **UTM** proposé d'après l'adresse. Un garde-fou mesure, au chantier, l'écart des longueurs du système choisi et refuse les systèmes en degrés ou en pieds : laissé en Lambert 93, un projet à Abidjan allongeait toutes les longueurs de 25 % sans un message. Voir [🌍 Territoire France / International](#-territoire-france--international).
+
 La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle.
 
 Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard **StaR-Eau V2024** (CNIG / ASTEE).
@@ -45,6 +60,8 @@ Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne 
 - [📥 Import Star-DT / StaR-Elec](#-import-star-dt--star-elec-dt-dict)
 - [📤 Export StaR-Eau](#-export-star-eau-cnig--astee-v2024)
 - [📦 Format de projet .bet](#-format-de-projet-bet)
+- [🌍 Territoire France / International](#-territoire-france--international)
+- [📌 Avertissement d'usage](#-avertissement-dusage)
 - [🤖 Pilotage par script](#-pilotage-par-script)
 - [🚀 Installation](#-installation)
 - [🌳 Structure du projet](#-structure-du-projet)
@@ -235,13 +252,15 @@ etiquettes*, et suit le projet `.bet`.
   la console Python, un script ou un agent — sans ouvrir de fenetre, avec des
   tolerances de snap en metres et des retours serialisables.
 - **Recettes** : une procedure de travail rangee dans un fichier JSON, rejouee
-  en un appel. Trois livrees, et `enregistrer_recette()` pour les siennes.
+  en un appel. Huit livrees (dont trois blocs d'assemblage), publiees aussi
+  dans la **boite a outils Processing** (fournisseur `canaplan`), et
+  `enregistrer_recette()` pour les siennes.
 
 ### 💾 Gestion de projet
 
 | Outil | Description |
 |---|---|
-| **Creer un projet avec l'assistant** | Assistant en 4 etapes, navigables librement (Precedent / Suivant) : (1) recherche d'adresse **BAN** avec suggestions au fil de la frappe et mini-carte OSM pour situer et ajuster la position du projet ; (2) choix des fonds de plan a charger (OSM et Ortho coches par defaut, BAN / Noms de voie / PCI Bati / PCI Parcelles en option) ; (3) configuration rapide — reseau par defaut, cubature, remblai — en accordeons repliables, memes reglages que le dialogue *Configuration rapide* ; (4) recapitulatif puis creation : applique l'etendue choisie, charge les fonds de plan retenus et enregistre le projet. Accessible depuis le dialogue d'accueil (« Debuter avec l'assistant ») ou directement en tete du menu *Projet*. |
+| **Creer un projet avec l'assistant** | Assistant en 4 etapes, navigables librement (Precedent / Suivant) : (1) choix du **territoire** (France / International), recherche d'adresse avec suggestions au fil de la frappe (**BAN** en France, **OpenStreetMap** a l'international, ou le systeme de coordonnees est propose d'apres l'adresse — zone UTM — puis controle) et mini-carte OSM pour situer et ajuster la position du projet ; (2) choix des fonds de plan a charger (France : OSM et Ortho coches par defaut, BAN / Noms de voie / PCI Bati / PCI Parcelles en option ; International : OSM, photo aerienne Esri et bati OSM, tous coches) ; (3) configuration rapide — reseau par defaut, cubature, remblai — en accordeons repliables, memes reglages que le dialogue *Configuration rapide* ; (4) recapitulatif puis creation : applique l'etendue choisie, charge les fonds de plan retenus et enregistre le projet. Accessible depuis le dialogue d'accueil (« Debuter avec l'assistant ») ou directement en tete du menu *Projet*. |
 | **Enregistrer** | Sauvegarde toutes les couches EU/EP dans une archive `.bet` (ZIP contenant un GeoPackage + metadonnees JSON). |
 | **Enregistrer sous** | Choisit un dossier et un nom, cree un fichier `.bet`. |
 | **Charger un projet** | Charge un fichier `.bet` (v2 ZIP ou v1 JSON legacy) et restaure les couches, etiquettes et visibilite. |
@@ -258,11 +277,21 @@ etiquettes*, et suit le projet `.bet`.
 Les 4 étapes de l'assistant (menu *Projet ▸ Créer un projet avec l'assistant*,
 ou bouton « Débuter avec l'assistant » du dialogue d'accueil) :
 
-**1. Localiser le projet** — recherche d'adresse BAN avec suggestions au fil
-de la frappe, mini-carte OSM pour ajuster la position exacte du projet.
+**1. Localiser le projet** — choix du territoire, recherche d'adresse avec
+suggestions au fil de la frappe (BAN en France), mini-carte OSM pour ajuster
+la position exacte du projet.
 
 <div align="center">
   <img src="images/Assistant_etape1.png" alt="Étape 1 — Localiser le projet">
+</div>
+
+En **International**, l'adresse est cherchée dans OpenStreetMap et le système
+de coordonnées proposé est la zone UTM de l'adresse — ici Dakar, EPSG:32628 —,
+remplaçable par un système national en mètres. Il est contrôlé avant de passer
+à l'étape suivante.
+
+<div align="center">
+  <img src="images/Assistant_etape1_international.png" alt="Étape 1 — Territoire International, Dakar">
 </div>
 
 **2. Fonds de plan** — choix des fonds à charger dans le nouveau projet (OSM
@@ -271,6 +300,14 @@ PCI Parcelles en option).
 
 <div align="center">
   <img src="images/Assistant_etape2.png" alt="Étape 2 — Fonds de plan">
+</div>
+
+En International, trois fonds : OpenStreetMap, photo aérienne Esri World
+Imagery et bâti OpenStreetMap, coché d'office puisque les branchements
+automatiques en ont besoin.
+
+<div align="center">
+  <img src="images/Assistant_etape2_international.png" alt="Étape 2 — Fonds de plan International">
 </div>
 
 **3. Configuration rapide** — trois accordéons repliables (mêmes réglages que
@@ -303,6 +340,26 @@ coupe de remblai) avant de cliquer sur « Créer ».
 
 <div align="center">
   <img src="images/Assistant_etape4.png" alt="Étape 4 — Récapitulatif">
+</div>
+
+#### 🌍 Exemple international — Dakar
+
+Collecteur EU PVC 200 rue de Fatick, quartier Point E (Dakar, Sénégal), joué
+entièrement par script : projet International en UTM 28N (EPSG:32628, écart de
+longueur **0,047 %** au chantier), bâti OpenStreetMap, collecteur posé sur
+l'axe OSM de la rue — 8 regards, 311 m — et un branchement par bâtiment
+riverain, piqué au milieu de son front de rue.
+
+```python
+api.nouveau_projet(adresse="Rue de Kaolack, Dakar", territoire="international")
+api.attendre_fonds(["OSM - Bati"])
+axe = api.axe_de_rue("Rue de Fatick", commune="Dakar")
+api.tracer_conduite("EU", axe=axe, entraxe_max=50, diametre=200, materiau="PVC")
+api.creer_branchements("EU", distance_max=15, diametre=160, materiau="PVC")
+```
+
+<div align="center">
+  <img src="images/exemple_dakar.png" alt="Réseau EU rue de Fatick, Dakar">
 </div>
 
 #### ✏️ Dessin de réseau
@@ -486,13 +543,23 @@ son cadre délimite exactement la zone que montrera la planche.
 
 | Outil | Description |
 |---|---|
-| **Mise en place fond de projet** | Charge les 6 fonds de carte (BAN, Noms de rue, PCI Bati, PCI Parcelles, OSM Desature, Ortho IGN) sur l'emprise courante et configure le projet (fond blanc, SCR). |
+| **Mise en place fond de projet** | France : charge les 6 fonds de carte (BAN, Noms de rue, PCI Bati, PCI Parcelles, OSM Desature, Ortho IGN) sur l'emprise courante et configure le projet (fond blanc, SCR). International : OpenStreetMap, photo aerienne Esri et bati OpenStreetMap. |
 | **BAN Adresses (vecteur)** | Charge les adresses de la BAN sur l'emprise courante. |
 | **Noms de rue BD TOPO** | Charge les voies nominees de la BD TOPO sur l'emprise courante. |
 | **PCI Vecteur Parcelles** | Charge les parcelles cadastrales (Parcellaire Express IGN) sur l'emprise courante. |
 | **PCI Vecteur Bati** | Charge les batiments (BD TOPO) sur l'emprise courante. |
 | **Ortho IGN (BD ORTHO nationale)** | Ajoute le flux d'orthophotographie BD ORTHO de l'IGN, disponible sur toute la France (remplace l'ancien fond regional CRAIG limite a un millesime). |
 | **OSM Desature** | Ajoute un fond OpenStreetMap desature. |
+| **OpenStreetMap (monde)** | Fond OpenStreetMap standard, disponible partout. |
+| **Photo aerienne Esri (monde)** | Esri World Imagery, affichee a l'echelle du chantier. |
+| **Bati OpenStreetMap (monde)** | Batiments OSM (Overpass) sur l'emprise de la carte, ecrits dans le systeme du projet : c'est le bati des branchements automatiques hors de France. |
+
+Le menu *Fond de plan* est decoupe en deux sections, **France** et
+**International**. La section International est proposee dans tous les
+projets ; dans un projet International, la section France (IGN, BAN, cadastre)
+est masquee, comme l'import Star-DT et l'export StaR-Eau. Les mentions de
+source d'OpenStreetMap et d'Esri sont imprimees sur les plans PDF qui montrent
+ces fonds.
 
 ---
 
@@ -871,7 +938,7 @@ destinataire exige un import PostGIS strict ou la colonne est `NOT NULL`.
 ## 📦 Format de projet .bet
 
 Le fichier `.bet` est une archive ZIP contenant :
-- `metadata.json` — version, CRS, etat des etiquettes, visibilite des couches
+- `metadata.json` — version, territoire (France / International), CRS, etat des etiquettes, visibilite des couches
 - `data.gpkg` — toutes les couches EU/EP au format GeoPackage
 
 Une rotation de sauvegardes est effectuee automatiquement : `.bet` → `.bak1` → `.bak2`.
@@ -880,12 +947,79 @@ La compatibilite ascendante est assuree avec le format v1 (JSON brut + GPKG exte
 
 ---
 
+## 🌍 Territoire France / International
+
+CanaPlan est né en France et s'appuyait sur ses services publics sans le dire.
+Chaque projet porte désormais un **territoire**, choisi à la première étape de
+l'assistant ou par `api.territoire()`, enregistré dans le `.bet` et rétabli à
+l'ouverture. Un projet d'avant la 2.1 est un projet France : rien n'y change.
+
+| | France | International |
+|---|---|---|
+| Système de coordonnées | Lambert 93 (EPSG:2154) | Zone UTM proposée d'après l'adresse, ou système national en mètres |
+| Recherche d'adresse | Base Adresse Nationale | OpenStreetMap — Photon, repli Nominatim |
+| Plan de fond | OSM désaturé, orthophoto IGN | OpenStreetMap, photo aérienne Esri World Imagery |
+| Bâti des branchements automatiques | BD TOPO (« PCI - Bati ») | OpenStreetMap par Overpass (« OSM - Bati ») |
+| Parcelles | Parcellaire Express IGN | — : le tabouret est posé sur la façade |
+| TN auto sur MNT | LiDAR HD, repli RGE ALTI | — : les MNT mondiaux (30 m) ne calent pas un fil d'eau |
+| Import Star-DT, export StaR-Eau | ✔ | — |
+
+**Garde-fou sur le système de coordonnées.** Un système inadapté ne se voit pas
+à l'écran : le plan se dessine juste, mais longueurs, pentes, cubatures et
+profils sont faux, sans message. Laissé en Lambert 93, un projet allonge les
+longueurs de **+14,7 % à Dakar**, **+25,5 % à Abidjan** et **+41,6 % à
+Kinshasa**. CanaPlan compare donc, au chantier, la longueur mesurée dans le
+système du projet à la distance géodésique :
+
+- système en degrés, en pieds (State Plane américain) ou invalide → **refusé** ;
+- écart de longueur supérieur à **1 %** → signalé, avec la zone UTM conseillée ;
+- chantier hors du domaine d'emploi du système → signalé. Cas distinct du
+  précédent : Lambert 93 à Boulder (Colorado) ne déforme les longueurs que de
+  0,5 %, mais le nord y est tourné de près de 80°.
+
+Le contrôle joue à la création du projet, à l'ouverture d'un `.bet` et dans
+`api.etat()`. Essais menés à Dakar, São Paulo, Boulder, Toronto, Porto, Madrid,
+Rome, Berlin, Londres, Dublin, Zurich, Amsterdam et Bruxelles, en UTM comme
+dans les systèmes nationaux (BNG, ITM, LV95, RD New, Lambert belge, PT-TM06,
+MTM, Gauss-Krüger) : écarts tous inférieurs à 0,05 %.
+
+Les recettes écrites pour la France tournent à l'international sans être
+réécrites : « PCI - Bati » y désigne le bâti OSM, et l'étape de TN sur MNT se
+désactive par son paramètre (`tn_auto=False`).
+
+---
+
+## 📌 Avertissement d'usage
+
+Métrés, cubatures, profils, cotes et pentes produits par CanaPlan sont
+**indicatifs** : ils se vérifient par les moyens de l'utilisateur et ne se
+substituent pas à une étude de conception complète. L'avertissement apparaît :
+
+- dans une fenêtre, à la **première utilisation d'une fonction** — pas au
+  lancement de QGIS. « J'ai compris » la ferme pour de bon ; refusée, la
+  fonction ne se lance pas ;
+- dans **À propos** ;
+- dans les **rapports de cubature** : fenêtre de résultats, PDF (encadré et
+  pied de page), classeur Excel, dernière ligne du CSV.
+
+Plans, profils et coupes, pièces graphiques, n'en portent pas. Le pilotage par
+script n'est jamais bloqué par la fenêtre.
+
+<div align="center">
+  <img src="images/avertissement.png" alt="Avertissement d'usage">
+</div>
+
+---
+
 ## 🤖 Pilotage par script
 
-Les outils de CanaPlan sont faits pour une souris : des `QgsMapTool` nourris par
-des clics, des `QDialog` qui rendent des dictionnaires. Le module
-**`tools/api.py`** les expose en verbes appelables depuis la console Python de
-QGIS, un script, un serveur MCP ou un agent.
+**CanaPlan se pilote entièrement par script — un chantier complet sans un seul
+clic.** Les outils ont d'abord été écrits pour une souris (des `QgsMapTool`
+nourris par des clics, des `QDialog` qui rendent des dictionnaires) ; c'est leur
+origine, pas leur limite. Le module **`tools/api.py`** les expose en verbes
+appelables depuis la console Python de QGIS, un script, un serveur MCP ou un
+agent — et les **recettes** enchaînent ces verbes en procédures complètes.
+Passer par la souris n'est jamais une obligation.
 
 ```python
 from CanaPlan.tools import api
@@ -931,6 +1065,9 @@ api.recette("collecteur_de_rue",
 | Recette livrée | Ce qu'elle fait |
 |---|---|
 | `collecteur_de_rue` | Projet à une adresse, collecteur sur l'axe OSM, branchements, numérotation, cotes, étiquettes, enregistrement, plan PDF |
+| `reseau_de_voie` | Réseau sur l'axe OSM d'une voie, un branchement par bâtiment riverain — piqué au milieu de son front de rue, arrêté en limite de parcelle —, TN sur MNT IGN, cotes facultatives |
+| `coter_mnt` | Cote un réseau déjà tracé avec le TN relevé sur le MNT IGN ; seules pente et profondeurs sont saisies |
+| `projet_sur_voie`, `tracer_reseau`, `habiller` | Blocs d'assemblage des recettes ci-dessus — non publiés dans Processing |
 | `recaler_cotes` | Renumérote et repose TN, profondeurs et fils d'eau sur un réseau déjà tracé, puis contrôle |
 | `livraison` | Styles, étiquettes, vérification, enregistrement, export PDF complet |
 
@@ -944,6 +1081,37 @@ Les cotes de chantier — TN, pente, profondeurs — n'ont volontairement **aucu
 valeur par défaut** : elles changent à chaque affaire, et l'appel qui les omet
 est refusé avant la première étape. `enregistrer_recette()` range une séquence
 éprouvée dans le profil QGIS, sans toucher au code du plugin.
+
+Le sens d'écoulement vient de `voie_de_raccordement`, l'exutoire — jamais du
+terrain : un collecteur remonte sous une rue qui descend dès que l'exutoire est
+en haut. Il se précise avec sa commune (« Rue de Venise, Vichy ») ; sans
+commune, une homonyme lointaine est résolue et l'appel est refusé.
+
+### 🧰 Recettes dans la boîte à outils Processing
+
+Les recettes sont aussi publiées dans la **boîte à outils Processing**, sous le
+fournisseur `canaplan` (groupes *Recettes livrées* et *Recettes personnelles*),
+chacune avec un formulaire généré depuis ses paramètres et son aide. C'est le
+catalogue qu'un agent ou un serveur MCP consulte en premier :
+`execute_processing("canaplan:reseau_de_voie", …)` joue un chantier sans rien
+savoir de l'API. Les algorithmes tournent sur le fil principal de QGIS.
+
+<div align="center">
+  <img src="images/processing_recette.png" alt="Recette reseau_de_voie dans la boîte à outils Processing">
+</div>
+
+### 🌍 À l'international
+
+```python
+api.territoire("international")              # ou nouveau_projet(territoire=…)
+api.nouveau_projet(adresse="Rue de Kaolack, Dakar", crs="EPSG:32628")
+# → {"territoire": "international", "crs": "EPSG:32628", "deformation_pct": 0.047, "avertissements": [], …}
+```
+
+`crs` accepte un système national ; un système en degrés ou en pieds est
+refusé, un système qui déforme les longueurs au chantier est rendu dans
+`avertissements`. `api.territoire()` sans argument rend le territoire, le
+système et son diagnostic.
 
 > Référence complète des verbes, de leurs arguments et de leurs retours :
 > **[API.md](API.md)**.
@@ -1038,6 +1206,8 @@ From field survey to delivery, one tool covers the whole chain: Star-DT / StaR-E
 - **Multi-sheet printing:** place sheets on the map, aim each one with the mouse, then export a PDF with an optional overview page, or a DXF 2018 plan.
 - **Scripting API** (`tools/api.py`): every tool as a callable verb from the Python console, a script or an agent — no dialogs, snapping tolerances in metres, serialisable results. Reusable procedures are declared as JSON **recipes** and replayed in a single call. See [API.md](API.md).
 - **StaR-Eau V2024 export** to GeoPackage, with a compliance check that lists blocking issues before writing.
+- **France / International territory:** outside France, addresses and buildings come from OpenStreetMap, aerial imagery from Esri World Imagery, and a UTM zone is proposed from the address. A guard measures the chosen CRS's length distortion on site and rejects degree- or foot-based systems — left in Lambert 93, a project in Abidjan stretched every length by 25 %.
+- **Recipes in the Processing Toolbox** (`canaplan` provider), and a usage disclaimer shown on first use and in trench-volume reports.
 - **Star-DT / StaR-Elec (DT-DICT) import** and DXF/DWG import into GeoPackage.
 
 ### 📋 Requirements
@@ -1107,6 +1277,7 @@ Del levantamiento de campo a la entrega, una sola herramienta cubre toda la cade
 - **Etiquetas** con tamaño fijo o adaptado a la escala de impresión, y umbral de visualización.
 - **Impresión multihoja** en PDF con plano de conjunto, y exportación DXF 2018.
 - **Exportación StaR-Eau V2024** a GeoPackage, con control de conformidad previo.
+- **Territorio Francia / Internacional:** fuera de Francia, direcciones y edificios de OpenStreetMap, ortofoto Esri World Imagery y zona UTM propuesta a partir de la dirección, con control de la deformación de las longitudes.
 
 ### 🚀 Instalación
 
@@ -1141,6 +1312,7 @@ Do levantamento de campo à entrega, uma só ferramenta cobre toda a cadeia: imp
 - **Rótulos** com tamanho fixo ou adaptado à escala de impressão, e limiar de exibição.
 - **Impressão multifolha** em PDF com planta de conjunto, e exportação DXF 2018.
 - **Exportação StaR-Eau V2024** para GeoPackage, com controlo de conformidade prévio.
+- **Território França / Internacional:** fora de França, moradas e edifícios do OpenStreetMap, ortofoto Esri World Imagery e zona UTM proposta a partir da morada, com controlo da deformação dos comprimentos.
 
 ### 🚀 Instalação
 
@@ -1175,6 +1347,7 @@ Von der Feldaufnahme bis zur Übergabe deckt ein einziges Werkzeug die gesamte K
 - **Beschriftungen** mit fester Größe oder an den Druckmaßstab angepasst, mit Anzeigeschwelle.
 - **Mehrblattdruck** als PDF mit Übersichtsplan sowie DXF-2018-Export.
 - **StaR-Eau-V2024-Export** ins GeoPackage, mit vorheriger Konformitätsprüfung.
+- **Gebiet Frankreich / International:** außerhalb Frankreichs Adressen und Gebäude aus OpenStreetMap, Luftbild Esri World Imagery und eine aus der Adresse vorgeschlagene UTM-Zone, mit Prüfung der Längenverzerrung.
 
 ### 🚀 Installation
 
@@ -1218,7 +1391,7 @@ CanaPlan/
 │   ├── dependances_dialog.py       # Proposition d'installation des librairies manquantes (ezdxf, pypdf)
 │   ├── project_wizard_dialog.py    # Assistant de creation de projet (adresse, fonds de plan, config rapide, recap)
 │   ├── quick_config_widgets.py     # Widgets Reseau/Cubature/Remblai partages entre ConfigDialog et l'assistant
-│   ├── ban_search_widget.py        # Barre de recherche d'adresse BAN avec suggestions
+│   ├── ban_search_widget.py        # Barre de recherche d'adresse avec suggestions (BAN en France, Photon/OSM ailleurs)
 │   ├── star_dt_dialog.py           # Dialogue d'import GML Star-DT / StaR-Elec (multi-fichiers + drag & drop)
 │   ├── stareau_export_dialog.py    # Dialogue d'export StaR-Eau (5 onglets + controle)
 │   ├── about_dialog.py             # Dialogue « A propos » (lit metadata.txt)
@@ -1230,6 +1403,10 @@ CanaPlan/
 │   ├── errlog.py                   # Journal QGIS onglet CanaPlan, plafonne (erreurs jusqu'ici avalees)
 │   ├── dependances.py              # Installation a la demande dans libs/ : ezdxf/fontTools/pyparsing (DXF), pypdf (PDF complet)
 │   ├── fonds_plan.py               # Chargement des fonds de plan (BAN, PCI, ortho IGN, OSM)
+│   ├── territoire.py               # Territoire France / International, systeme de coordonnees, controle de deformation
+│   ├── osm_services.py             # Recherche d'adresse Photon / Nominatim, bati OSM (Overpass) en tache de fond
+│   ├── avertissement.py            # Avertissement d'usage : fenetre a la premiere utilisation, mentions des rapports
+│   ├── processing_provider.py      # Recettes publiees dans la boite a outils Processing (fournisseur canaplan)
 │   ├── draw_conduite_tool.py       # Trace des conduites
 │   ├── draw_branchement_tool.py    # Trace des branchements
 │   ├── insert_regard_tool.py       # Insertion de regard sur conduite
@@ -1275,6 +1452,7 @@ CanaPlan/
 
 | Version | Notes |
 |---------|-------|
+| **2.1** | **Territoire International** : projets hors de France avec adresses et bâti OpenStreetMap, photo aérienne Esri et système UTM proposé, sous garde-fou de déformation des longueurs — **avertissement d'usage** — **recettes dans la boîte à outils Processing** — branchements automatiques centrés sur le front de rue et arrêtés en limite de parcelle — sens d'écoulement lu sur l'exutoire, plus sur le terrain |
 | **2.0** | **TN auto (MNT IGN)** : remplissage du terrain naturel des regards et tabourets depuis le LiDAR HD (repli RGE ALTI), avec aperçu avant écriture et rapport CSV de traçabilité — cinq nouvelles **recettes** de pilotage par script (`coter_mnt`, `habiller`, `projet_sur_voie`, `reseau_de_voie`, `tracer_reseau`) — correction d'un plantage à la création de couche sur un projet neuf en CRS géographique — la fenêtre de résultats Cubature ne s'accumule plus d'un calcul à l'autre — icône du plugin dans le menu Extensions |
 | **1.9** | **Pilotage par script** (`tools/api.py`) et **recettes** rejouables — numérotation des planches suivant le collecteur, de l'aval vers l'amont — taille des étiquettes en millimètres de papier — requêtes BAN et Overpass par la pile réseau de QGIS |
 | **1.8** | Compatibilité **QGIS 4 / Qt 6** — bouton **PDF complet** dans la fenêtre d'export — profils en long toujours orientés regard le plus profond à gauche — seuil de dézoom des étiquettes déduit de l'échelle cible |
@@ -1291,6 +1469,48 @@ CanaPlan/
 
 <details>
 <summary>Détail complet des versions</summary>
+
+### 2.1
+
+- **Territoire France / International.** Choix du territoire à la première
+  étape de l'assistant, porté par le projet et par le `.bet`. À
+  l'international : recherche d'adresse OpenStreetMap (Photon, repli
+  Nominatim), fond OpenStreetMap, photo aérienne Esri World Imagery, bâti
+  OpenStreetMap téléchargé par Overpass en tâche de fond, zone UTM proposée
+  d'après l'adresse. Les services propres à la France (BAN, IGN, cadastre, TN
+  auto, StaR-Eau, Star-DT) y sont masqués. Lambert 93 n'est plus imposé nulle
+  part : couches, axes OSM et adresses sont exprimés dans le système du projet.
+- **Garde-fou du système de coordonnées.** Écart de longueur mesuré au
+  chantier contre la distance géodésique : refus des systèmes en degrés, en
+  pieds ou invalides ; signalement au-delà de 1 % d'écart ou hors du domaine
+  d'emploi du système — à la création, à l'ouverture et dans `api.etat()`.
+- **Fond de plan en sections France / International**, dans le menu comme
+  dans le panneau ; les fonds du monde sont proposés dans tous les projets.
+  Mentions de source OpenStreetMap / Esri imprimées sur les plans PDF.
+- **Avertissement d'usage** : fenêtre à la première utilisation d'une
+  fonction, texte dans À propos et dans les rapports de cubature (fenêtre, PDF,
+  Excel, CSV), en cinq langues.
+- **Recettes publiées dans la boîte à outils Processing** (fournisseur
+  `canaplan`), formulaire et aide compris ; les blocs d'assemblage n'y sont pas.
+- **Pilotage par script.** `api.territoire()` ; `nouveau_projet(territoire,
+  crs)` ; `adresse()` et `voie()` passent par OpenStreetMap à l'international.
+  `creer_branchements` pique chaque branchement au milieu du front de rue de
+  son bâtiment et l'arrête en limite de parcelle (`couche_parcelles`) : deux
+  mitoyens ne se superposent plus, un bâtiment sans front de rue est écarté
+  (`front_min`) et rendu dans `batis_ecartes`, les piquages s'écartent entre eux
+  et des regards (`ecart_min`, `garde_regard`). Zéro branchement n'est plus
+  muet : `avertissements` dit si le bâti ne couvre pas le réseau ou conseille
+  un `distance_max`.
+- **Sens d'écoulement.** `extremites` s'oriente sur l'exutoire
+  (`voie_de_raccordement`), plus sur le TN ; sans exutoire, le nord fait
+  l'amont par convention.
+- **Corrections.** Numérotation des tabourets le long de l'abscisse depuis le
+  regard de départ, et non plus selon le sens de numérisation des conduites ;
+  un tabouret n'est plus renommé deux fois quand deux branchements arrivent au
+  même point. Géocodage Photon en deux temps (lieu, puis rue autour de lui),
+  pour ne plus confondre Porto et Porto Seguro, ni London et Londres. Miroir
+  Overpass suisse retiré (il rendait vide hors de Suisse), second tour de
+  miroirs quand tous flanchent.
 
 ### 2.0
 

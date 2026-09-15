@@ -1,6 +1,6 @@
 {
   "nom": "coter_mnt",
-  "resume": "Cote un réseau déjà tracé et numéroté en prenant le terrain naturel sur le MNT IGN (LiDAR HD, repli RGE ALTI) au lieu d'une valeur unique saisie. Remplace le `tn` plat des recettes `reseau_de_voie` et `recaler_cotes` : chaque regard et chaque tabouret reçoit son TN mesuré, la source est rendue ouvrage par ouvrage. Seules la pente et les profondeurs restent des choix de chantier. `voie_de_raccordement` désigne l'exutoire et fixe l'extrémité aval, sur laquelle l'ancrage est posé ; vide, le nord fait l'amont.",
+  "resume": "Cote un réseau déjà tracé et numéroté en prenant le terrain naturel sur le MNT IGN (LiDAR HD, repli RGE ALTI) au lieu d'une valeur unique saisie. Remplace le `tn` plat des recettes `reseau_de_voie` et `recaler_cotes` : chaque regard et chaque tabouret reçoit son TN mesuré, la source est rendue ouvrage par ouvrage. Seules la pente et les profondeurs restent des choix de chantier. `voie_de_raccordement` désigne l'exutoire et fixe l'extrémité aval, sur laquelle l'ancrage est posé. LE PRÉCISER AVEC SA COMMUNE (« Rue de Venise, Vichy ») : sans commune, une homonyme lointaine est résolue et l'appel est refusé plutôt que d'orienter au hasard. Le sens d'écoulement est lu sur la numérotation (REU01 = amont), jamais sur le TN. Vide, le nord fait l'amont par convention.",
   "parametres": {
     "reseau": "EU",
     "voie_de_raccordement": "",

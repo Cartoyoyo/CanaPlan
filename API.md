@@ -70,6 +70,32 @@ une géométrie d'axe pour retourner un réseau.
 **R4 — Les fonds WFS sont asynchrones.**
 `fonds()` rend la main avant que les couches existent. Toujours
 `attendre_fonds(["PCI - Bati"])` avant tout appel qui les lit.
+À l'international, le même appel attend « OSM - Bati » : les noms français
+sont traduits vers le territoire du projet.
+
+**R4 bis — Le territoire décide des services et du système de coordonnées.**
+`territoire()` le lit ; `territoire("international")` le fixe pour le projet
+ouvert ET pour le prochain `nouveau_projet()`. France : Lambert 93, BAN, fonds
+IGN, cadastre, `tn_mnt`, StaR-Eau, Star-DT. International : système projeté du
+chantier (zone UTM par défaut), Photon/Nominatim, OSM, Esri World Imagery, bâti
+OSM ; pas de parcelles (tabouret sur la façade), et `tn_mnt`,
+`controle_stareau`, `exporter_stareau`, `importer_star_dt` lèvent.
+Contrôler `etat()["crs"]["ok"]` : un système qui déforme les longueurs de plus
+de 1 % au chantier fausse pentes, profils et cubatures sans rien afficher.
+Motifs du diagnostic : `crs_invalide`, `crs_geographique`, `crs_non_metrique`
+(bloquants — un State Plane en pieds est refusé par `nouveau_projet`),
+`crs_deforme` (> 1 %), `crs_hors_domaine` (chantier hors du domaine d'emploi :
+Lambert 93 au Colorado ne déforme que de 0,5 %, mais le nord y tourne de ~80°).
+
+**R4 ter — Le bâti se charge sur l'emprise de la CARTE, pas du réseau.**
+`nouveau_projet` le télécharge autour de l'adresse ; sur une voie longue,
+`axe_de_rue` peut retenir un tronçon éloigné. `creer_branchements` le signale
+dans `avertissements` (0 bâtiment à portée) : cadrer sur le réseau, rejouer
+`fonds("pci_bati")`, attendre la fin du téléchargement, relancer.
+Même rubrique quand les façades sont juste au-delà de `distance_max` (rues
+larges, fréquentes hors de France) : le message compte les bâtiments entre
+`distance_max` et le double, et donne la valeur à rejouer (Berlin : 0
+branchement à 15 m, « Relancer avec distance_max=18 », 51 branchements).
 
 **R5 — Un `attendu` sur chaque étape qui peut échouer en silence.**
 Cibles usuelles : `echecs` vide, `conduites_en_contre_pente` vide, `erreurs`
@@ -207,27 +233,41 @@ traite PAS les suppressions différées.
 
 | Fonction | Rôle |
 |---|---|
-| `adresse(recherche)` | Géocodage BAN : label, score, INSEE, lon/lat, x/y L93. |
-| `voie(recherche, commune=None, insee=None, seuil=0.55)` | Nom de voie officiel : `nom`, `label`, `insee`, `score_ban`, `similitude`, `confiance`, `verdict` (sure/probable/douteuse). Lève sous `seuil`. |
-| `axe_de_rue(nom_voie, commune=None, insee=None, rafraichir=False, rayon=1500.0, detail=False)` | Axe de chaussée OSM en L93 (`QgsGeometry` ligne). |
+| `adresse(recherche)` | Géocodage : label, score, INSEE, lon/lat, x/y dans le système du projet. BAN en France ; Photon puis Nominatim à l'international (`score` et `insee` None, `nom_voie`, `pays`, `service`). |
+| `voie(recherche, commune=None, insee=None, seuil=0.55)` | Nom de voie officiel : `nom`, `label`, `insee`, `score_ban`, `similitude`, `confiance`, `verdict` (sure/probable/douteuse). Lève sous `seuil`. Hors de France, OSM ne note pas ses réponses : `score_ban` vaut la similitude. |
+| `axe_de_rue(nom_voie, commune=None, insee=None, rafraichir=False, rayon=1500.0, detail=False)` | Axe de chaussée OSM dans le système du projet (`QgsGeometry` ligne). |
 
 L'axe OSM EST l'axe de la voie : une conduite posée dessus est centrée par
 construction. Coût 2 à 4 s, MIS EN CACHE pour la session sur la clé
-(voie, commune, insee) — le rappeler est gratuit. `rafraichir=True` force.
+(voie, commune, insee, et système de coordonnées hors Lambert 93) — le
+rappeler est gratuit. `rafraichir=True` force.
 Overpass refuse les requêtes sans `User-Agent` (HTTP 406) ; l'API en fournit un.
+Miroirs : overpass-api.de, maps.mail.ru, overpass.kumi.systems — tous à
+couverture mondiale (overpass.osm.ch, qui ne sert que la Suisse, est retiré).
 
 ### 3.3 Projet
 
 | Fonction | Rôle |
 |---|---|
-| `nouveau_projet(adresse=None, dossier=None, nom=None, fonds=None, demi_emprise=200.0)` | Crée un `.bet`. |
-| `charger(chemin)` | Charge un `.bet`, sans modale. |
+| `nouveau_projet(adresse=None, dossier=None, nom=None, fonds=None, demi_emprise=200.0, territoire=None, crs=None)` | Crée un `.bet`. Rend aussi `territoire`, `crs`, `deformation_pct`, `avertissements`. |
+| `territoire(nom=None)` | Lit ou fixe le territoire (`france` / `international`) ; rend le système du projet et son diagnostic au chantier. |
+| `charger(chemin)` | Charge un `.bet`, sans modale. Rétablit son territoire et son système de coordonnées. |
 | `enregistrer(chemin=None)` | Enregistre, sans barre de progression. Erreurs dans `erreurs`. |
 | `enregistrer_sous(chemin)` | — |
 | `projets_recents()` | Derniers `.bet`, projet courant, dossier. |
 
 `nouveau_projet` charge PAR DÉFAUT tous les fonds, dont le bâti cadastral que
 l'assistant laisse décoché alors qu'il est indispensable aux branchements.
+
+`territoire` absent : le dernier choisi (assistant ou `territoire()`), France à
+défaut. `crs` absent : Lambert 93 en France ; à l'international, la zone UTM de
+`adresse` — l'un des deux est alors obligatoire. Un système en degrés lève ; un
+système qui déforme les longueurs de plus de 1 % au chantier passe, signalé
+dans `avertissements`.
+
+    api.nouveau_projet(adresse="Rue Carnot, Dakar", territoire="international",
+                       dossier="~/Documents/CanaPlan", nom="Dakar_Plateau")
+    # -> crs EPSG:32628, deformation_pct 0.045
 
 `enregistrer` passe par `_do_save(silencieux=True)` : pas de `QProgressDialog`,
 donc pas de `processEvents`. Ce n'est pas un confort — chaque `processEvents`
@@ -244,13 +284,19 @@ sauvegarde de quelques secondes.
 Clés : `osm`, `ortho`, `ban`, `noms_voie`, `pci_bati`, `pci_parcelles`.
 Voir R4 : les quatre fonds vectoriels passent par un WFS asynchrone (`QgsTask`).
 
+À l'international : `osm` = OpenStreetMap, `ortho` = Esri World Imagery,
+`pci_bati` (alias `bati`) = bâti OpenStreetMap par Overpass, asynchrone, écrit
+dans le système du projet (couche « OSM - Bati »). Emprise limitée à ~5 km de
+côté. `ban`, `noms_voie`, `pci_parcelles` sans effet. Les plans PDF portent la
+mention des sources OSM / Esri.
+
 ### 3.5 Dessin
 
 | Fonction | Rôle |
 |---|---|
 | `implanter_regards(axe, entraxe_max=50.0, tol_axe=0.5)` | Abscisses des regards, sans dessiner. |
 | `tracer_conduite(reseau, axe=None, points=None, entraxe_max=50.0, tol_axe=0.5, vider=False, diametre=None, materiau=None)` | Conduite + regards. |
-| `creer_branchements(reseau, distance_max=10.0, couche_bati="PCI - Bati", vider=False, diametre=None, materiau=None)` | Un branchement par bâtiment proche. |
+| `creer_branchements(reseau, distance_max=10.0, couche_bati="PCI - Bati", vider=False, diametre=None, materiau=None, couche_parcelles="PCI - Parcelles", front_min=1.0, ecart_min=1.0, garde_regard=0.5)` | Un branchement centré par bâtiment riverain, jusqu'à la limite de parcelle. |
 | `inserer_regard(point, reseau=None)` | Insère un regard et coupe la conduite. |
 | `supprimer(reseau, role, ids)` | Suppression brute par identifiant. |
 | `vider(reseau, roles=…)` | Vide les couches métier. |
@@ -264,10 +310,26 @@ dont l'omission écarterait la conduite de plus de `tol_axe` mètres de l'axe r�
 `diametre` / `materiau` valent pour les SEULS ouvrages créés par l'appel : posés
 dans les défauts le temps du tracé, rendus ensuite, y compris sur exception.
 
-`creer_branchements` part du piquage le plus proche sur la conduite et rejoint
-le point du bâti le plus proche, où un tabouret est posé. Échecs listés dans
-`echecs`, pas levés. `couche_bati` n'est qu'un nom de couche : toute couche de
-points ou polygones du projet convient (ex. points d'adresse BAN).
+`creer_branchements` pique **au milieu du front de rue** de chaque bâtiment —
+son emprise projetée sur l'axe — et pose le branchement perpendiculairement
+jusqu'à la **limite de sa parcelle** côté voie, où va le tabouret. Deux
+mitoyens ont des fronts différents, donc des piquages différents : la
+superposition qu'un piquage « au point le plus proche » produisait sur le coin
+partagé n'est plus possible.
+
+Un bâtiment dont le front vaut moins de `front_min` (défaut 1 m) est écarté :
+son emprise entière se projette sur un nœud terminal, il est donc *après* le
+bout du chantier — typiquement la voie transversale d'un carrefour. Motifs
+listés dans `batis_ecartes`, distinct de `echecs`. `front_min=0` rend
+l'ancien comportement.
+
+`ecart_min` (1 m) et `garde_regard` (0,5 m) déplacent le piquage le long de la
+conduite quand deux branchements se touchent ou qu'un piquage tombe sur une
+chambre ; ils ne déplacent jamais le tabouret.
+
+`couche_parcelles` introuvable, le branchement s'arrête sur la façade — repli,
+pas défaut. Échecs listés dans `echecs`, pas levés. `couche_bati` n'est qu'un
+nom de couche : toute couche de polygones du projet convient.
 
 `supprimer` est brute volontairement. Contrôler après coup par
 `recalculer_pentes()` puis `verifier()`.

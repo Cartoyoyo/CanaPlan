@@ -1,6 +1,6 @@
 {
   "nom": "collecteur_de_rue",
-  "resume": "Chantier complet à une adresse, jusqu'au plan PDF : projet, collecteur sur l'axe OSM de la rue, un branchement par bâtiment proche, terrain naturel relevé sur le MNT IGN, cotes, symbologie, étiquettes, enregistrement et export asynchrone — le ticket est dans la dernière étape. Assemblage des blocs `projet_sur_voie`, `tracer_reseau`, `coter_mnt` et `habiller` : ses étapes ne sont plus recopiées ici. Diffère de `reseau_de_voie` sur deux points seulement : le projet est centré sur une `adresse` donnée plutôt que sur la voie, et le PDF part par défaut. Les cotes de chantier (pente, profondeurs) changent à chaque affaire et restent obligatoires tant que `coter` vaut vrai ; `voie_de_raccordement` désigne l'exutoire et oriente numérotation et cotes.",
+  "resume": "Chantier complet à une adresse, jusqu'au plan PDF : projet, collecteur sur l'axe OSM de la rue, un branchement par bâtiment riverain (centré sur son front de rue, arrêté en limite de parcelle), terrain naturel relevé sur le MNT IGN, cotes, symbologie, étiquettes, enregistrement et export asynchrone — le ticket est dans la dernière étape. Assemblage des blocs `projet_sur_voie`, `tracer_reseau`, `coter_mnt` et `habiller` : ses étapes ne sont plus recopiées ici. Diffère de `reseau_de_voie` sur deux points seulement : le projet est centré sur une `adresse` donnée plutôt que sur la voie, et le PDF part par défaut. Les cotes de chantier (pente, profondeurs) changent à chaque affaire et restent obligatoires tant que `coter` vaut vrai ; `voie_de_raccordement` désigne l'exutoire et oriente numérotation et cotes.",
   "parametres": {
     "adresse": null,
     "rue": null,
@@ -17,6 +17,8 @@
     "entraxe_max": 50.0,
     "tol_axe": 0.5,
     "distance_max": 10.0,
+    "couche_parcelles": "PCI - Parcelles",
+    "front_min": 1.0,
     "tn_auto": true,
     "coter": true,
     "pente": null,
@@ -43,6 +45,8 @@
               "diametre": "$diametre", "diametre_branchement": "$diametre_branchement",
               "entraxe_max": "$entraxe_max", "tol_axe": "$tol_axe",
               "distance_max": "$distance_max", "tn_auto": "$tn_auto",
+              "couche_parcelles": "$couche_parcelles",
+              "front_min": "$front_min",
               "voie_de_raccordement": "$voie_de_raccordement"},
      "attendu": {"etat": "ok"}},
     {"appel": "recette", "si": "$coter",

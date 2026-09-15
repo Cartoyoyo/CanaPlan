@@ -149,7 +149,7 @@ class RenommerTool(QgsMapTool):
     # ------------------------------------------------------------------ renommage
 
     def _rename_path(self, start, end):
-        graph, _       = build_graph(self.couches['conduite'], self.couches['regard'],
+        graph, regards = build_graph(self.couches['conduite'], self.couches['regard'],
                                      tol=self._SNAP_TOL_M)
         r_ids, c_feats = bfs(graph, start.id(), end.id())
 
@@ -179,17 +179,45 @@ class RenommerTool(QgsMapTool):
                 rid, nom_reg_idx, f"{reg_prefix}{n_reg + i:02d}")
         regard_layer.commitChanges()
 
-        # ── Tabourets rattachés, ordonnés par (indice conduite, pk_debut) ────
-        cid_to_idx = {c.id(): i for i, c in enumerate(c_feats)}
+        # ── Tabourets rattachés, ordonnés par abscisse depuis le départ ──────
+        # `pk_debut` se mesure depuis le premier sommet de la conduite, qui
+        # n'est pas son extrémité amont : la numérisation ne dit rien du sens
+        # d'écoulement. Trier dessus numérotait les tabourets de l'aval vers
+        # l'amont sur tout tronçon numérisé à rebours — invisible quand la rue
+        # descend dans le sens où elle a été saisie, systématique sinon.
+        #
+        # Le sens, c'est `start` qui le donne : le regard de départ, choisi par
+        # l'opérateur ou passé par la recette. On le suit. `c_feats[i]` relie
+        # `r_ids[i]` à `r_ids[i+1]`, donc la conduite est parcourue à l'endroit
+        # si son premier sommet touche `r_ids[i]`. De quoi convertir chaque
+        # `pk_debut` en une **abscisse unique mesurée depuis le départ** : un
+        # seul nombre à trier, et qui se lit — « ce branchement est à 137 m de
+        # l'amont ».
+        abscisses = {}          # {id_conduite: (origine, sens, longueur)}
+        cumul = 0.0
+        for i, c in enumerate(c_feats):
+            line   = c.geometry().asPolyline()
+            length = c.geometry().length()
+            amont  = regards.get(r_ids[i])
+            sens   = 1.0
+            if line and amont is not None and not amont.geometry().isEmpty():
+                pt = QgsPointXY(amont.geometry().asPoint())
+                if pt.distance(QgsPointXY(line[0])) \
+                        > pt.distance(QgsPointXY(line[-1])):
+                    sens = -1.0
+            abscisses[c.id()] = (cumul, sens, length)
+            cumul += length
 
         br_on_path = []
         for br in self.couches['branchement'].getFeatures():
-            idx = cid_to_idx.get(br['id_conduite'])
-            if idx is None:
+            repere = abscisses.get(br['id_conduite'])
+            if repere is None:
                 continue
+            origine, sens, length = repere
             pk = _to_float(br['pk_debut']) or 0.0
-            br_on_path.append((idx, pk, br))
-        br_on_path.sort(key=lambda x: (x[0], x[1]))
+            br_on_path.append(
+                (origine + (pk if sens > 0 else length - pk), br))
+        br_on_path.sort(key=lambda x: x[0])
 
         tabouret_layer = self.couches['tabouret']
         nom_tab_idx    = tabouret_layer.fields().indexOf('nom')
@@ -202,7 +230,7 @@ class RenommerTool(QgsMapTool):
 
         tabouret_layer.startEditing()
         tab_num = n_tab_start
-        for _idx, _pk, br in br_on_path:
+        for _s, br in br_on_path:
             geom = br.geometry()
             if geom.isEmpty():
                 continue
@@ -210,12 +238,18 @@ class RenommerTool(QgsMapTool):
             if not line:
                 continue
             end_pt = QgsPointXY(line[-1])
-            for fid, rpt in tab_pts.items():
-                if end_pt.distance(rpt) <= self._SNAP_TOL_M:
-                    tabouret_layer.changeAttributeValue(
-                        fid, nom_tab_idx, f"{tab_prefix}{tab_num:02d}")
-                    tab_num += 1
-                    break
+            # Un tabouret déjà nommé sort du jeu : deux branchements arrivant au
+            # même point rebaptisaient sinon le même tabouret deux fois, et son
+            # voisin restait sans nom.
+            proche = [fid for fid, rpt in tab_pts.items()
+                      if end_pt.distance(rpt) <= self._SNAP_TOL_M]
+            if not proche:
+                continue
+            fid = min(proche, key=lambda i: end_pt.distance(tab_pts[i]))
+            tabouret_layer.changeAttributeValue(
+                fid, nom_tab_idx, f"{tab_prefix}{tab_num:02d}")
+            del tab_pts[fid]
+            tab_num += 1
         tabouret_layer.commitChanges()
 
         from ..gui.etiquettes import sync_labels_after_rename

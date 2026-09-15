@@ -946,6 +946,40 @@ class PrintTool(QgsMapTool):
                     QRect(lx - demi, sb_y - lbl_h, 2 * demi, lbl_h),
                     drapeau, texte)
 
+        # Mentions de source des fonds tiers (OpenStreetMap, Esri), en bas à
+        # droite de la zone carte : leur licence les exige sur tout plan
+        # imprimé qui les montre. Le bloc tient dans un tiers de la largeur,
+        # le milieu étant à la barre d'échelle.
+        from . import territoire as _terr
+        _sources = _terr.attributions(_print_layers)
+
+        def _draw_attribution():
+            if not _sources:
+                return
+            f_src = QFont("Arial")
+            f_src.setPixelSize(max(6, px(1.6)))
+            painter.setFont(f_src)
+            marge = px(1.5)
+            largeur_max = int(w_px * 0.33)
+            enroule = Qt.TextFlag.TextWordWrap
+
+            def _bloc(texte, a_droite, encre):
+                alignement = (Qt.AlignmentFlag.AlignRight if a_droite
+                              else Qt.AlignmentFlag.AlignLeft)
+                cadre = painter.boundingRect(
+                    QRect(0, 0, largeur_max, px(30)),
+                    alignement | Qt.AlignmentFlag.AlignBottom | enroule, texte)
+                x = (w_px - marge - cadre.width() - marge // 2) if a_droite else marge
+                zone = QRect(x, carto_y_px - marge - cadre.height(),
+                             cadre.width() + marge // 2, cadre.height())
+                painter.fillRect(zone, QColor(255, 255, 255, 190))
+                painter.setPen(encre)
+                painter.drawText(zone, alignement | Qt.AlignmentFlag.AlignVCenter
+                                 | enroule, texte)
+
+            _bloc(i18n.tr('pt_sources', sources=" — ".join(_sources)), True,
+                  QColor(0x33, 0x33, 0x33))
+
         def _draw_cartouche(titre_txt, fmt, page_num):
             painter.fillRect(
                 QRect(0, carto_y_px, w_px, h_px - carto_y_px),
@@ -1249,6 +1283,7 @@ class PrintTool(QgsMapTool):
 
             _draw_north_arrow(0.0)
             _draw_scalebar(ov_ctx['ov_ech'])
+            _draw_attribution()
             ov_fmt = i18n.tr(
                 'pt_nb_feuilles', nb=n,
                 echelle=f"{int(ov_ctx['ov_ech']):,}".replace(",", " "))
@@ -1266,6 +1301,7 @@ class PrintTool(QgsMapTool):
             detail_imgs[i] = None   # libère l'image (pic mémoire, grands formats)
             _draw_north_arrow(self._sheets[i]['rotation_rad'])
             _draw_scalebar()
+            _draw_attribution()
             _draw_cartouche(titre, fmt_ech, f"{i + 1} / {n}")
 
         painter.end()

@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
 """Façade de pilotage de CanaPlan par script (console Python, MCP, agent).
 
+**CanaPlan n'est pas un outil de saisie manuelle.** Ce module le pilote
+entièrement : un chantier complet — projet, fonds, tracé sur l'axe OSM de la
+voie, un branchement par habitation, terrain naturel sur le MNT IGN, cotes,
+plan PDF — se joue sans un seul clic. Commencer par `api.aide()`, qui rend le
+sommaire des verbes et des recettes livrées.
+
 Pourquoi ce module
 ------------------
-Les outils de CanaPlan sont faits pour une souris : ce sont des `QgsMapTool`
-nourris par des clics, et des `QDialog` qui rendent des dictionnaires. Piloté
-depuis l'extérieur, cela pose trois problèmes qui n'existent pas sous la main
-d'un opérateur :
+Les outils de CanaPlan ont d'abord été écrits pour une souris — ce sont des
+`QgsMapTool` nourris par des clics, et des `QDialog` qui rendent des
+dictionnaires. C'est leur origine, pas leur limite. Pilotés depuis l'extérieur,
+ils posent trois problèmes qui n'existent pas sous la main d'un opérateur :
 
 1. **Les fenêtres modales bloquent.** Un `QMessageBox` ouvert depuis un appel
    distant fige QGIS : plus rien ne répond, la session est perdue.
@@ -53,7 +59,7 @@ import uuid
 
 from qgis.core import (
     Qgis, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsFeatureRequest,
-    QgsGeometry, QgsPointXY, QgsProject, QgsRectangle,
+    QgsGeometry, QgsPointXY, QgsProject, QgsRectangle, QgsSpatialIndex,
 )
 from qgis.PyQt.QtCore import QTimer, QVariant
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox
@@ -251,11 +257,25 @@ def _cadrer(geom_ou_points, marge=20.0):
     canvas.refresh()
 
 
-def _to_l93(lon, lat):
-    tr = QgsCoordinateTransform(QgsCoordinateReferenceSystem(WGS84),
-                                QgsCoordinateReferenceSystem(L93),
-                                QgsProject.instance())
-    return tr.transform(QgsPointXY(lon, lat))
+def _to_projet(lon, lat):
+    """Point WGS 84 exprimé dans le système du projet.
+
+    Lambert 93 en France ; ailleurs, le système choisi pour le chantier. Tout
+    ce qui vient d'un service en longitude / latitude (adresse, axe OSM) passe
+    par ici : le convertir en Lambert 93 hors de France posait l'axe à des
+    milliers de kilomètres des couches du projet.
+    """
+    from . import territoire as terr
+    return terr.vers_projet(lon, lat)
+
+
+def _france_seulement(verbe):
+    """Refuse un verbe qui repose sur un service ou une norme français."""
+    from . import territoire as terr
+    if not terr.est_france():
+        raise RuntimeError(
+            "%s : réservé au territoire France (projet en territoire %s)."
+            % (verbe, terr.courant()))
 
 
 def _get_json(url, data=None):
@@ -343,6 +363,14 @@ def etat():
     # est vide juste apres `nouveau_projet()` et rendait "projet": null.
     res["projet"] = _bet_courant() or projet.fileName() or None
     res["qgs"] = projet.fileName() or None
+    # Le système de coordonnées et son diagnostic au chantier : un système
+    # inadapté ne se voit pas à l'écran, il fausse longueurs et pentes.
+    from . import territoire as terr
+    diag = terr.diagnostic_projet(projet)
+    res["territoire"] = terr.courant(projet)
+    res["crs"] = {"authid": projet.crs().authid() or None,
+                  "deformation_pct": diag["deformation_pct"],
+                  "ok": diag["ok"], "message": diag["message"] or None}
     return res
 
 
@@ -399,7 +427,22 @@ def fermer(detruire=True):
 # ─────────────────────────────────────────────────────────── données externes
 
 def adresse(recherche):
-    """Géocode une adresse sur la Base Adresse Nationale."""
+    """Géocode une adresse, dans le système du projet (`x`, `y`).
+
+    France : Base Adresse Nationale. International : OpenStreetMap, par
+    Photon puis Nominatim en repli ; `score` et `insee` y valent None.
+    """
+    from . import territoire as terr
+    if not terr.est_france():
+        from .osm_services import geocoder
+        r = geocoder(recherche, _get_json)
+        p = _to_projet(r["lon"], r["lat"])
+        return {"label": r["label"], "score": None, "insee": None,
+                "ville": r.get("city"), "type": r.get("type"),
+                "nom_voie": r.get("nom_voie"), "pays": r.get("pays"),
+                "service": r.get("service"),
+                "lon": r["lon"], "lat": r["lat"], "x": p.x(), "y": p.y()}
+
     url = ("https://api-adresse.data.gouv.fr/search/?limit=1&q="
            + urllib.parse.quote(recherche))
     feats = _get_json(url).get("features") or []
@@ -407,7 +450,7 @@ def adresse(recherche):
         raise RuntimeError("Adresse introuvable : %s" % recherche)
     f = feats[0]
     lon, lat = f["geometry"]["coordinates"]
-    p = _to_l93(lon, lat)
+    p = _to_projet(lon, lat)
     return {"label": f["properties"]["label"], "score": f["properties"]["score"],
             "insee": f["properties"].get("citycode"),
             "ville": f["properties"].get("city"),
@@ -499,15 +542,18 @@ def voie(recherche, commune=None, insee=None, seuil=0.55):
     """
     requete = recherche if not commune else "%s, %s" % (recherche, commune)
     info = adresse(requete)
-    nom = _nom_de_label(info["label"])
+    nom = info.get("nom_voie") or _nom_de_label(info["label"])
     sim = _similitude(recherche, nom)
-    confiance = round((float(info["score"]) + sim) / 2.0, 3)
+    # OpenStreetMap ne note pas ses réponses : hors de France, la
+    # ressemblance des noms est la seule mesure, et elle compte double.
+    score = info["score"] if info.get("score") is not None else sim
+    confiance = round((float(score) + sim) / 2.0, 3)
     verdict = ("sure" if confiance >= 0.80 else
                "probable" if confiance >= 0.65 else
                "douteuse" if confiance >= seuil else "rejetee")
     res = {"demande": recherche, "nom": nom, "noyau": _noyau(nom),
            "ville": info.get("ville"), "insee": insee or info["insee"],
-           "score_ban": round(float(info["score"]), 3),
+           "score_ban": round(float(score), 3),
            "similitude": round(sim, 3), "confiance": confiance,
            "verdict": verdict,
            "corrige": (_sans_accents(nom).lower().split()
@@ -522,15 +568,38 @@ def voie(recherche, commune=None, insee=None, seuil=0.55):
     return res
 
 
+#: Miroirs Overpass a couverture MONDIALE. `overpass.osm.ch` en a ete retire :
+#: il ne sert que la Suisse, et rendait vide — sans erreur — toute requete
+#: sur la France ou l'Afrique (mesure le 15/09/2026 sur Dakar : 0 batiment la
+#: ou le serveur principal et mail.ru en rendent 36, en 5 s).
 _MIROIRS_OVERPASS = (
     "https://overpass-api.de/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.osm.ch/api/interpreter",
 )
 
 
-def _overpass(requete):
-    """Interroge Overpass, en repliant sur un miroir si le premier flanche.
+def _overpass(requete, tours=2, pause=5.0):
+    """Interroge Overpass, en refaisant le tour des miroirs s'ils flanchent tous.
+
+    Mesuré le 15/09/2026 : les serveurs publics rendent des 504 au hasard de
+    leur charge, et les trois miroirs peuvent échouer ensemble puis répondre
+    en 5 s quelques secondes plus tard (Via Margutta, Rome). Un second tour,
+    après une courte pause, évite de faire échouer toute une recette pour un
+    creux de disponibilité. Un résultat vide n'est pas un échec : il n'est
+    pas redemandé.
+    """
+    for tour in range(max(1, tours)):
+        try:
+            return _overpass_tour(requete)
+        except RuntimeError:
+            if tour >= tours - 1:
+                raise
+            time.sleep(pause)
+
+
+def _overpass_tour(requete):
+    """Un tour des miroirs Overpass, en repliant sur le suivant si l'un flanche.
 
     Le serveur public rend regulierement un 504 aux heures chargees, et une
     recette de quinze etapes qui echoue a la quatrieme pour cette raison est
@@ -597,7 +666,7 @@ def _ligne_fusionnee(lignes):
 
 def axe_de_rue(nom_voie, commune=None, insee=None, rafraichir=False,
                rayon=1500.0, detail=False):
-    """Axe de chaussee d'une voie, en Lambert 93, depuis OpenStreetMap.
+    """Axe de chaussee d'une voie, dans le systeme du projet, depuis OpenStreetMap.
 
     L'axe OSM est l'axe de la voie : une conduite posee dessus est centree
     dans la rue par construction. Retourne une `QgsGeometry` de type ligne, ou
@@ -627,8 +696,14 @@ def axe_de_rue(nom_voie, commune=None, insee=None, rafraichir=False,
     les memes arguments ne refait pas la requete Overpass. Passer
     `rafraichir=True` pour forcer un nouvel appel.
     """
+    from . import territoire as terr
     cle = (nom_voie.strip().lower(), (commune or "").strip().lower(),
            insee or "", round(float(rayon)))
+    # L'axe est garde en coordonnees du projet : la cle porte donc le systeme.
+    # Sauf en Lambert 93, pour relire le cache deja constitue en France.
+    systeme = terr.crs_projet().authid()
+    if systeme != L93:
+        cle = cle + (systeme,)
     if not rafraichir:
         garde = _axes.get(cle) or _cache_axes_lire(cle)
         if garde:
@@ -660,7 +735,7 @@ def axe_de_rue(nom_voie, commune=None, insee=None, rafraichir=False,
     for e in elements:
         nom_osm = (e.get("tags") or {}).get("name") or ""
         par_nom.setdefault(nom_osm, []).append(QgsGeometry.fromPolylineXY(
-            [_to_l93(p["lon"], p["lat"]) for p in e["geometry"]]))
+            [_to_projet(p["lon"], p["lat"]) for p in e["geometry"]]))
 
     def _rang(nom_osm):
         """La graphie OSM la plus proche de la demande gagne, la BAN ensuite."""
@@ -692,31 +767,67 @@ def axe_de_rue(nom_voie, commune=None, insee=None, rafraichir=False,
 # ────────────────────────────────────────────────────────────────── projet
 
 def nouveau_projet(adresse=None, dossier=None, nom=None, fonds=None,
-                   demi_emprise=200.0):
+                   demi_emprise=200.0, territoire=None, crs=None):
     """Crée un projet CanaPlan, sans passer par l'assistant.
 
     Reproduit exactement ce que fait la dernière page de l'assistant, mais
     sans construire la fenêtre. `fonds` accepte les clés de `run_fond_projet`
     ('osm', 'ortho', 'ban', 'noms_voie', 'pci_bati', 'pci_parcelles') ; par
-    défaut tout est chargé — dont le bâti cadastral, que l'assistant laisse
-    décoché alors qu'il est indispensable aux branchements.
+    défaut tout est chargé — dont le bâti, que l'assistant laisse décoché en
+    France alors qu'il est indispensable aux branchements.
+
+    `territoire` : 'france' ou 'international'. Sans valeur, le dernier
+    territoire choisi (assistant ou `territoire()`), France à défaut. À
+    l'international : adresses et bâti OpenStreetMap, photo aérienne Esri ;
+    'ban', 'noms_voie' et 'pci_parcelles' n'y ont pas d'équivalent.
+
+    `crs` : système de coordonnées du projet (« EPSG:32628 »). Par défaut
+    Lambert 93 en France, et à l'international la zone UTM de l'adresse — il
+    faut alors `adresse` ou `crs`. Un système en degrés est refusé : longueurs,
+    pentes et cubatures y seraient fausses. Un système qui déforme les
+    longueurs de plus de 1 % au chantier est accepté mais signalé dans
+    `avertissements`.
     """
     from .projet_bet import _do_save
+    from . import territoire as terr
     plugin, iface = _plugin(), _iface()
+    projet = QgsProject.instance()
 
     dossier = _chemin(dossier or os.path.join("~", "Documents", "CanaPlan"))
     os.makedirs(dossier, exist_ok=True)
     nom = nom or "CanaPlan"
     bet = os.path.join(dossier, nom + ".bet")
 
+    # Le territoire d'abord : il décide du service qui géocode l'adresse.
+    t = terr.definir(territoire or terr.defaut(), projet)
     infos = {}
+    if adresse:
+        infos = globals()["adresse"](adresse)
+    lon, lat = infos.get("lon"), infos.get("lat")
+
+    if crs:
+        systeme = (crs if isinstance(crs, QgsCoordinateReferenceSystem)
+                   else QgsCoordinateReferenceSystem(str(crs)))
+    else:
+        systeme = terr.crs_propose(lon, lat, t)
+    if systeme is None:
+        raise RuntimeError("Territoire international : passer `adresse` (la zone "
+                           "UTM en est déduite) ou `crs`.")
+    diag = terr.diagnostic_crs(systeme, lon, lat)
+    if diag["motif"] in terr.MOTIFS_BLOQUANTS:
+        raise RuntimeError(terr.message_diagnostic(diag, lon, lat))
+
     canvas = iface.mapCanvas()
     # Le CRS du PROJET, pas seulement celui du canevas : _create_layer en
     # herite pour les couches metier, et un projet neuf reste sinon en 4326.
-    QgsProject.instance().setCrs(QgsCoordinateReferenceSystem(L93))
-    canvas.setDestinationCrs(QgsCoordinateReferenceSystem(L93))
-    if adresse:
-        infos = globals()["adresse"](adresse)
+    projet.setCrs(systeme)
+    canvas.setDestinationCrs(systeme)
+    plugin.appliquer_territoire()
+    if infos:
+        # Géocodé avant que le système du projet ne soit fixé : x, y sont
+        # recalculés dans le système retenu.
+        p = terr.vers_projet(lon, lat, systeme)
+        infos["x"], infos["y"] = p.x(), p.y()
         canvas.setExtent(QgsRectangle(infos["x"] - demi_emprise, infos["y"] - demi_emprise,
                                       infos["x"] + demi_emprise, infos["y"] + demi_emprise))
     canvas.refresh()
@@ -728,9 +839,45 @@ def nouveau_projet(adresse=None, dossier=None, nom=None, fonds=None,
         erreurs = _do_save(plugin, iface, os.path.join(dossier, nom + "_tmp.gpkg"),
                            bet, silencieux=True)
     return {"bet": bet, "adresse": infos, "erreurs": erreurs or [],
+            "territoire": t, "crs": systeme.authid(),
+            "deformation_pct": diag["deformation_pct"],
+            "avertissements": ([] if diag["ok"]
+                               else [terr.message_diagnostic(diag, lon, lat)]),
             "messages": sf.messages,
             "note": "Les fonds WFS (bâti, parcelles) se chargent en tâche de "
                     "fond : interroger etat() jusqu'à leur apparition."}
+
+
+def territoire(nom=None):
+    """Lit ou fixe le territoire : 'france' ou 'international'.
+
+    Sans argument, rend le territoire du projet ouvert, son système de
+    coordonnées et le diagnostic de ce système au chantier. Avec un nom, fixe
+    le territoire du projet ouvert **et** celui que prendra le prochain
+    `nouveau_projet()` — c'est ce qui permet de jouer à l'international une
+    recette écrite pour la France :
+
+        api.territoire("international")
+        api.recette("projet_sur_voie", adresse="Avenue Cheikh Anta Diop, Dakar", ...)
+
+    Changer le territoire ne change pas le système de coordonnées d'un projet
+    existant : le diagnostic rendu dit s'il convient.
+    """
+    from . import territoire as terr
+    projet = QgsProject.instance()
+    if nom is not None:
+        terr.definir(nom, projet)
+        try:
+            _plugin().appliquer_territoire()
+        except RuntimeError:
+            pass
+    diag = terr.diagnostic_projet(projet)
+    return {"territoire": terr.courant(projet), "defaut": terr.defaut(),
+            "crs": projet.crs().authid() or None,
+            "deformation_pct": diag["deformation_pct"],
+            "crs_ok": diag["ok"], "message": diag["message"] or None,
+            "couche_bati": terr.couche_bati(),
+            "couche_parcelles": terr.couche_parcelles()}
 
 
 def enregistrer(chemin=None):
@@ -863,19 +1010,193 @@ def tracer_conduite(reseau, axe=None, points=None, entraxe_max=50.0,
             "messages": sf.messages}
 
 
-def creer_branchements(reseau, distance_max=10.0, couche_bati="PCI - Bati",
-                       vider=False, diametre=None, materiau=None):
-    """Un branchement par bâtiment situé à moins de `distance_max` du réseau.
+def _axes_continus(reseau_geom):
+    """Le reseau decoupe en polylignes continues, support des abscisses."""
+    fusion = reseau_geom.mergeLines()
+    if fusion.isEmpty():
+        fusion = reseau_geom
+    if fusion.isMultipart():
+        parts = [QgsGeometry.fromPolylineXY([QgsPointXY(p) for p in ligne])
+                 for ligne in fusion.asMultiPolyline()]
+    else:
+        parts = [fusion]
+    return [a for a in parts if a.length() > 0]
 
-    Chaque branchement part du point de piquage le plus proche sur la conduite
-    et rejoint le point du bâti le plus proche, où un tabouret est posé. Passe
-    par `DrawBranchementTool._finish` : tabouret, contrôle topologique, cote de
-    piquage et attributs sont ceux du tracé manuel.
+
+def _index_parcelles(nom_couche):
+    """(index, {fid: geometrie}) de la couche parcellaire, ou None si absente."""
+    if not nom_couche:
+        return None
+    for c in QgsProject.instance().mapLayers().values():
+        if c.name() == nom_couche and hasattr(c, "getFeatures"):
+            geoms = {f.id(): QgsGeometry(f.geometry()) for f in c.getFeatures()
+                     if not f.geometry().isEmpty()}
+            return QgsSpatialIndex(c.getFeatures()), geoms
+    return None
+
+
+def _vrai(feature, champ):
+    """Vrai si `champ` existe sur l'entite et vaut vrai — absent, c'est faux."""
+    if champ not in feature.fields().names():
+        return False
+    v = feature[champ]
+    if _vide(v):
+        return False
+    return v in (True, 1, "true", "True", "t", "1", "oui")
+
+
+def _tangente(axe, s, pas=0.5):
+    """Vecteur unitaire de l'axe en s, lu sur un petit arc de part et d'autre."""
+    long_axe = axe.length()
+    a = axe.interpolate(max(0.0, s - pas)).asPoint()
+    b = axe.interpolate(min(long_axe, s + pas)).asPoint()
+    dx, dy = b.x() - a.x(), b.y() - a.y()
+    norme = math.hypot(dx, dy)
+    if norme == 0:
+        return 1.0, 0.0
+    return dx / norme, dy / norme
+
+
+def _espacer_piquages(cibles, axes, couche_regard, ecart_min, garde_regard):
+    """Ecarte les piquages entre eux et des chambres, sur place.
+
+    Une seule passe en avancant : les cibles sont triees par abscisse, et
+    chaque piquage est repousse juste au-dela de ce que le precedent et les
+    chambres interdisent. Repousser vers l'aval plutot que de choisir le cote
+    le plus proche garde l'ordre des branchements identique a l'ordre des
+    maisons — c'est lui que la renumerotation suit ensuite.
+    """
+    if not (ecart_min or garde_regard):
+        return
+    interdits = {i: [] for i in range(len(axes))}
+    if garde_regard:
+        for f in couche_regard.getFeatures():
+            if f.geometry().isEmpty():
+                continue
+            g = f.geometry()
+            i = min(range(len(axes)), key=lambda k: axes[k].distance(g))
+            if axes[i].distance(g) <= garde_regard:
+                interdits[i].append(axes[i].lineLocatePoint(g))
+    for i in interdits:
+        interdits[i].sort()
+
+    cibles.sort(key=lambda c: (c["axe"], c["s"]))
+    precedent = {}
+    for c in cibles:
+        i, s = c["axe"], c["s"]
+        if i in precedent:
+            s = max(s, precedent[i] + ecart_min)
+        for sr in interdits[i]:
+            if abs(s - sr) < garde_regard:
+                s = sr + garde_regard
+        s = min(max(s, 0.0), axes[i].length())
+        c["s"] = s
+        precedent[i] = s
+
+
+def _arrivee_branchement(pa, axe, s, bati, parcelles, distance_max):
+    """Point d'arrivee du branchement : limite de parcelle, sinon façade.
+
+    Le rayon part du piquage perpendiculairement a l'axe, vers le bâtiment, et
+    s'arrete a la **premiere** limite rencontree : c'est celle qui donne sur la
+    rue. Le tabouret se pose en limite de propriete, pas contre le mur.
+
+    La parcelle est ecartee quand elle contient deja le piquage — elle borde
+    alors l'axe, et la premiere limite trouvee serait celle du fond, derriere
+    la maison. Le repli est la façade, qui reste dans le bon sens.
+
+    Rend `(point, sur_parcelle)`, ou `(None, False)` si rien n'est atteint dans
+    `distance_max`.
+    """
+    tx, ty = _tangente(axe, s)
+    nx, ny = -ty, tx
+    centre = bati.centroid().asPoint()
+    if (centre.x() - pa.x()) * nx + (centre.y() - pa.y()) * ny < 0:
+        nx, ny = -nx, -ny
+    portee = distance_max + 1.0
+    rayon = QgsGeometry.fromPolylineXY(
+        [pa, QgsPointXY(pa.x() + nx * portee, pa.y() + ny * portee)])
+
+    def premier_croisement(surface):
+        bord = QgsGeometry(surface.constGet().boundary())
+        touche = rayon.intersection(bord)
+        if touche.isEmpty():
+            return None
+        pts = [QgsPointXY(v) for v in touche.vertices()]
+        return min(pts, key=pa.distance) if pts else None
+
+    if parcelles is not None:
+        index, geoms = parcelles
+        centre_geom = bati.centroid()
+        pa_geom = QgsGeometry.fromPointXY(pa)
+        for pid in index.intersects(centre_geom.boundingBox().buffered(1.0)):
+            if not geoms[pid].contains(centre_geom):
+                continue
+            if geoms[pid].contains(pa_geom):
+                break
+            pt = premier_croisement(geoms[pid])
+            if pt is not None and pa.distance(pt) <= distance_max:
+                return pt, True
+            break
+
+    pt = premier_croisement(bati)
+    if pt is None:
+        ligne = bati.shortestLine(QgsGeometry.fromPointXY(pa)).asPolyline()
+        pt = QgsPointXY(ligne[0]) if ligne else None
+    if pt is None or pa.distance(pt) > distance_max:
+        return None, False
+    return pt, False
+
+
+def creer_branchements(reseau, distance_max=10.0, couche_bati="PCI - Bati",
+                       vider=False, diametre=None, materiau=None,
+                       couche_parcelles="PCI - Parcelles", front_min=1.0,
+                       ecart_min=1.0, garde_regard=0.5):
+    """Un branchement centré par bâtiment riverain, jusqu'à la limite de parcelle.
+
+    Chaque bâtiment à moins de `distance_max` du réseau reçoit un branchement
+    perpendiculaire à la conduite, piqué **au milieu de son front de rue** et
+    arrêté sur la **limite de sa parcelle** côté voie, où le tabouret est posé.
+    L'écriture passe par `DrawBranchementTool._finish` : tabouret, contrôle
+    topologique, cote de piquage et attributs restent ceux du tracé manuel.
 
     `diametre` et `materiau`, comme pour `tracer_conduite`, ne valent que pour
     les branchements créés par cet appel.
+
+    **Le front de rue remplace le point le plus proche.** Piquer au point le
+    plus proche du bâti donnait le bon branchement pour une maison isolée et un
+    faux pour deux mitoyens : leur point le plus proche est le *coin qu'ils
+    partagent*, donc un piquage commun, deux branchements superposés et un
+    tabouret sans nom. Projeter l'emprise du bâtiment sur l'axe donne son front
+    de rue `[s_min, s_max]` ; piquer en son milieu sépare les mitoyens par
+    construction, puisque leurs fronts diffèrent, et pose le branchement
+    perpendiculairement, comme sur le terrain.
+
+    **Un bâtiment sans front de rue n'est pas riverain.** Ceux de la voie
+    transversale, au carrefour où s'arrête le chantier, sont proches du réseau
+    mais pas le long : leur emprise entière se projette sur le nœud terminal,
+    et leur front vaut zéro. Le seuil `front_min` lit cet effondrement — ce
+    n'est pas une marge de distance, mais la différence entre border la rue et
+    se trouver après son bout. `front_min=0` rend le comportement d'avant, où
+    la rue voisine se faisait raccorder au chantier.
+
+    Deux garde-fous ferment ce que le centrage laisse ouvert : `ecart_min`
+    écarte deux piquages trop voisins (des mitoyens de même largeur peuvent
+    tomber à quelques décimètres), `garde_regard` interdit de piquer sur une
+    chambre. Ils déplacent le piquage le long de la conduite, jamais le
+    tabouret, qui reste en face du bâtiment.
+
+    `couche_parcelles` absente ou introuvable, le branchement s'arrête sur la
+    façade : c'est le repli, pas le défaut — le tabouret se pose en limite de
+    propriété, et c'est la parcelle qui la porte.
     """
     from .draw_branchement_tool import DrawBranchementTool
+    from . import territoire as terr
+    # Noms français traduits vers le territoire du projet : « PCI - Bati »
+    # devient « OSM - Bati » à l'international, où il n'y a pas de parcelles
+    # — le tabouret s'arrête alors sur la façade, le repli prévu ci-dessus.
+    couche_bati = terr.nom_couche(couche_bati)
+    couche_parcelles = terr.nom_couche(couche_parcelles) if couche_parcelles else None
     jeu = _couches(reseau)
     if vider:
         for role in ("branchement", "tabouret"):
@@ -887,28 +1208,75 @@ def creer_branchements(reseau, distance_max=10.0, couche_bati="PCI - Bati",
             bati = c
             break
     if bati is None:
-        raise RuntimeError("Couche « %s » absente : charger le bâti cadastral "
-                           "(run_fond_projet) et attendre la fin du WFS." % couche_bati)
+        raise RuntimeError("Couche « %s » absente : charger le bâti "
+                           "(fonds('pci_bati')) et attendre la fin du "
+                           "téléchargement (attendre_fonds)." % couche_bati)
+    if bati.crs() != jeu["conduite"].crs():
+        raise RuntimeError("Couche « %s » en %s, réseau en %s : les distances "
+                           "seraient fausses. Recharger le bâti dans le système "
+                           "du projet." % (couche_bati, bati.crs().authid(),
+                                          jeu["conduite"].crs().authid()))
 
     reseau_geom = QgsGeometry.unaryUnion(
         [f.geometry() for f in jeu["conduite"].getFeatures()])
     if reseau_geom.isEmpty():
         raise RuntimeError("Aucune conduite %s : tracer le réseau d'abord." % reseau)
 
-    cibles = []
+    # Le reseau se lit en axes continus : un chantier lineaire en donne un,
+    # un reseau ramifie un par branche. L'abscisse curviligne n'a de sens que
+    # sur une branche, d'ou le decoupage plutot qu'une geometrie unique.
+    axes = _axes_continus(reseau_geom)
+    parcelles = _index_parcelles(couche_parcelles)
+
+    cibles, ecartes = [], []
     for f in bati.getFeatures(QgsFeatureRequest(
             reseau_geom.buffer(distance_max, 8).boundingBox())):
         g = f.geometry()
-        if g.distance(reseau_geom) <= distance_max:
-            cibles.append((f.id(), QgsGeometry(g)))
+        if g.distance(reseau_geom) > distance_max:
+            continue
+        if _vrai(f, "construction_legere"):
+            ecartes.append({"bati": f.id(), "cause": "construction legere"})
+            continue
+
+        i_axe = min(range(len(axes)), key=lambda k: axes[k].distance(g))
+        axe = axes[i_axe]
+        bornes = [axe.lineLocatePoint(QgsGeometry.fromPointXY(QgsPointXY(v)))
+                  for v in g.vertices()]
+        if not bornes:
+            continue
+        s_min, s_max = min(bornes), max(bornes)
+        if s_max - s_min < front_min:
+            ecartes.append({"bati": f.id(),
+                            "cause": "sans front de rue (%.1f m) : bati hors "
+                                     "de l'emprise du chantier"
+                                     % (s_max - s_min)})
+            continue
+        cibles.append({"bati": f.id(), "geom": QgsGeometry(g),
+                       "axe": i_axe, "s": 0.5 * (s_min + s_max)})
+
+    # Piquages : d'abord ecartes les uns des autres et des chambres, ensuite
+    # seulement projetes. Deplacer le piquage ne deplace pas le tabouret : le
+    # branchement s'incline un peu, il ne change pas de maison.
+    _espacer_piquages(cibles, axes, jeu["regard"], ecart_min, garde_regard)
+
+    for c in cibles:
+        axe = axes[c["axe"]]
+        c["pa"] = QgsPointXY(axe.interpolate(c["s"]).asPoint())
+        c["pb"], c["sur_parcelle"] = _arrivee_branchement(
+            c["pa"], axe, c["s"], c["geom"], parcelles, distance_max)
+    retenus = [c for c in cibles if c["pb"] is not None]
+    for c in cibles:
+        if c["pb"] is None:
+            ecartes.append({"bati": c["bati"],
+                            "cause": "aucune limite atteinte a moins de "
+                                     "%.1f m" % distance_max})
 
     faits, echecs = 0, []
     with _defauts_temporaires("branchement_%s" % reseau.lower(),
                               diametre=diametre, materiau=materiau) as pose,             sans_fenetre() as sf, _edition_groupee(jeu["tabouret"],
                                                      jeu["branchement"]) as ed:
-        for fid, g in cibles:
-            seg = reseau_geom.shortestLine(g).asPolyline()
-            pa, pb = QgsPointXY(seg[0]), QgsPointXY(seg[1])
+        for c in retenus:
+            fid, pa, pb = c["bati"], c["pa"], c["pb"]
             _cadrer([pa, pb], marge=5.0)
             outil = DrawBranchementTool(_iface().mapCanvas(), reseau, jeu,
                                         tol_m=TOL_SNAP_M, differer_ecriture=True)
@@ -931,8 +1299,54 @@ def creer_branchements(reseau, distance_max=10.0, couche_bati="PCI - Bati",
     for err in ed.erreurs:
         echecs.append({"bati": None, "cause": "commit refuse : %s" % err})
 
+    # Zéro bâtiment à portée n'est pas un résultat, c'est presque toujours un
+    # bâti chargé ailleurs que le réseau : le fond se télécharge sur l'emprise
+    # de la carte à la création du projet, autour de l'adresse, alors que
+    # `axe_de_rue` peut retenir un autre tronçon d'une voie longue (Pearl
+    # Street à Boulder : bâti autour du Mall, axe 2 km plus à l'est, zéro
+    # branchement et aucun message). On le dit.
+    # Même silence quand les façades sont juste au-delà du seuil : les rues
+    # larges le sont souvent hors de France (Oderberger Straße à Berlin :
+    # 52 bâtiments entre 15 et 20 m de l'axe, zéro branchement à 15 m, 53 à 25 m).
+    avertissements = []
+    if faits == 0:
+        emprise_reseau = reseau_geom.boundingBox()
+        emprise_reseau.grow(distance_max)
+        bati_extent = bati.extent()
+        bati_extent.combineExtentWith(bati.dataProvider().extent())
+        if not bati_extent.intersects(emprise_reseau):
+            avertissements.append(
+                "Aucun bâtiment de « %s » à moins de %.0f m du réseau : la couche "
+                "ne couvre pas le réseau. Cadrer la carte sur le réseau, "
+                "recharger le bâti (fonds('pci_bati') puis attendre_fonds) et "
+                "relancer." % (couche_bati, distance_max))
+        else:
+            portee = 2.0 * distance_max
+            au_dela = sorted(
+                d for d in (f.geometry().distance(reseau_geom)
+                            for f in bati.getFeatures(QgsFeatureRequest(
+                                reseau_geom.buffer(portee, 8).boundingBox())))
+                if distance_max < d <= portee)
+            if au_dela:
+                # Le seuil conseillé couvre les trois quarts des façades vues
+                # au-delà, arrondi au mètre supérieur, plus une marge de 1 m.
+                conseil = math.ceil(au_dela[min(len(au_dela) - 1,
+                                                int(0.75 * len(au_dela)))]) + 1
+                avertissements.append(
+                    "Aucun branchement : %d bâtiment(s) de « %s » entre %.0f et "
+                    "%.0f m du réseau, façades en retrait (rue large). Relancer "
+                    "avec distance_max=%d." % (len(au_dela), couche_bati,
+                                               distance_max, portee, conseil))
+            else:
+                avertissements.append(
+                    "Aucun branchement : aucun bâtiment de « %s » à moins de "
+                    "%.0f m du réseau." % (couche_bati, portee))
+
     lb = [f.geometry().length() for f in jeu["branchement"].getFeatures()]
-    return {"batis_retenus": len(cibles), "branchements": faits,
+    return {"batis_retenus": len(retenus), "batis_ecartes": ecartes,
+            "avertissements": avertissements,
+            "sur_limite_parcelle": sum(1 for c in retenus if c["sur_parcelle"]),
+            "branchements": faits,
             "tabourets": jeu["tabouret"].featureCount(),
             "lineaire": round(sum(lb), 2),
             "longueur_min": round(min(lb), 2) if lb else None,
@@ -1028,8 +1442,8 @@ def _vider(couche):
 
 # ───────────────────────────────────────────────────── numérotation et cotes
 
-def extremites(reseau, pres_de=None):
-    """Les deux regards d'extremite du reseau, orientes par un repere.
+def extremites(reseau, pres_de=None, portee_repere=2000.0):
+    """Les deux regards d'extremite du reseau, orientes par l'exutoire.
 
     `pres_de` designe le point de raccordement — l'exutoire, presque toujours
     le collecteur de la voie voisine : « a partir du chemin de Champcourt »
@@ -1038,10 +1452,23 @@ def extremites(reseau, pres_de=None):
 
     Il accepte une `QgsGeometry` (l'axe rendu par `axe_de_rue`), un couple
     [x, y] en Lambert 93, ou un nom de voie — « Rue de Champcourt, Cusset » —
-    resolu par `voie()` puis `axe_de_rue()`. Vide ou absent, le terrain
-    tranche quand le TN est renseigne — l'extremite la plus basse devient
-    `aval`, un reseau gravitaire s'en allant par le bas ; a defaut de TN, le
-    nord fait l'amont, comme dans `renumeroter`.
+    resolu par `voie()` puis `axe_de_rue()`.
+
+    **Le sens vient de l'exutoire, jamais du terrain.** Le TN a longtemps servi
+    de repli — l'extremite la plus basse faisait l'aval — au motif qu'un reseau
+    gravitaire s'en va par le bas. C'est une correlation, pas une cause : un
+    collecteur remonte sous une rue qui descend des que l'exutoire est en haut,
+    et le reseau se trouvait alors cote a l'envers sans un mot. Le terrain ne
+    tranche plus rien ici. Faute de repere, le nord fait l'amont — convention
+    arbitraire, annoncee comme telle dans `repere`, a corriger en nommant
+    l'exutoire.
+
+    **Un repere invraisemblable est refuse.** « Rue de Venise » sans commune se
+    resout sur une homonyme a 348 km, et l'orientation se joue alors sur l'ecart
+    entre deux distances de 348 km, c'est-a-dire sur du bruit — les deux
+    extremites sortent dans l'ordre du hasard. Au-dela de `portee_repere` metres
+    du reseau, l'appel echoue en demandant la commune plutot que de rendre une
+    orientation tiree au sort. Un exutoire est par nature mitoyen du chantier.
 
     Rend les noms des deux regards tels qu'ils sont **avant** renumerotation :
     les passer a `renumeroter(de=..., vers=...)` oriente la numerotation dans
@@ -1079,20 +1506,21 @@ def extremites(reseau, pres_de=None):
 
     if geom is not None:
         da, db = geom.distance(a.geometry()), geom.distance(b.geometry())
+        # Un repere hors de portee n'oriente rien : l'ecart entre `da` et `db`
+        # y devient negligeable devant les deux, et le tri sort au hasard.
+        if portee_repere and min(da, db) > portee_repere:
+            raise RuntimeError(
+                "Repere de raccordement « %s » resolu a %.0f km du reseau : "
+                "c'est une homonyme, pas l'exutoire du chantier. Preciser la "
+                "commune — par exemple « Rue de Venise, Vichy »."
+                % (repere, min(da, db) / 1000.0))
         if da < db:
             a, b, da, db = b, a, db, da
         distances = (round(da, 2), round(db, 2))
-    elif not _vide(a["tn"]) and not _vide(b["tn"]) \
-            and float(a["tn"]) != float(b["tn"]):
-        # Le terrain avant le nord. Un reseau gravitaire s'en va par le bas :
-        # orienter au nord pouvait poser l'amont sur l'extremite basse, et
-        # `caler_cotes` cotait alors le reseau a l'envers sans rien signaler.
-        # Tant que le TN valait une constante, rien ne pouvait le montrer.
-        repere = "terrain (TN)"
-        a, b = sorted([a, b], key=lambda f: -float(f["tn"]))
-        distances = (None, None)
     else:
-        repere = "nord"
+        # Le nord est une convention, pas une mesure : il est annonce comme
+        # tel. Le TN ne sert plus de repli — voir la docstring.
+        repere = "nord (convention, exutoire non precise)"
         a, b = sorted([a, b], key=lambda f: -f.geometry().asPoint().y())
         distances = (None, None)
 
@@ -1111,8 +1539,8 @@ def renumeroter(reseau, prefixe_regard=None, prefixe_tabouret=None, depart=1,
     """Renumérote regards et tabourets de l'amont vers l'aval.
 
     Appelle l'outil du plugin, donc hérite de sa numérotation en parcours de
-    graphe et de l'ordonnancement des tabourets par tronçon puis par pk de
-    piquage. `de` et `vers` designent chacun un regard, par son nom ou par
+    graphe et de l'ordonnancement des tabourets par abscisse curviligne
+    mesurée depuis `de`. `de` et `vers` designent chacun un regard, par son nom ou par
     son identifiant (`amont_fid` / `aval_fid` de `extremites`) ; à défaut, les
     deux extrémités du réseau sont prises (le nord comme amont).
 
@@ -1192,7 +1620,11 @@ def tn_mnt(reseau, roles=("regard", "tabouret"), ecraser=True):
 
     `ecraser=False` preserve un TN deja renseigne : un leve de geometre ne se
     remplace pas par un modele.
+
+    France seulement : les MNT mondiaux (maille 30 m, erreur de plusieurs
+    metres) ne permettent pas de caler un fil d'eau.
     """
+    _france_seulement("tn_mnt")
     from . import altimetrie_qgis as alt
     jeu = _couches(reseau)
     roles = tuple(roles)
@@ -1249,9 +1681,11 @@ def caler_cotes(reseau, tn=None, ancrage=None, pente=None, tabourets=None):
                   valeur négative crée une contre-pente.
 
     Si l'ancrage est le point bas (cas courant : l'exutoire), le calcul remonte
-    le réseau. Sinon il descend. Le sens d'ecoulement est etabli sur le TN des
-    deux extremites quand il est renseigne — le seul ordre de la chaine ne dit
-    rien de l'amont et de l'aval.
+    le réseau. Sinon il descend. **Le sens d'ecoulement est lu sur la
+    numerotation** — `renumeroter` va de l'amont vers l'aval depuis l'exutoire,
+    donc REU01 est l'amont — et jamais sur le TN : le terrain peut monter vers
+    l'exutoire sans que le reseau cesse d'y couler. Un reseau non numerote est
+    refuse plutot que devine.
 
     Les branchements sont cotés dans la foulée : poser les fils d'eau des
     regards sans propager la cote de piquage laissait le réseau à moitié coté
@@ -1306,22 +1740,23 @@ def caler_cotes(reseau, tn=None, ancrage=None, pente=None, tabourets=None):
     # le reseau a l'envers des que cette extremite etait le point bas, sans
     # aucun signalement.
     #
-    # Le TN tranche quand il varie. Il ne varie pas toujours : un `tn` unique
-    # passe a cette meme fonction aplatit le terrain avant qu'on l'interroge.
-    # La numerotation prend alors le relais — `renumeroter` va de l'amont vers
-    # l'aval, REU01 est donc l'amont.
+    # **C'est la numerotation qui porte le sens d'ecoulement, jamais le TN.**
+    # `renumeroter` va de l'amont vers l'aval depuis l'exutoire : REU01 est
+    # l'amont, point. Le terrain a longtemps tranche en premier ici, au motif
+    # qu'un reseau gravitaire suit la pente du sol. Il ne la suit pas toujours —
+    # un collecteur remonte sous une rue qui descend des que l'exutoire est en
+    # haut — et le TN renversait alors une orientation pourtant demandee par
+    # l'operateur, en silence. Le sol est une correlation, la numerotation est
+    # la decision.
     if len(ordre) >= 2:
-        inverser = None
-        tn_tete, tn_pied = ordre[0]["tn"], ordre[-1]["tn"]
-        if not _vide(tn_tete) and not _vide(tn_pied) \
-                and float(tn_tete) != float(tn_pied):
-            inverser = float(tn_tete) < float(tn_pied)
-        else:
-            num_tete, num_pied = _numero(ordre[0]["nom"]), _numero(ordre[-1]["nom"])
-            if num_tete is not None and num_pied is not None \
-                    and num_tete != num_pied:
-                inverser = num_tete > num_pied
-        if inverser:
+        num_tete, num_pied = _numero(ordre[0]["nom"]), _numero(ordre[-1]["nom"])
+        if num_tete is None or num_pied is None or num_tete == num_pied:
+            raise RuntimeError(
+                "Reseau non numerote : impossible d'etablir le sens "
+                "d'ecoulement. Passer `renumeroter(de=amont, vers=aval)` "
+                "avant de coter — l'orientation se decide sur l'exutoire, "
+                "pas sur le terrain.")
+        if num_tete > num_pied:
             ordre = list(reversed(ordre))
     noms = [f["nom"] for f in ordre]
     if nom_ancre not in noms:
@@ -1657,10 +2092,17 @@ def fonds(*demandes, **bascules):
     Les quatre derniers passent par un WFS **asynchrone** : ils n'existent pas
     au retour de cet appel. Enchaîner sur `attendre_fonds()`.
 
+    À l'international, 'osm' charge OpenStreetMap, 'ortho' la photo aérienne
+    Esri et 'pci_bati' (alias 'bati') le bâti OpenStreetMap, lui aussi
+    asynchrone ; les autres clés sont sans effet.
+
         api.fonds("pci_bati", "pci_parcelles")
         api.fonds(ortho=False, osm=True)
     """
     options = {c: False for c in FONDS} if demandes else {}
+    demandes = tuple("pci_bati" if d == "bati" else d for d in demandes)
+    if "bati" in bascules:
+        bascules["pci_bati"] = bascules.pop("bati")
     for d in demandes:
         if d not in FONDS:
             raise RuntimeError("Fond inconnu : %s (attendus : %s)"
@@ -1681,7 +2123,10 @@ def attendre_fonds(noms=("PCI - Bati",), delai=90.0, pas=0.5):
     numéro un du pilotage de CanaPlan.
     """
     from qgis.PyQt.QtWidgets import QApplication
-    attendus = set(noms)
+    from . import territoire as terr
+    # Noms français traduits vers le territoire : une recette écrite pour la
+    # France attend « PCI - Bati », qui s'appelle « OSM - Bati » ailleurs.
+    attendus = {terr.nom_couche(n) for n in noms} - {None}
     t0 = time.time()
     while time.time() - t0 < delai:
         presents = {c.name() for c in QgsProject.instance().mapLayers().values()}
@@ -2048,6 +2493,7 @@ def controle_stareau():
     Retourne les non-conformités : champs obligatoires vides, ouvrages
     orphelins, géométries douteuses. À passer avant `exporter_stareau`.
     """
+    _france_seulement("controle_stareau")
     from .stareau_export import check_conformity, source_layers
     return {"couches_sources": [c.name() for c in source_layers() if c],
             "controle": check_conformity()}
@@ -2060,6 +2506,7 @@ def exporter_stareau(parametres, chemin):
     d'ouvrage, commune, date de relevé, précision…). Voir
     `gui/stareau_export_dialog.params()` pour la liste exacte.
     """
+    _france_seulement("exporter_stareau")
     from .stareau_export import export_stareau
     chemin = os.path.expanduser(chemin)
     with sans_fenetre() as sf:
@@ -2069,6 +2516,7 @@ def exporter_stareau(parametres, chemin):
 
 def importer_star_dt(fichiers, dossier_sortie, types=None):
     """Importe des fichiers d'échange Star-DT vers des couches SIG."""
+    _france_seulement("importer_star_dt")
     from .star_dt_import import import_star_dt
     dossier_sortie = os.path.expanduser(dossier_sortie)
     os.makedirs(dossier_sortie, exist_ok=True)
@@ -2794,8 +3242,8 @@ DOMAINES = {
     "Lecture et séance": ["etat", "lire", "verifier", "aide", "fermer",
                           "dependances_manquantes"],
     "Données externes": ["adresse", "voie", "axe_de_rue"],
-    "Projet": ["nouveau_projet", "charger", "enregistrer", "enregistrer_sous",
-               "projets_recents"],
+    "Projet": ["nouveau_projet", "territoire", "charger", "enregistrer",
+               "enregistrer_sous", "projets_recents"],
     "Fonds de plan": ["fonds", "attendre_fonds"],
     "Dessin": ["implanter_regards", "tracer_conduite", "creer_branchements",
                "inserer_regard", "supprimer", "vider"],

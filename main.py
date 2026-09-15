@@ -24,6 +24,7 @@ class ReseauAssainissementPlugin(QObject):
         self.actions = []
         self.action_dict = {}
         self.tools = {}  # pour garder réf aux map tools
+        self.provider = None  # fournisseur Processing (recettes publiées)
 
         # Translator (optionnel, désactivé pour l'instant)
         # self.translator = QTranslator()
@@ -49,6 +50,19 @@ class ReseauAssainissementPlugin(QObject):
         except Exception as _err:
             errlog.ignored(_err, "main.initGui:purge_bet")
 
+        # Publication des recettes dans la boite a outils Processing. C'est la
+        # que QGIS — et tout agent qui l'interroge — cherche ce qui est
+        # pilotable : sans entree `canaplan` au registre, le plugin passe pour
+        # un outil a la souris. L'echec n'est pas fatal, la barre d'outils et
+        # l'API restent entieres.
+        try:
+            from qgis.core import QgsApplication
+            from .tools.processing_provider import CanaPlanProvider
+            self.provider = CanaPlanProvider()
+            QgsApplication.processingRegistry().addProvider(self.provider)
+        except Exception as _err:
+            self.provider = None
+            errlog.ignored(_err, "main.initGui:provider")
 
         # Groupe pour les outils de dessin (non exclusif pour permettre le toggle)
         self.tool_group = QActionGroup(self.iface.mainWindow())
@@ -239,6 +253,14 @@ class ReseauAssainissementPlugin(QObject):
             self.run_osm_desature,
             checkable=False
         )
+        # Fonds du monde : proposés quel que soit le territoire du projet.
+        for key, label, cb in [
+            ('monde_osm',      "OpenStreetMap (monde)",             self.run_monde_osm),
+            ('monde_esri',     "Photo aérienne Esri (monde)",       self.run_monde_esri),
+            ('monde_bati_osm', "Bâti OpenStreetMap (monde)",        self.run_monde_bati_osm),
+        ]:
+            self.action_dict[key] = self._add_action(
+                "config.svg", label, cb, checkable=False)
         self.action_dict['enregistrer_projet'] = self._add_action(
             "config.svg",
             "Enregistrer le projet",
@@ -317,17 +339,28 @@ class ReseauAssainissementPlugin(QObject):
             ('grp_ep', ['conduite_ep', 'branchement_ep', 'profil_ep', 'coupe_ep', 'renommer_ep']),
             ('grp_etiquettes', ['creer_etiquettes', 'afficher_etiquettes', 'taille_etiquettes', 'forcer_etiquettes', 'affichage_etiquettes', 'annotation']),
             ('grp_sorties', ['imprimer', 'profil_groupe', 'coupe_transversale', 'cubature', 'coupe_tranchee_composee', 'export_stareau']),
-            ('grp_fond', ['fond_projet', 'osm_desature', 'ortho_ign', 'pci_parcelles', 'pci_bati', 'ban_vecteur', 'nom_voie']),
+            ('grp_fond', ['fond_projet']),
         ]
         self.submenus = []
         # (sous-menu, clé i18n) : le titre est reposé à chaque changement de langue
         self._submenus_i18n = []
+        # Sections France / International du menu Fond de plan, par clé i18n
+        self._sous_menus_fond = {}
         for cle_titre, keys in menu_groups:
             submenu = self.menu.addMenu(i18n.tr(cle_titre))
             for key in keys:
                 action = self.action_dict.get(key)
                 if action is not None:
                     submenu.addAction(action)
+            if cle_titre == 'grp_fond':
+                for cle_section, cles_section in self._SECTIONS_FOND:
+                    section = submenu.addMenu(i18n.tr(cle_section))
+                    for key in cles_section:
+                        action = self.action_dict.get(key)
+                        if action is not None:
+                            section.addAction(action)
+                    self._sous_menus_fond[cle_section] = section
+                    self._submenus_i18n.append((section, cle_section))
             self.submenus.append(submenu)
             self._submenus_i18n.append((submenu, cle_titre))
 
@@ -339,6 +372,7 @@ class ReseauAssainissementPlugin(QObject):
             self.show_about_dialog,
             checkable=False,
             add_to_toolbar=False,
+            avertir=False,     # « À propos » porte lui-même l'avertissement
         )
 
         # Synchronise le bouton avec l'état actuel du moteur d'étiquettes
@@ -373,7 +407,47 @@ class ReseauAssainissementPlugin(QObject):
         self.menu.addAction(self.action_dict['about'])
 
         i18n.signaux.langue_changee.connect(self._retranslate)
+        # Le territoire est une propriété du projet : menus et panneau suivent
+        # chaque ouverture, fermeture ou création de projet.
+        QgsProject.instance().readProject.connect(self.appliquer_territoire)
+        QgsProject.instance().cleared.connect(self.appliquer_territoire)
         self._retranslate()
+
+    # --- Territoire (France / International) ---
+
+    # Entrées qui n'existent qu'en France : services français (BAN, BD TOPO,
+    # cadastre, orthophoto IGN, OSM de datagrandest) ou normes françaises
+    # (StaR-Eau, Star-DT). Les fonds du monde (monde_*) restent visibles
+    # partout : en France, ils s'ajoutent aux fonds français.
+    _ACTIONS_FRANCE = ('import_star_dt', 'export_stareau', 'ban_vecteur',
+                       'nom_voie', 'pci_parcelles', 'pci_bati', 'ortho_ign',
+                       'osm_desature')
+
+    # Sections du Fond de plan (menu et panneau) : (clé i18n, actions).
+    _SECTIONS_FOND = (
+        ('grp_fond_france', ['osm_desature', 'ortho_ign', 'pci_parcelles',
+                             'pci_bati', 'ban_vecteur', 'nom_voie']),
+        ('grp_fond_international', ['monde_osm', 'monde_esri', 'monde_bati_osm']),
+    )
+
+    def appliquer_territoire(self, *_args):
+        """Masque les entrées propres à la France hors du territoire France."""
+        from .tools import territoire
+        france = territoire.est_france()
+        for cle in self._ACTIONS_FRANCE:
+            action = self.action_dict.get(cle)
+            if action is not None:
+                action.setVisible(france)
+        # Section France du Fond de plan : masquée entière plutôt que vide.
+        section = getattr(self, '_sous_menus_fond', {}).get('grp_fond_france')
+        if section is not None:
+            section.menuAction().setVisible(france)
+        panel = getattr(self, 'side_panel', None)
+        if panel is not None:
+            # Le fond de projet international compte 3 couches, pas 6.
+            panel.appliquer_territoire(
+                () if france else self._ACTIONS_FRANCE,
+                {} if france else {'fond_projet': 'panel_fond_projet_int'})
 
     def _build_language_menu(self):
         """Sous-menu Langue : cases à cocher exclusives, 'auto' en tête."""
@@ -412,11 +486,22 @@ class ReseauAssainissementPlugin(QObject):
         panel = getattr(self, 'side_panel', None)
         if panel is not None:
             panel.retranslate()
+        # Après la retraduction, qui a reposé les libellés français.
+        self.appliquer_territoire()
 
     def unload(self):
         """Supprime la barre d'outils, les actions et les rubber bands."""
         from qgis.PyQt import sip
         self._cleanup_tools()
+        # Le fournisseur part en premier : laisse au registre, il garderait des
+        # algorithmes dont le module est sur le point d'etre recharge.
+        if self.provider is not None:
+            try:
+                from qgis.core import QgsApplication
+                QgsApplication.processingRegistry().removeProvider(self.provider)
+            except Exception as _err:
+                errlog.ignored(_err, "main.unload:provider")
+            self.provider = None
         from .tools.projet_bet import cleanup_plugin_resources
         cleanup_plugin_resources(self)
         # Le dialogue StaR-Eau est non modal : il survivrait au rechargement
@@ -430,6 +515,12 @@ class ReseauAssainissementPlugin(QObject):
             i18n.signaux.langue_changee.disconnect(self._retranslate)
         except (TypeError, RuntimeError) as _err:
             errlog.ignored(_err, "main.unload:416")
+        for signal in (QgsProject.instance().readProject,
+                       QgsProject.instance().cleared):
+            try:
+                signal.disconnect(self.appliquer_territoire)
+            except (TypeError, RuntimeError) as _err:
+                errlog.ignored(_err, "main.unload:territoire")
         toggle_panel = self.action_dict.get('toggle_panel')
         if toggle_panel is not None:
             self.iface.removeToolBarIcon(toggle_panel)
@@ -457,15 +548,19 @@ class ReseauAssainissementPlugin(QObject):
         self.iface.mapCanvas().refresh()
 
     def _add_action(self, icon_name, text, callback, checkable=False,
-                    add_to_toolbar=False):
+                    add_to_toolbar=False, avertir=True):
         """Crée une action du plugin, référencée par le menu et le panneau.
 
         add_to_toolbar est conservé pour ne pas casser les appels existants :
         le plugin n'a plus de barre d'outils, le paramètre est sans effet.
+        avertir : l'action passe d'abord par l'avertissement d'usage, affiché
+        une seule fois (voir tools/avertissement.py).
         """
         icon_path = os.path.join(self.plugin_dir, "icon", icon_name)
         action = QAction(QIcon(icon_path), text, self.iface.mainWindow())
         action.setCheckable(checkable)
+        if avertir:
+            callback = self._avec_avertissement(action, callback)
         if checkable:
             action.toggled.connect(callback)
             self.tool_group.addAction(action)
@@ -473,6 +568,42 @@ class ReseauAssainissementPlugin(QObject):
             action.triggered.connect(callback)
         self.actions.append(action)
         return action
+
+    def _avec_avertissement(self, action, callback):
+        """Enveloppe `callback` : l'avertissement d'usage passe avant la
+        première utilisation d'une fonction, puis plus jamais.
+
+        Désactiver un outil (action cochable qu'on décoche) ne demande rien.
+        Refusé, l'outil n'est pas lancé et son bouton se décoche.
+
+        Le signal Qt transmet `checked` ; la fonction enveloppée ne reçoit que
+        les arguments qu'elle accepte, comme lorsqu'elle était connectée
+        directement.
+        """
+        import inspect
+        try:
+            params = inspect.signature(callback).parameters.values()
+            if any(p.kind == p.VAR_POSITIONAL for p in params):
+                maxi = None
+            else:
+                maxi = sum(1 for p in params
+                           if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD))
+        except (TypeError, ValueError):
+            maxi = None
+
+        def garde(*args):
+            desactivation = action.isCheckable() and bool(args) and not args[0]
+            if not desactivation:
+                from .tools import avertissement
+                if not avertissement.confirmer(self.iface.mainWindow()):
+                    if action.isCheckable() and action.isChecked():
+                        action.blockSignals(True)
+                        action.setChecked(False)
+                        action.blockSignals(False)
+                    return None
+            return callback(*(args if maxi is None else args[:maxi]))
+
+        return garde
 
     def show_about_dialog(self):
         from .gui.about_dialog import AboutDialog
@@ -644,13 +775,13 @@ class ReseauAssainissementPlugin(QObject):
         """Crée une couche mémoire pour le rôle et le réseau donnés,
         avec la symbologie appropriée."""
         defn = self.LAYER_DEFINITIONS[role]
-        # Toutes les geometries produites par CanaPlan (axe OSM reprojete, MNT
-        # IGN, PCI) sont en metres Lambert 93. Un projet QGIS neuf est en
-        # EPSG:4326 -- valide, donc l'ancien repli "si invalide" ne jouait pas,
-        # et les couches recevaient des metres etiquetes en degres : plus rien
-        # ne s'affichait. On n'herite du CRS projet que s'il est projete.
-        crs = QgsProject.instance().crs()
-        crs_str = crs.authid() if (crs.isValid() and not crs.isGeographic()) else "EPSG:2154"
+        # Les couches metier sont toujours dans un systeme projete, en metres :
+        # celui du projet s'il l'est. Un projet QGIS neuf est en EPSG:4326 --
+        # valide, donc l'ancien repli "si invalide" ne jouait pas, et les
+        # couches recevaient des metres etiquetes en degres. Le repli depend
+        # du territoire : Lambert 93 en France, zone UTM du chantier ailleurs.
+        from .tools import territoire
+        crs_str = territoire.crs_projet().authid()
 
         uri = f"{defn['geom']}?crs={crs_str}"
         name = f"{role}_{reseau}"
@@ -999,6 +1130,10 @@ class ReseauAssainissementPlugin(QObject):
         """
         from qgis.core import QgsRasterLayer, QgsLayerTreeLayer
         from qgis.PyQt.QtGui import QColor
+        from .tools import territoire
+
+        if not territoire.est_france():
+            return self._fond_international(options)
 
         opt = options or {}
         def _wanted(key):
@@ -1109,7 +1244,130 @@ class ReseauAssainissementPlugin(QObject):
                              insert_cb=insert_above_rasters,
                              restore_extent=(canvas, saved_extent))
 
+    # ------------------------------------------------------------------ fonds International
+
+    def _fond_international(self, options=None):
+        """Fond de projet hors de France : OSM, photo aérienne Esri, bâti OSM.
+
+        :param options: mêmes clés que run_fond_projet. 'osm' charge
+            OpenStreetMap, 'ortho' la photo aérienne Esri World Imagery,
+            'pci_bati' (ou 'bati') le bâti OpenStreetMap. Les clés françaises
+            sans équivalent ('ban', 'noms_voie', 'pci_parcelles') sont
+            ignorées. Une clé absente vaut True.
+        """
+        from qgis.core import QgsRasterLayer, QgsLayerTreeLayer
+        from qgis.PyQt.QtGui import QColor
+        from .tools import territoire
+
+        opt = options or {}
+        project   = QgsProject.instance()
+        tree_root = project.layerTreeRoot()
+        canvas    = self.iface.mapCanvas()
+        saved_extent = canvas.extent()
+
+        project.setBackgroundColor(QColor(255, 255, 255))
+        canvas.setCanvasColor(QColor(255, 255, 255))
+        existing = {l.name() for l in project.mapLayers().values()}
+
+        # Mêmes réglages d'affichage que les fonds français : le plan des rues
+        # s'efface au très grand zoom, la photo n'apparaît qu'à l'échelle du
+        # chantier — c'est là qu'elle est nette et utile.
+        canvas.freeze(True)
+        try:
+            for cle, nom, uri, opacite, reglage in (
+                    ('osm', territoire.NOM_OSM, territoire.URI_OSM, 0.7,
+                     lambda l: l.setMaximumScale(1000)),
+                    ('ortho', territoire.NOM_ESRI, territoire.URI_ESRI, 0.75,
+                     lambda l: l.setMinimumScale(2000))):
+                if not opt.get(cle, True) or nom in existing:
+                    continue
+                lyr = QgsRasterLayer(uri, nom, "wms")
+                if not lyr.isValid():
+                    self.iface.messageBar().pushMessage(
+                        i18n.tr('msg_fond_carte'), i18n.tr('msg_wms_echec', nom=nom),
+                        level=Qgis.MessageLevel.Warning, duration=6)
+                    continue
+                lyr.setOpacity(opacite)
+                reglage(lyr)
+                lyr.setScaleBasedVisibility(True)
+                project.addMapLayer(lyr, False)
+                tree_root.insertChildNode(-1, QgsLayerTreeLayer(lyr))
+        finally:
+            canvas.freeze(False)
+        canvas.setExtent(saved_extent)
+        canvas.refresh()
+
+        if not opt.get('bati', opt.get('pci_bati', True)):
+            self.iface.messageBar().pushMessage(
+                i18n.tr('fond_projet'), i18n.tr('msg_fond_ok'),
+                level=Qgis.MessageLevel.Info, duration=6)
+            return
+
+        rasters = (territoire.NOM_OSM, territoire.NOM_ESRI)
+
+        def insert_above_rasters(layer):
+            root = QgsProject.instance().layerTreeRoot()
+            idx = len(root.children())
+            for i, child in enumerate(root.children()):
+                if child.name() in rasters:
+                    idx = i
+                    break
+            QgsProject.instance().addMapLayer(layer, False)
+            root.insertChildNode(idx, QgsLayerTreeLayer(layer))
+
+        self.run_bati_osm(insert_cb=insert_above_rasters, scale_min=5000)
+
+    def run_bati_osm(self, insert_cb=None, scale_min=None):
+        """Bâti OpenStreetMap sur l'emprise de la carte, dans le système du projet."""
+        from qgis.core import QgsCoordinateTransform, QgsCoordinateReferenceSystem
+        from .tools import territoire, osm_services
+
+        canvas  = self.iface.mapCanvas()
+        nom     = territoire.couche_bati(territoire.INTERNATIONAL)
+        systeme = territoire.crs_projet()
+        extent  = canvas.extent()
+        emprise = QgsCoordinateTransform(
+            canvas.mapSettings().destinationCrs(),
+            QgsCoordinateReferenceSystem("EPSG:4326"),
+            QgsProject.instance()).transformBoundingBox(extent)
+
+        def fetch(on_done):
+            return osm_services.fetch_bati_async(
+                nom, emprise, systeme.authid(), nom, on_done)
+
+        self._load_wfs_async(nom, [], style_cb=self._style_pci_layer,
+                             scale_min=scale_min, insert_cb=insert_cb,
+                             restore_extent=(canvas, extent), fetch=fetch)
+
+    def run_monde_osm(self):
+        from .tools import territoire
+        self._add_xyz_international(territoire.NOM_OSM, territoire.URI_OSM)
+
+    def run_monde_esri(self):
+        from .tools import territoire
+        self._add_xyz_international(territoire.NOM_ESRI, territoire.URI_ESRI)
+
+    def run_monde_bati_osm(self):
+        # Hors de tout fond de projet : la couche va en bas de légende et reste
+        # visible à toutes les échelles, comme les bâtis PCI chargés à l'unité.
+        self.run_bati_osm()
+
+    def _add_xyz_international(self, nom, uri):
+        from qgis.core import QgsRasterLayer
+        self._remove_orphan_layer(nom)
+        if any(l.name() == nom for l in QgsProject.instance().mapLayers().values()):
+            return
+        layer = QgsRasterLayer(uri, nom, "wms")
+        if not layer.isValid():
+            QMessageBox.warning(self.iface.mainWindow(), i18n.tr('msg_fond_carte'),
+                                i18n.tr('msg_wms_echec', nom=nom))
+            return
+        self._add_raster_bottom_keep_extent(layer)
+
     def run_pci_bati(self):
+        from .tools import territoire
+        if not territoire.est_france():
+            return self.run_bati_osm()
         canvas = self.iface.mapCanvas()
         self._load_wfs_async("PCI - Bâti", [
             {'typename': "BDTOPO_V3:batiment",
@@ -1129,7 +1387,7 @@ class ReseauAssainissementPlugin(QObject):
 
     def _load_wfs_async(self, title, requests, style_cb=None,
                         scale_min=None, insert_cb=None,
-                        restore_extent=None):
+                        restore_extent=None, fetch=None):
         """Télécharge et ajoute des couches WFS sans bloquer l'interface.
 
         Le réseau et l'écriture des GeoJSON partent dans une QgsTask
@@ -1143,15 +1401,19 @@ class ReseauAssainissementPlugin(QObject):
                           dans la légende (défaut : tout en bas)
         :param restore_extent: (canvas, extent) pour reverrouiller l'étendue
                           de la carte après ajout des couches
+        :param fetch: callable(on_done) remplaçant le téléchargement WFS
+                          (bâti OSM à l'international) ; même format de
+                          résultat que tools.wfs_utils.fetch_wfs_async
         """
         from qgis.core import QgsVectorLayer, QgsLayerTreeLayer, QgsMessageLog, Qgis
         from .tools.wfs_utils import current_bbox_l93, fetch_wfs_async
 
-        bbox = current_bbox_l93(self.iface.mapCanvas())
-        QgsMessageLog.logMessage(
-            f"{title} : bbox envoyée = {bbox}", "CanaPlan", Qgis.MessageLevel.Info)
-        for req in requests:
-            req['bbox'] = bbox
+        if fetch is None:
+            bbox = current_bbox_l93(self.iface.mapCanvas())
+            QgsMessageLog.logMessage(
+                f"{title} : bbox envoyée = {bbox}", "CanaPlan", Qgis.MessageLevel.Info)
+            for req in requests:
+                req['bbox'] = bbox
 
         iface = self.iface
 
@@ -1219,7 +1481,11 @@ class ReseauAssainissementPlugin(QObject):
                 rcanvas.setExtent(rextent)
                 rcanvas.refresh()
 
-        fetch_wfs_async(title, requests, on_done)
+        if fetch is not None:
+            if fetch(on_done) is None:
+                return          # refusé d'emblée : on_done a déjà rendu compte
+        else:
+            fetch_wfs_async(title, requests, on_done)
         iface.messageBar().pushMessage(
             title, i18n.tr('msg_telechargement'), level=Qgis.MessageLevel.Info, duration=3)
 
@@ -1388,6 +1654,9 @@ class ReseauAssainissementPlugin(QObject):
 
     def run_ortho_ign(self):
         from qgis.core import QgsRasterLayer, QgsLayerTreeLayer
+        from .tools import territoire
+        if not territoire.est_france():
+            return self._add_xyz_international(territoire.NOM_ESRI, territoire.URI_ESRI)
         name   = "Ortho IGN (BD ORTHO nationale)"
         source = (
             "crs=EPSG:2154&featureCount=10&format=image/jpeg"
@@ -1410,6 +1679,9 @@ class ReseauAssainissementPlugin(QObject):
 
     def run_osm_desature(self):
         from qgis.core import QgsRasterLayer, QgsLayerTreeLayer
+        from .tools import territoire
+        if not territoire.est_france():
+            return self._add_xyz_international(territoire.NOM_OSM, territoire.URI_OSM)
         name   = "OSM Desature"
         source = (
             "crs=EPSG:2154&featureCount=10&format=image/png"

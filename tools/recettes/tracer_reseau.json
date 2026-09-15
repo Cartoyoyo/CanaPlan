@@ -1,6 +1,6 @@
 {
   "nom": "tracer_reseau",
-  "resume": "BLOC. Pose la conduite et ses regards sur un axe fourni, raccorde un branchement par bâtiment proche, relève le terrain naturel sur le MNT, oriente le réseau sur `voie_de_raccordement` (ou sur le terrain à défaut) et numérote de l'amont vers l'aval. Ne cote rien. Rend `ext` et `num` dans `valeurs`.",
+  "resume": "BLOC. Pose la conduite et ses regards sur un axe fourni, raccorde un branchement par bâtiment riverain, relève le terrain naturel sur le MNT, oriente le réseau sur `voie_de_raccordement` (ou sur le terrain à défaut) et numérote de l'amont vers l'aval. Ne cote rien. Rend `ext` et `num` dans `valeurs`. Chaque branchement est piqué au milieu du front de rue de son bâtiment et s'arrête sur la limite de parcelle côté voie : deux mitoyens ne peuvent plus se superposer, et un bâtiment sans front de rue — ceux de la voie transversale, après le bout du chantier — est écarté (`front_min`) et rendu dans `batis_ecartes` avec son motif. La numérotation des tabourets suit l'abscisse depuis `de`, pas le sens de numérisation des conduites.",
   "parametres": {
     "reseau": "EU",
     "axe": null,
@@ -10,6 +10,8 @@
     "entraxe_max": 50.0,
     "tol_axe": 0.5,
     "distance_max": 10.0,
+    "couche_parcelles": "PCI - Parcelles",
+    "front_min": 1.0,
     "voie_de_raccordement": "",
     "tn_auto": true
   },
@@ -43,6 +45,8 @@
       "args": {
         "reseau": "$reseau",
         "distance_max": "$distance_max",
+        "couche_parcelles": "$couche_parcelles",
+        "front_min": "$front_min",
         "vider": true,
         "diametre": "$diametre_branchement",
         "materiau": "$materiau"
@@ -50,6 +54,9 @@
       "attendu": {
         "echecs": {
           "vide": true
+        },
+        "branchements": {
+          "min": 1
         }
       }
     },

@@ -1,8 +1,8 @@
 [general]
 name=CanaPlan – Réseau Assainissement
-description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE). [EN] Topological drawing of foul (red) and storm (blue) sewer networks: pipes, service connections, manholes, inspection chambers. Longitudinal profiles, trench volumes, cross sections, multi-sheet PDF printing, DXF export and StaR-Eau (CNIG/ASTEE) GeoPackage export. Scriptable: every tool is callable from Python, and reusable procedures are declared as JSON recipes.
+description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. PILOTABLE PAR SCRIPT AUTANT QU'À LA SOURIS — point d'entrée : from CanaPlan.tools import api ; api.aide() — chaque outil est un verbe Python, et des recettes JSON jouent un chantier complet (projet, fonds, tracé sur axe OSM, un branchement par habitation, terrain naturel sur MNT IGN, cotes, plan PDF) en un seul appel, sans aucun clic. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE). En France comme à l'international : adresses et bâti OpenStreetMap, photo aérienne Esri, système UTM contrôlé hors de France. [EN] Topological drawing of foul (red) and storm (blue) sewer networks: pipes, service connections, manholes, inspection chambers. FULLY SCRIPTABLE, NOT A MOUSE-ONLY TOOL — entry point: from CanaPlan.tools import api ; api.aide() — every tool is a Python verb, and JSON recipes run a complete job (project, basemaps, centreline from OSM, one connection per dwelling, ground level from the national DEM, levels, PDF plan) in a single call. Longitudinal profiles, trench volumes, cross sections, multi-sheet PDF printing, DXF export and StaR-Eau (CNIG/ASTEE) GeoPackage export.
 icon=icon/icon.png
-version=2.0
+version=2.1
 qgisMinimumVersion=3.40
 qgisMaximumVersion=4.99
 author=Yoan Laloux
@@ -12,11 +12,11 @@ repository=https://github.com/Cartoyoyo/CanaPlan
 tracker=https://github.com/Cartoyoyo/CanaPlan/issues
 license=GNU GPL v3
 homepage=https://github.com/Cartoyoyo/CanaPlan
-tags=assainissement,réseau,EU,EP,profil en long,cubature,DXF,BET,StaR-Eau,GeoPackage,CNIG,ASTEE,Star-DT,DT-DICT
+tags=assainissement,réseau,EU,EP,profil en long,cubature,DXF,BET,StaR-Eau,GeoPackage,CNIG,ASTEE,Star-DT,DT-DICT,OpenStreetMap,international
 experimental=False
 deprecated=False
 
-about=CanaPlan est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement EU (Eaux Usées) et EP (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement. La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle. Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE).
+about=CanaPlan s'utilise de deux façons, également complètes : à la souris, et par script. Le module CanaPlan.tools.api expose chaque outil en verbe Python appelable depuis la console QGIS, un script, un serveur MCP ou un agent — « from CanaPlan.tools import api ; api.aide() » rend le sommaire des verbes et des recettes disponibles. Les recettes sont des procédures JSON qui enchaînent un chantier entier en un appel : création du projet, chargement des fonds, tracé du collecteur sur l'axe OSM de la voie, un branchement par habitation jusqu'à la limite de parcelle, terrain naturel relevé sur le MNT IGN, cotes, étiquettes et plan PDF. Rien de tout cela n'exige un clic. CanaPlan est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement EU (Eaux Usées) et EP (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement. La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle. Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE).
     [EN] CanaPlan is a design drawing tool for sanitary and storm sewer
     networks, used directly inside QGIS on a basemap the plugin loads for you
     (French address database, cadastral parcels and buildings, IGN aerial
@@ -35,6 +35,24 @@ about=CanaPlan est un logiciel de dessin projet qui permet de tracer des réseau
     procedures can be declared as JSON recipes and replayed in a single call.
 
 changelog=
+    2.1  Territoire International. Premiere etape de l'assistant : France ou
+         International. Hors de France, adresses OpenStreetMap (Photon,
+         repli Nominatim), fond OpenStreetMap, photo aerienne Esri World
+         Imagery, bati OpenStreetMap (Overpass) et zone UTM proposee d'apres
+         l'adresse. Garde-fou du systeme de coordonnees : ecart de longueur
+         mesure au chantier, refus des systemes en degres ou en pieds,
+         signalement au-dela de 1 % ou hors domaine (Lambert 93 allonge les
+         longueurs de 25 % a Abidjan). Fond de plan en sections France /
+         International, mentions de source sur les plans PDF.
+         Avertissement d'usage : fenetre a la premiere utilisation d'une
+         fonction, texte dans A propos et dans les rapports de cubature.
+         Recettes publiees dans la boite a outils Processing (fournisseur
+         canaplan).
+         Branchements automatiques centres sur le front de rue et arretes en
+         limite de parcelle ; batiments sans front de rue ecartes ;
+         avertissement quand aucun branchement n'est pose. Sens
+         d'ecoulement lu sur l'exutoire, plus sur le terrain. Numerotation
+         des tabourets suivant l'abscisse depuis le regard de depart.
     2.0  TN auto (MNT IGN). Bouton du Tableau de saisie qui releve le
          terrain naturel des regards et tabourets sur le MNT LiDAR HD
          (0,50 m), avec repli sur le RGE ALTI (1 m) la ou le LiDAR HD ne

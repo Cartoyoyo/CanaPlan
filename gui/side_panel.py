@@ -22,6 +22,10 @@ class SidePanel(QDockWidget):
         # (item, clé i18n) : les libellés sont reposés à chaque changement
         # de langue, sans reconstruire l'arbre ni perdre son état déplié.
         self._i18n_items = []
+        # Territoire du projet : entrées masquées, et libellés remplacés
+        # (clé d'action -> clé i18n), voir main.appliquer_territoire.
+        self._masquees = ()
+        self._libelles_territoire = {}
         self._build_ui()
 
     def _build_ui(self):
@@ -89,13 +93,18 @@ class SidePanel(QDockWidget):
         folder_fdc = self._folder("grp_fond")
         self._item(folder_fdc, icon_dir, "config.svg", "fond_projet",
                    tr_key="panel_fond_projet")
-        self._item(folder_fdc, icon_dir, "config.svg", "osm_desature")
-        self._item(folder_fdc, icon_dir, "config.svg", "ortho_ign")
-        self._item(folder_fdc, icon_dir, "config.svg", "pci_parcelles")
-        self._item(folder_fdc, icon_dir, "config.svg", "pci_bati")
-        self._item(folder_fdc, icon_dir, "config.svg", "ban_vecteur",
+        fdc_france = self._folder("grp_fond_france", parent=folder_fdc)
+        self._item(fdc_france, icon_dir, "config.svg", "osm_desature")
+        self._item(fdc_france, icon_dir, "config.svg", "ortho_ign")
+        self._item(fdc_france, icon_dir, "config.svg", "pci_parcelles")
+        self._item(fdc_france, icon_dir, "config.svg", "pci_bati")
+        self._item(fdc_france, icon_dir, "config.svg", "ban_vecteur",
                    tr_key="panel_ban_vecteur")
-        self._item(folder_fdc, icon_dir, "config.svg", "nom_voie")
+        self._item(fdc_france, icon_dir, "config.svg", "nom_voie")
+        fdc_int = self._folder("grp_fond_international", parent=folder_fdc)
+        self._item(fdc_int, icon_dir, "config.svg", "monde_osm")
+        self._item(fdc_int, icon_dir, "config.svg", "monde_esri")
+        self._item(fdc_int, icon_dir, "config.svg", "monde_bati_osm")
 
         for folder in (folder_projet, folder_general, folder_eu, folder_ep,
                        folder_etiquettes, folder_impression, folder_fdc):
@@ -131,7 +140,8 @@ class SidePanel(QDockWidget):
     def retranslate(self):
         """Repose les libellés de l'arbre et du sélecteur."""
         for item, cle in self._i18n_items:
-            item.setText(0, i18n.tr(cle))
+            action = item.data(0, Qt.ItemDataRole.UserRole)
+            item.setText(0, i18n.tr(self._libelles_territoire.get(action, cle)))
         self.label_langue.setText(i18n.tr('langue'))
         # Le signal est coupé le temps de réécrire les entrées : les
         # renommer déclenche currentIndexChanged et rappellerait definir().
@@ -143,8 +153,28 @@ class SidePanel(QDockWidget):
             self.combo_langue.setCurrentIndex(index)
         self.combo_langue.blockSignals(False)
 
-    def _folder(self, tr_key):
-        item = QTreeWidgetItem([i18n.tr(tr_key)])
+    def appliquer_territoire(self, masquees, libelles):
+        """Masque les entrées propres à la France et renomme celles qui
+        changent de source à l'international."""
+        self._masquees = tuple(masquees)
+        self._libelles_territoire = dict(libelles)
+        for item, cle in self._i18n_items:
+            action = item.data(0, Qt.ItemDataRole.UserRole)
+            if action is None:
+                continue
+            item.setHidden(action in self._masquees)
+            item.setText(0, i18n.tr(self._libelles_territoire.get(action, cle)))
+        # Une sous-section dont toutes les entrées sont masquées (Fond de plan
+        # > France, à l'international) disparaît avec elles.
+        for item, _cle in self._i18n_items:
+            if item.data(0, Qt.ItemDataRole.UserRole) is None and item.parent() is not None:
+                enfants = [item.child(i) for i in range(item.childCount())]
+                item.setHidden(bool(enfants) and all(e.isHidden() for e in enfants))
+
+    def _folder(self, tr_key, parent=None):
+        """Dossier du panneau ; `parent` en fait une sous-section."""
+        item = (QTreeWidgetItem(parent, [i18n.tr(tr_key)]) if parent is not None
+                else QTreeWidgetItem([i18n.tr(tr_key)]))
         font = QFont()
         font.setBold(True)
         item.setFont(0, font)

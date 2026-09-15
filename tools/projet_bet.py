@@ -8,12 +8,14 @@ from datetime import date, datetime
 
 from qgis.core import (QgsProject, QgsVectorLayer, QgsVectorFileWriter,
                        QgsRectangle, QgsCoordinateTransform,
+                       QgsCoordinateReferenceSystem,
                        QgsMemoryProviderUtils, QgsFeature, QgsLayerTreeGroup,
                        )
 from qgis.PyQt.QtCore import QSettings, Qt
 from qgis.PyQt import sip
 
 from . import i18n
+from . import territoire
 from qgis.PyQt.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QProgressDialog, QApplication
 from . import errlog
 from qgis.core import Qgis
@@ -408,7 +410,8 @@ def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
         "version":             "2.0",
         "plugin":              "CanaPlan",
         "date":                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "crs":                 crs.authid() if crs.isValid() else "EPSG:2154",
+        "crs":                 territoire.crs_projet(project).authid(),
+        "territoire":          territoire.courant(project),
         "gpkg":                "data.gpkg",
         "layers":              layers_meta,
         "labels":              labels_state,
@@ -617,6 +620,18 @@ def load_projet(plugin, iface, bet_path=None):
     from .layer_keys import get_layer_id, set_layer_id
     s                 = QSettings()
     project           = QgsProject.instance()
+
+    # Territoire et système de coordonnées du projet, avant toute couche : les
+    # outils de dessin travaillent dans le système de la carte, qui doit être
+    # celui des couches. Un .bet d'avant cette version n'a pas de territoire :
+    # c'est un projet France, et son "crs" vaut Lambert 93.
+    territoire.definir(bet_data.get('territoire') or territoire.FRANCE,
+                       project, memoriser=False)
+    crs_bet = QgsCoordinateReferenceSystem(bet_data.get('crs') or "")
+    if crs_bet.isValid() and not crs_bet.isGeographic():
+        project.setCrs(crs_bet)
+        iface.mapCanvas().setDestinationCrs(crs_bet)
+    plugin.appliquer_territoire()
     layers_meta       = bet_data.get('layers', {})
     labels_state      = bet_data.get('labels', {})
     visibility_state  = bet_data.get('visibility', {})
@@ -726,6 +741,12 @@ def load_projet(plugin, iface, bet_path=None):
             errors.append(i18n.tr('bet_err_fonds_recharge', detail=exc))
 
     canvas.refresh()
+
+    # Garde-fou : un système inadapté au chantier ne se voit pas à l'écran,
+    # mais fausse longueurs, pentes et cubatures. Il se signale donc ici.
+    diag = territoire.diagnostic_projet(project)
+    if not diag['ok'] and diag['message']:
+        errors.append(diag['message'])
 
     if errors:
         QMessageBox.warning(

@@ -191,6 +191,11 @@ class TableauSaisieDialog(QDialog):
         btn_tn_auto = QPushButton(i18n.tr('tn_bouton'))
         btn_tn_auto.setToolTip(i18n.tr('tn_bouton_tip'))
         btn_tn_auto.clicked.connect(self._remplir_tn_auto)
+        # MNT LiDAR HD et RGE ALTI : France seulement. Ailleurs, les MNT
+        # mondiaux (maille 30 m, erreur de plusieurs mètres) ne permettent
+        # pas de caler un fil d'eau : pas de TN automatique plutôt qu'un faux.
+        from ..tools import territoire
+        btn_tn_auto.setVisible(territoire.est_france())
         top.addWidget(btn_tn_auto)
         layout.addLayout(top)
 

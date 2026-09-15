@@ -321,6 +321,13 @@ class CubatureDialog(QDialog):
         )
         layout.addWidget(self.total_label)
 
+        from ..tools import avertissement
+        avert = QLabel(avertissement.texte_court())
+        avert.setWordWrap(True)
+        avert.setStyleSheet("color: #8A5300; font-size: 10px; font-style: italic;"
+                            " padding: 0 6px;")
+        layout.addWidget(avert)
+
         # Boutons export
         btn_row = QHBoxLayout()
         btn_row.addStretch()
@@ -565,6 +572,11 @@ class CubatureDialog(QDialog):
                     row.append(r.get('volume') if r.get('volume') is not None else '')
                     row += [r.get(c['field']) if r.get(c['field']) is not None else '' for c in vol_cols]
                     writer.writerow(row)
+                # En fin de fichier et non en tête : une ligne avant l'en-tête
+                # casse l'import du CSV dans un tableur ou un script.
+                from ..tools import avertissement
+                writer.writerow([])
+                writer.writerow([avertissement.texte_court()])
             self._open_folder(path)
         except Exception as e:
             QMessageBox.critical(self, i18n.tr('cb_err_csv'), str(e))
@@ -784,6 +796,16 @@ class CubatureDialog(QDialog):
             i18n.tr('rap_date', date=date.today().strftime('%d/%m/%Y')),
             subtitle_style,
         ))
+        from ..tools import avertissement
+        avert_style = ParagraphStyle(
+            'Avertissement', parent=styles['Normal'], fontSize=7.5, leading=9.5,
+            textColor=colors.HexColor('#6B4200'),
+            backColor=colors.HexColor('#FFF4E5'),
+            borderColor=colors.HexColor('#E0A040'), borderWidth=0.5,
+            borderPadding=4, spaceBefore=3*mm, spaceAfter=4*mm)
+        story.append(Paragraph("<b>%s</b> — %s" % (i18n.tr('avert_titre'),
+                                                   avertissement.texte()),
+                               avert_style))
         story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#CC0000')))
         story.append(Spacer(1, 3*mm))
 
@@ -1280,6 +1302,10 @@ class CubatureDialog(QDialog):
             canvas.drawString(15*mm, 10*mm,
                               "%s — %s" % (projet_nom, report_type))
             canvas.drawRightString(page_size[0] - 15*mm, 10*mm, i18n.tr('rap_page', n=canvas.getPageNumber()))
+            canvas.setFont('Helvetica-Oblique', 6.5)
+            canvas.setFillColor(colors.HexColor('#8A5300'))
+            canvas.drawCentredString(page_size[0] / 2.0, 6*mm,
+                                     avertissement.texte_court())
             canvas.restoreState()
 
         doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
@@ -1348,6 +1374,11 @@ class CubatureDialog(QDialog):
                 value=i18n.tr('rap_projet_date', projet=projet_nom,
                               date=date.today().strftime('%d/%m/%Y')))
             c.font = Font(size=9, color='555555')
+
+            from ..tools import avertissement
+            ws_recap.merge_cells('A3:H3')
+            c = ws_recap.cell(row=3, column=1, value=avertissement.texte_court())
+            c.font = Font(size=9, italic=True, color='8A5300')
 
             # Paramètres
             ws_recap.merge_cells('A4:D4')
@@ -1739,6 +1770,12 @@ class CubatureDialog(QDialog):
             ws_synth.column_dimensions['A'].width = 22
             ws_synth.column_dimensions['B'].width = 12
             ws_synth.column_dimensions['C'].width = 18
+
+            # Pied de page d'impression sur chaque feuille : la mention suit
+            # le classeur jusque sur papier.
+            for ws in wb.worksheets:
+                ws.oddFooter.center.text = avertissement.texte_court()
+                ws.oddFooter.center.size = 7
 
             wb.save(path)
             self._open_folder(path)

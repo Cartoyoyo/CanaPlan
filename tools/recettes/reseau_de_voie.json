@@ -1,6 +1,6 @@
 {
   "nom": "reseau_de_voie",
-  "resume": "Réseau posé sur l'axe OSM d'une voie, avec un branchement par polygone du bâti cadastral proche. Répond à la demande courante « crée un réseau EU PVC 200 dans l'impasse Danton à Cusset à partir du chemin de Champcourt, un branchement par habitation ». Assemblage des blocs `projet_sur_voie`, `tracer_reseau`, `coter_mnt` et `habiller` : les étapes ne sont plus recopiées ici. Le nom de voie est résolu avec tolérance par `voie()`, le type (rue, chemin, impasse, allée) étant ce que l'usager confond le plus et ce qui identifie le moins. `voie_de_raccordement` désigne l'exutoire et oriente numérotation et cotes ; vide, le terrain tranche sur le TN, et le nord seulement à défaut de TN. Le terrain naturel est relevé sur le MNT IGN (`tn_auto`), il n'est plus une constante saisie. Les cotes ne sont PAS obligatoires : sans `coter`, le réseau est tracé, numéroté, stylé, étiqueté, enregistré et ses regards portent leur TN, sans profondeur ni fil d'eau — à reprendre par `coter_mnt` ou `recaler_cotes` avec les valeurs du chantier.",
+  "resume": "Réseau posé sur l'axe OSM d'une voie, avec un branchement par bâtiment riverain, piqué au milieu de son front de rue et arrêté sur la limite de parcelle. Répond à la demande courante « crée un réseau EU PVC 200 dans l'impasse Danton à Cusset à partir du chemin de Champcourt, un branchement par habitation ». Assemblage des blocs `projet_sur_voie`, `tracer_reseau`, `coter_mnt` et `habiller` : les étapes ne sont plus recopiées ici. Le nom de voie est résolu avec tolérance par `voie()`, le type (rue, chemin, impasse, allée) étant ce que l'usager confond le plus et ce qui identifie le moins. `voie_de_raccordement` désigne l'exutoire et oriente numérotation et cotes : c'est LUI qui donne le sens d'écoulement, jamais le terrain — un collecteur remonte sous une rue qui descend dès que l'exutoire est en haut. LE PRÉCISER AVEC SA COMMUNE (« Rue de Venise, Vichy ») : sans commune, une homonyme à 348 km est résolue et l'appel est refusé. Vide, le nord fait l'amont par convention, ce qui n'a aucune valeur hydraulique. Le terrain naturel est relevé sur le MNT IGN (`tn_auto`), il n'est plus une constante saisie. Les cotes ne sont PAS obligatoires : sans `coter`, le réseau est tracé, numéroté, stylé, étiqueté, enregistré et ses regards portent leur TN, sans profondeur ni fil d'eau — à reprendre par `coter_mnt` ou `recaler_cotes` avec les valeurs du chantier.",
   "parametres": {
     "rue": null,
     "commune": null,
@@ -16,6 +16,8 @@
     "entraxe_max": 50.0,
     "tol_axe": 0.5,
     "distance_max": 10.0,
+    "couche_parcelles": "PCI - Parcelles",
+    "front_min": 1.0,
     "tn_auto": true,
     "coter": false,
     "pente": null,
@@ -58,6 +60,8 @@
         "entraxe_max": "$entraxe_max",
         "tol_axe": "$tol_axe",
         "distance_max": "$distance_max",
+        "couche_parcelles": "$couche_parcelles",
+        "front_min": "$front_min",
         "voie_de_raccordement": "$voie_de_raccordement",
         "tn_auto": "$tn_auto"
       },

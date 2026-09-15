@@ -1,22 +1,26 @@
 # -*- coding: utf-8 -*-
-"""Assistant de création de projet (4 étapes) : adresse, fonds de plan,
-configuration rapide, récapitulatif. Voir assistant_creation_projet.md à la
-racine du plugin pour le plan complet."""
+"""Assistant de création de projet (4 étapes) : territoire et adresse, fonds
+de plan, configuration rapide, récapitulatif. Voir assistant_creation_projet.md
+à la racine du plugin pour le plan complet."""
 
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget,
     QWidget, QCheckBox, QGroupBox, QToolBox, QTextEdit, QFrame,
     QLineEdit, QFileDialog, QMessageBox, QScrollArea, QApplication,
+    QRadioButton, QButtonGroup,
 )
 from qgis.PyQt.QtGui import QFont, QColor
 from qgis.core import (
     QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject,
     QgsPointXY, QgsRasterLayer, QgsRectangle,
 )
-from qgis.gui import QgsMapCanvas, QgsMapToolPan, QgsVertexMarker
+from qgis.gui import (
+    QgsMapCanvas, QgsMapToolPan, QgsVertexMarker, QgsProjectionSelectionWidget,
+)
 
 from ..tools import i18n
+from ..tools import territoire as terr
 from .ban_search_widget import BanSearchWidget
 from .quick_config_widgets import (
     ReseauDefautWidget, CubatureConfigWidget, RemblaiConfigWidget,
@@ -30,13 +34,20 @@ _CUBATURE_WIDTH_KEYS = {
     'larg_branch_eu': 'qc_branch_court_eu', 'larg_branch_ep': 'qc_branch_court_ep',
 }
 
-CANVAS_CRS = QgsCoordinateReferenceSystem("EPSG:2154")
+# La mini-carte est en Web Mercator, le système natif des tuiles OSM : elles
+# s'y affichent nettes partout dans le monde, là où Lambert 93 déformait tout
+# ce qui sort de France. L'emprise est convertie dans le système du projet à
+# la création.
+CANVAS_CRS = QgsCoordinateReferenceSystem("EPSG:3857")
 WGS84_CRS = QgsCoordinateReferenceSystem("EPSG:4326")
 
-# Vichy, siège de l'utilisateur (Vichy Communauté) — vue par défaut de la
-# mini-carte tant qu'aucune adresse n'a été recherchée.
-DEFAULT_LON, DEFAULT_LAT = 3.4265, 46.1278
-DEFAULT_HALF_EXTENT_M = 1500   # vue large ~3 km, ville entière
+# Vue par défaut de la mini-carte tant qu'aucune adresse n'a été choisie :
+# Vichy (Vichy Communauté) en France, l'Afrique de l'Ouest et centrale à
+# l'international, où se trouvent la plupart des chantiers hors de France.
+DEFAULT_VIEWS = {
+    terr.FRANCE: (3.4265, 46.1278, 1500),         # ~3 km, ville entière
+    terr.INTERNATIONAL: (8.0, 8.0, 3500000),      # ~7 000 km, continent
+}
 PICKED_HALF_EXTENT_M = 200     # vue rapprochée ~400 m, échelle de rue
 
 # Ascenseur discret : pas de flèches, poignée translucide qui ne s'affirme
@@ -69,29 +80,62 @@ STEP_TITLE_KEYS = ['wz_etape1', 'wz_etape2', 'wz_etape3', 'wz_etape4']
 
 
 class _AddressPage(QWidget):
-    """Étape 1 : recherche BAN + mini-carte OSM pour situer le projet."""
+    """Étape 1 : territoire, recherche d'adresse, système de coordonnées et
+    mini-carte OSM pour situer le projet."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._address_label = ""
+        self._picked = None              # (lon, lat) de l'adresse choisie
+        self._crs_manuel = False         # système choisi à la main : ne plus le proposer
         layout = QVBoxLayout(self)
 
-        layout.addWidget(QLabel(
-            i18n.tr('wz_adresse_aide')))
+        # ── Territoire ──────────────────────────────────────────────────
+        ligne = QHBoxLayout()
+        ligne.addWidget(QLabel(i18n.tr('wz_territoire')))
+        self._radio_fr = QRadioButton(i18n.tr('wz_territoire_france'))
+        self._radio_int = QRadioButton(i18n.tr('wz_territoire_international'))
+        self._groupe = QButtonGroup(self)
+        for radio in (self._radio_fr, self._radio_int):
+            self._groupe.addButton(radio)
+            ligne.addWidget(radio)
+        ligne.addStretch()
+        layout.addLayout(ligne)
+
+        self._aide_int = QLabel(i18n.tr('wz_territoire_aide_int'))
+        self._aide_int.setWordWrap(True)
+        self._aide_int.setStyleSheet("color: #555;")
+        layout.addWidget(self._aide_int)
+
+        layout.addWidget(QLabel(i18n.tr('wz_adresse_aide')))
 
         self._search = BanSearchWidget()
         self._search.address_picked.connect(self._on_address_picked)
         layout.addWidget(self._search)
 
+        # ── Système de coordonnées (international) ──────────────────────
+        self._crs_box = QWidget()
+        crs_layout = QVBoxLayout(self._crs_box)
+        crs_layout.setContentsMargins(0, 0, 0, 0)
+        crs_ligne = QHBoxLayout()
+        crs_ligne.addWidget(QLabel(i18n.tr('wz_crs_label')))
+        self._crs_widget = QgsProjectionSelectionWidget()
+        self._crs_widget.crsChanged.connect(self._on_crs_changed)
+        crs_ligne.addWidget(self._crs_widget, 1)
+        crs_layout.addLayout(crs_ligne)
+        crs_aide = QLabel(i18n.tr('wz_crs_aide'))
+        crs_aide.setWordWrap(True)
+        crs_aide.setStyleSheet("color: #555;")
+        crs_layout.addWidget(crs_aide)
+        layout.addWidget(self._crs_box)
+
+        # ── Mini-carte ──────────────────────────────────────────────────
         self._canvas = QgsMapCanvas()
-        self._canvas.setMinimumHeight(320)
+        self._canvas.setMinimumHeight(300)
         self._canvas.setDestinationCrs(CANVAS_CRS)
         self._canvas.setCanvasColor(QColor(235, 235, 230))
 
-        osm = QgsRasterLayer(
-            "type=xyz&url=https://tile.openstreetmap.org/%7Bz%7D/%7Bx%7D/%7By%7D.png"
-            "&zmax=19&zmin=0&crs=EPSG3857",
-            "OSM", "wms")
+        osm = QgsRasterLayer(terr.URI_OSM, "OSM", "wms")
         self._osm_layer = osm
         if osm.isValid():
             self._canvas.setLayers([osm])
@@ -99,17 +143,70 @@ class _AddressPage(QWidget):
         self._canvas.setMapTool(QgsMapToolPan(self._canvas))
         layout.addWidget(self._canvas)
 
-        # Vue par défaut : Vichy, tant qu'aucune adresse n'a été choisie.
-        transform = QgsCoordinateTransform(WGS84_CRS, CANVAS_CRS, QgsProject.instance())
-        default_point = transform.transform(QgsPointXY(DEFAULT_LON, DEFAULT_LAT))
-        self._set_view(default_point, DEFAULT_HALF_EXTENT_M)
-
         self._marker = QgsVertexMarker(self._canvas)
         self._marker.setColor(QColor(220, 40, 40))
         self._marker.setIconType(QgsVertexMarker.IconType.ICON_CROSS)
         self._marker.setIconSize(14)
         self._marker.setPenWidth(3)
         self._marker.hide()
+
+        # Le dernier territoire choisi est proposé : qui travaille en Afrique
+        # n'a pas à rebasculer à chaque projet.
+        (self._radio_int if terr.defaut() == terr.INTERNATIONAL
+         else self._radio_fr).setChecked(True)
+        self._groupe.buttonToggled.connect(self._on_territoire_toggled)
+        self._appliquer_territoire()
+
+    # ── Territoire ──────────────────────────────────────────────────────
+
+    def territoire(self):
+        return terr.INTERNATIONAL if self._radio_int.isChecked() else terr.FRANCE
+
+    def _on_territoire_toggled(self, _button, checked):
+        if checked:
+            self._appliquer_territoire()
+
+    def _appliquer_territoire(self):
+        """Adapte recherche, système et vue au territoire. Une adresse choisie
+        dans l'autre territoire est oubliée : elle n'y a plus de sens."""
+        t = self.territoire()
+        international = t == terr.INTERNATIONAL
+        self._aide_int.setVisible(international)
+        self._crs_box.setVisible(international)
+        self._search.set_territoire(t)
+        self._address_label = ""
+        self._picked = None
+        self._crs_manuel = False
+        self._marker.hide()
+        self._set_crs(terr.crs_propose(territoire=t) if not international else None)
+        lon, lat, demi = DEFAULT_VIEWS[t]
+        self._set_view(self._to_canvas(lon, lat), demi)
+
+    # ── Système de coordonnées ──────────────────────────────────────────
+
+    def _set_crs(self, crs):
+        self._crs_programme = True
+        try:
+            self._crs_widget.setCrs(crs if crs is not None
+                                    else QgsCoordinateReferenceSystem())
+        finally:
+            self._crs_programme = False
+
+    def _on_crs_changed(self, _crs):
+        if not getattr(self, '_crs_programme', False):
+            self._crs_manuel = True
+
+    def crs(self):
+        """Système du projet : Lambert 93 en France, celui choisi ailleurs."""
+        if self.territoire() == terr.FRANCE:
+            return QgsCoordinateReferenceSystem(terr.L93)
+        return self._crs_widget.crs()
+
+    # ── Carte et adresse ────────────────────────────────────────────────
+
+    def _to_canvas(self, lon, lat):
+        transform = QgsCoordinateTransform(WGS84_CRS, CANVAS_CRS, QgsProject.instance())
+        return transform.transform(QgsPointXY(lon, lat))
 
     def _set_view(self, point, half_extent_m):
         rect = QgsRectangle(
@@ -121,52 +218,132 @@ class _AddressPage(QWidget):
 
     def _on_address_picked(self, lon, lat, label):
         self._address_label = label
-        transform = QgsCoordinateTransform(WGS84_CRS, CANVAS_CRS, QgsProject.instance())
-        point = transform.transform(QgsPointXY(lon, lat))
+        self._picked = (lon, lat)
+        point = self._to_canvas(lon, lat)
         self._set_view(point, PICKED_HALF_EXTENT_M)
         self._marker.setCenter(point)
         self._marker.show()
         self._canvas.refresh()
+        if self.territoire() == terr.INTERNATIONAL and not self._crs_manuel:
+            self._set_crs(terr.crs_propose(lon, lat, terr.INTERNATIONAL))
 
     def address_label(self):
         return self._address_label
 
-    def extent(self):
-        """Étendue courante de la mini-carte, en EPSG:2154."""
-        return self._canvas.extent()
+    def position(self):
+        """(lon, lat) du chantier : l'adresse choisie, sinon le centre de la
+        mini-carte — que l'utilisateur a pu déplacer après la recherche."""
+        centre = self._canvas.extent().center()
+        transform = QgsCoordinateTransform(CANVAS_CRS, WGS84_CRS, QgsProject.instance())
+        p = transform.transform(centre)
+        return p.x(), p.y()
+
+    def extent_in(self, crs):
+        """Étendue courante de la mini-carte, dans le système `crs`."""
+        transform = QgsCoordinateTransform(CANVAS_CRS, crs, QgsProject.instance())
+        return transform.transformBoundingBox(self._canvas.extent())
+
+    def validate(self, parent):
+        """Contrôle du système de coordonnées avant de quitter l'étape.
+
+        Un système en degrés ou absent bloque. Un système qui déforme les
+        longueurs au chantier (Lambert 93 à Dakar) est proposé à la
+        correction, sans l'imposer : un bureau d'études peut avoir ses raisons.
+        """
+        lon, lat = self.position()
+        crs = self.crs()
+        if (self.territoire() == terr.INTERNATIONAL and not self._crs_manuel
+                and not crs.isValid()):
+            crs = terr.crs_propose(lon, lat, terr.INTERNATIONAL)
+            self._set_crs(crs)
+        diag = terr.diagnostic_crs(crs, lon, lat)
+        if diag['ok']:
+            return True
+        message = terr.message_diagnostic(diag, lon, lat)
+        if diag['motif'] in terr.MOTIFS_BLOQUANTS:
+            QMessageBox.warning(parent, i18n.tr('wz_crs_titre'), message)
+            return False
+        reply = QMessageBox.question(
+            parent, i18n.tr('wz_crs_titre'),
+            i18n.tr('wz_crs_continuer', message=message),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        return reply == QMessageBox.StandardButton.Yes
 
 
 class _BasemapsPage(QWidget):
-    """Étape 2 : choix des fonds de plan à charger."""
+    """Étape 2 : choix des fonds de plan à charger, selon le territoire."""
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(i18n.tr('wz_fonds_aide')))
-
-        group = QGroupBox(i18n.tr('wz_fonds_titre'))
-        group_layout = QVBoxLayout()
-
-        self._checks = {}
-        for key, cle, checked in [
+    # (clé run_fond_projet, clé i18n, coché par défaut)
+    CHOIX = {
+        terr.FRANCE: [
             ('osm', 'wz_fond_osm', True),
             ('ortho', 'wz_fond_ortho', True),
             ('ban', 'wz_fond_ban', False),
             ('noms_voie', 'wz_fond_noms_voie', False),
             ('pci_parcelles', 'wz_fond_parcelles', False),
             ('pci_bati', 'wz_fond_bati', False),
-        ]:
+        ],
+        # Le bâti est coché d'office à l'international : sans lui, pas de
+        # branchements automatiques, et rien d'autre ne le remplace.
+        terr.INTERNATIONAL: [
+            ('osm', 'wz_fond_osm_int', True),
+            ('ortho', 'wz_fond_esri', True),
+            ('pci_bati', 'wz_fond_bati_osm', True),
+        ],
+    }
+    RECAP = {
+        terr.FRANCE: {
+            'osm': 'wz_fond_osm_court', 'ortho': 'wz_fond_ortho',
+            'ban': 'wz_fond_ban', 'noms_voie': 'wz_fond_noms_voie_court',
+            'pci_parcelles': 'wz_fond_parcelles', 'pci_bati': 'wz_fond_bati',
+        },
+        terr.INTERNATIONAL: {
+            'osm': 'wz_fond_osm_int', 'ortho': 'wz_fond_esri',
+            'pci_bati': 'wz_fond_bati_osm',
+        },
+    }
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel(i18n.tr('wz_fonds_aide')))
+
+        self._group = QGroupBox(i18n.tr('wz_fonds_titre'))
+        self._group_layout = QVBoxLayout()
+        self._group.setLayout(self._group_layout)
+        layout.addWidget(self._group)
+
+        self._aide_int = QLabel(i18n.tr('wz_fond_aide_int'))
+        self._aide_int.setWordWrap(True)
+        self._aide_int.setStyleSheet("color: #555;")
+        layout.addWidget(self._aide_int)
+        layout.addStretch()
+
+        self._territoire = None
+        self._checks = {}
+        self.set_territoire(terr.FRANCE)
+
+    def set_territoire(self, territoire):
+        if territoire == self._territoire:
+            return
+        self._territoire = territoire
+        for cb in self._checks.values():
+            self._group_layout.removeWidget(cb)
+            cb.deleteLater()
+        self._checks = {}
+        for key, cle, checked in self.CHOIX[territoire]:
             cb = QCheckBox(i18n.tr(cle))
             cb.setChecked(checked)
             self._checks[key] = cb
-            group_layout.addWidget(cb)
-
-        group.setLayout(group_layout)
-        layout.addWidget(group)
-        layout.addStretch()
+            self._group_layout.addWidget(cb)
+        self._aide_int.setVisible(territoire == terr.INTERNATIONAL)
 
     def options(self):
         return {key: cb.isChecked() for key, cb in self._checks.items()}
+
+    def libelles(self):
+        return {key: i18n.tr(cle) for key, cle in self.RECAP[self._territoire].items()}
 
 
 class _QuickConfigPage(QWidget):
@@ -268,7 +445,7 @@ class _RecapPage(QWidget):
 
         self._text = QTextEdit()
         self._text.setReadOnly(True)
-        self._text.setMaximumHeight(90)
+        self._text.setMaximumHeight(120)
         layout.addWidget(self._text)
 
         # Aperçus schématiques (réseau, largeurs de tranchée, remblai),
@@ -336,14 +513,14 @@ class _RecapPage(QWidget):
         if not self._name_edit.text().strip():
             self._name_edit.setText(name)
 
-    def refresh(self, address_label, basemap_options, config_page):
-        basemap_keys = {
-            'osm': 'wz_fond_osm_court', 'ortho': 'wz_fond_ortho',
-            'ban': 'wz_fond_ban', 'noms_voie': 'wz_fond_noms_voie_court',
-            'pci_parcelles': 'wz_fond_parcelles', 'pci_bati': 'wz_fond_bati',
-        }
-        chosen = [i18n.tr(basemap_keys[k]) for k, v in basemap_options.items() if v]
+    def refresh(self, address_label, basemap_options, config_page,
+                territoire_label="", crs_label="", basemap_labels=None):
+        basemap_labels = basemap_labels or {}
+        chosen = [basemap_labels.get(k, k) for k, v in basemap_options.items() if v]
         lines = [
+            i18n.tr('wz_recap_territoire'),
+            f"  {territoire_label} — {crs_label}",
+            "",
             i18n.tr('wz_recap_adresse'),
             f"  {address_label or i18n.tr('wz_recap_sans_adresse')}",
             "",
@@ -372,7 +549,7 @@ class ProjectWizardDialog(QDialog):
         self._created = False
 
         self.setWindowTitle(i18n.tr('nouveau_projet_assistant'))
-        self.setMinimumSize(560, 520)
+        self.setMinimumSize(560, 560)
 
         # Ouvrir assez grand pour que le récapitulatif (étape 4, la plus
         # dense) tienne d'un seul tenant quand l'écran le permet ; sinon on
@@ -433,10 +610,17 @@ class ProjectWizardDialog(QDialog):
             i18n.tr('wz_creer') if last else i18n.tr('wz_suivant'))
         if last:
             address_label = self._address_page.address_label()
+            t = self._address_page.territoire()
+            crs = self._address_page.crs()
             self._recap_page.refresh(
                 address_label,
                 self._basemaps_page.options(),
                 self._config_page,
+                territoire_label=i18n.tr('wz_territoire_france' if t == terr.FRANCE
+                                         else 'wz_territoire_international'),
+                crs_label=(f"{crs.authid()} ({crs.description()})"
+                           if crs.isValid() else "?"),
+                basemap_labels=self._basemaps_page.libelles(),
             )
             if address_label:
                 self._recap_page.set_default_name(
@@ -450,6 +634,10 @@ class ProjectWizardDialog(QDialog):
         if self._current_index() == self._stack.count() - 1:
             self._create_project()
             return
+        if self._current_index() == 0:
+            if not self._address_page.validate(self):
+                return
+            self._basemaps_page.set_territoire(self._address_page.territoire())
         self._stack.setCurrentIndex(self._current_index() + 1)
         self._update_nav()
 
@@ -475,9 +663,17 @@ class ProjectWizardDialog(QDialog):
                 return
         gpkg_temp = os.path.join(proj_folder, f"{proj_name}_tmp.gpkg")
 
+        # Territoire et système du PROJET avant toute couche : _create_layer
+        # en hérite, et les fonds téléchargés (bâti) sont écrits dedans.
+        project = QgsProject.instance()
+        crs = self._address_page.crs()
+        terr.definir(self._address_page.territoire(), project)
+        project.setCrs(crs)
+        self._plugin.appliquer_territoire()
+
         canvas = self._iface.mapCanvas()
-        canvas.setDestinationCrs(CANVAS_CRS)
-        canvas.setExtent(self._address_page.extent())
+        canvas.setDestinationCrs(crs)
+        canvas.setExtent(self._address_page.extent_in(crs))
         canvas.refresh()
 
         self._plugin.run_fond_projet(self._basemaps_page.options())

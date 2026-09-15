@@ -41,8 +41,8 @@ changelog=
          Imagery, bati OpenStreetMap (Overpass) et zone UTM proposee d'apres
          l'adresse. Garde-fou du systeme de coordonnees : ecart de longueur
          mesure au chantier, refus des systemes en degres ou en pieds,
-         signalement au-dela de 1 % ou hors domaine (Lambert 93 allonge les
-         longueurs de 25 % a Abidjan). Fond de plan en sections France /
+         signalement au-dela de 1 pour cent ou hors domaine (Lambert 93 allonge les
+         longueurs de 25 pour cent a Abidjan). Fond de plan en sections France /
          International, mentions de source sur les plans PDF.
          Avertissement d'usage : fenetre a la premiere utilisation d'une
          fonction, texte dans A propos et dans les rapports de cubature.

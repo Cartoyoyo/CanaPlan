@@ -2,7 +2,7 @@
 name=CanaPlan – Réseau Assainissement
 description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. PILOTABLE PAR SCRIPT AUTANT QU'À LA SOURIS — point d'entrée : from CanaPlan.tools import api ; api.aide() — chaque outil est un verbe Python, et des recettes JSON jouent un chantier complet (projet, fonds, tracé sur axe OSM, un branchement par habitation, terrain naturel sur MNT IGN, cotes, plan PDF) en un seul appel, sans aucun clic. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE). En France comme à l'international : adresses et bâti OpenStreetMap, photo aérienne Esri, système UTM contrôlé hors de France. [EN] Topological drawing of foul (red) and storm (blue) sewer networks: pipes, service connections, manholes, inspection chambers. FULLY SCRIPTABLE, NOT A MOUSE-ONLY TOOL — entry point: from CanaPlan.tools import api ; api.aide() — every tool is a Python verb, and JSON recipes run a complete job (project, basemaps, centreline from OSM, one connection per dwelling, ground level from the national DEM, levels, PDF plan) in a single call. Longitudinal profiles, trench volumes, cross sections, multi-sheet PDF printing, DXF export and StaR-Eau (CNIG/ASTEE) GeoPackage export.
 icon=icon/icon.png
-version=2.1
+version=2.1.1
 qgisMinimumVersion=3.40
 qgisMaximumVersion=4.99
 author=Yoan Laloux
@@ -35,6 +35,9 @@ about=CanaPlan s'utilise de deux façons, également complètes : à la souris, 
     procedures can be declared as JSON recipes and replayed in a single call.
 
 changelog=
+    2.1.1  Correctif de publication : metadata.txt illisible par
+           plugins.qgis.org (signe pour cent dans le changelog). Contenu
+           identique a la 2.1.
     2.1  Territoire International. Premiere etape de l'assistant : France ou
          International. Hors de France, adresses OpenStreetMap (Photon,
          repli Nominatim), fond OpenStreetMap, photo aerienne Esri World

@@ -1,8 +1,8 @@
 [general]
 name=CanaPlan – Réseau Assainissement
-description=Dessin topologique de réseaux EU (rouge) et EP (bleu) : conduites, branchements, regards, tabourets. PILOTABLE PAR SCRIPT AUTANT QU'À LA SOURIS — point d'entrée : from CanaPlan.tools import api ; api.aide() — chaque outil est un verbe Python, et des recettes JSON jouent un chantier complet (projet, fonds, tracé sur axe OSM, un branchement par habitation, terrain naturel sur MNT IGN, cotes, plan PDF) en un seul appel, sans aucun clic. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE). En France comme à l'international : adresses et bâti OpenStreetMap, photo aérienne Esri, système UTM contrôlé hors de France. [EN] Topological drawing of foul (red) and storm (blue) sewer networks: pipes, service connections, manholes, inspection chambers. FULLY SCRIPTABLE, NOT A MOUSE-ONLY TOOL — entry point: from CanaPlan.tools import api ; api.aide() — every tool is a Python verb, and JSON recipes run a complete job (project, basemaps, centreline from OSM, one connection per dwelling, ground level from the national DEM, levels, PDF plan) in a single call. Longitudinal profiles, trench volumes, cross sections, multi-sheet PDF printing, DXF export and StaR-Eau (CNIG/ASTEE) GeoPackage export.
+description=Dessin topologique de réseaux EU (rouge), EP (bleu) et eau potable AEP (cyan, symboles StaR-Eau) : conduites, branchements, regards, tabourets, nœuds et compteurs. PILOTABLE PAR SCRIPT AUTANT QU'À LA SOURIS — point d'entrée : from CanaPlan.tools import api ; api.aide() — chaque outil est un verbe Python, et des recettes JSON jouent un chantier complet (projet, fonds, tracé sur axe OSM, un branchement par habitation, terrain naturel sur MNT IGN, cotes, plan PDF) en un seul appel, sans aucun clic. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE). En France comme à l'international : adresses et bâti OpenStreetMap, photo aérienne Esri, système UTM contrôlé hors de France. [EN] Topological drawing of foul (red) and storm (blue) sewer networks and drinking-water (AEP, cyan, StaR-Eau symbols) networks: pipes, service connections, manholes, inspection chambers, nodes and meters. FULLY SCRIPTABLE, NOT A MOUSE-ONLY TOOL — entry point: from CanaPlan.tools import api ; api.aide() — every tool is a Python verb, and JSON recipes run a complete job (project, basemaps, centreline from OSM, one connection per dwelling, ground level from the national DEM, levels, PDF plan) in a single call. Longitudinal profiles, trench volumes, cross sections, multi-sheet PDF printing, DXF export and StaR-Eau (CNIG/ASTEE) GeoPackage export.
 icon=icon/icon.png
-version=2.1.1
+version=2.2
 qgisMinimumVersion=3.40
 qgisMaximumVersion=4.99
 author=Yoan Laloux
@@ -12,13 +12,13 @@ repository=https://github.com/Cartoyoyo/CanaPlan
 tracker=https://github.com/Cartoyoyo/CanaPlan/issues
 license=GNU GPL v3
 homepage=https://github.com/Cartoyoyo/CanaPlan
-tags=assainissement,réseau,EU,EP,profil en long,cubature,DXF,BET,StaR-Eau,GeoPackage,CNIG,ASTEE,Star-DT,DT-DICT,OpenStreetMap,international
+tags=assainissement,eau potable,AEP,réseau,EU,EP,profil en long,cubature,DXF,BET,StaR-Eau,GeoPackage,CNIG,ASTEE,Star-DT,DT-DICT,OpenStreetMap,international
 experimental=False
 deprecated=False
 
-about=CanaPlan s'utilise de deux façons, également complètes : à la souris, et par script. Le module CanaPlan.tools.api expose chaque outil en verbe Python appelable depuis la console QGIS, un script, un serveur MCP ou un agent — « from CanaPlan.tools import api ; api.aide() » rend le sommaire des verbes et des recettes disponibles. Les recettes sont des procédures JSON qui enchaînent un chantier entier en un appel : création du projet, chargement des fonds, tracé du collecteur sur l'axe OSM de la voie, un branchement par habitation jusqu'à la limite de parcelle, terrain naturel relevé sur le MNT IGN, cotes, étiquettes et plan PDF. Rien de tout cela n'exige un clic. CanaPlan est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement EU (Eaux Usées) et EP (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement. La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle. Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE).
+about=CanaPlan s'utilise de deux façons, également complètes : à la souris, et par script. Le module CanaPlan.tools.api expose chaque outil en verbe Python appelable depuis la console QGIS, un script, un serveur MCP ou un agent — « from CanaPlan.tools import api ; api.aide() » rend le sommaire des verbes et des recettes disponibles. Les recettes sont des procédures JSON qui enchaînent un chantier entier en un appel : création du projet, chargement des fonds, tracé du collecteur sur l'axe OSM de la voie, un branchement par habitation jusqu'à la limite de parcelle, terrain naturel relevé sur le MNT IGN, cotes, étiquettes et plan PDF. Rien de tout cela n'exige un clic. CanaPlan est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement EU (Eaux Usées) et EP (Eaux Pluviales), et des réseaux d'eau potable AEP avec les symboles du géostandard StaR-Eau, directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement. La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle. Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard StaR-Eau V2024 (CNIG/ASTEE).
     [EN] CanaPlan is a design drawing tool for sanitary and storm sewer
-    networks, used directly inside QGIS on a basemap the plugin loads for you
+    networks and drinking-water networks, used directly inside QGIS on a basemap the plugin loads for you
     (French address database, cadastral parcels and buildings, IGN aerial
     imagery, OpenStreetMap, or an existing DXF/DWG drawing). Topology is native:
     every pipe joins two structures, every service connection re-anchors itself
@@ -35,6 +35,33 @@ about=CanaPlan s'utilise de deux façons, également complètes : à la souris, 
     procedures can be declared as JSON recipes and replayed in a single call.
 
 changelog=
+    2.2  Reseau AEP (eau potable). Troisieme reseau complet, sur les quatre
+         couches d'EU et EP : conduite, branchement, noeud (champ type) et
+         compteur. Un noeud a chaque sommet, cree en vanne ; robinet de
+         branchement pose au piquage sans couper la conduite, recale au
+         deplacement et a la suppression ; outil Poser un appareil AEP ;
+         types dans Renseigner et le Tableau de saisie ; renumerotation par
+         type (V, RB, VT, VD, PI, BI, RP, CPT). Symboles du geostandard
+         StaR-Eau (collection eau potable, ASTEE / CNIG), orientes sur la
+         conduite ou le branchement, bouches a cle en option. Fil d'eau
+         deduit de la couverture (bouton Couverture -> FE, verbe
+         couverture_aep). Profil en long AEP, profil groupe EU + EP + AEP,
+         coupe transversale, cubature, coupe type, PDF complet, ZIP, DXF,
+         projet .bet et assistant de creation traitent l'AEP. Export
+         StaR-Eau de type EAU : tables aep_canalisation, aep_vanne,
+         aep_appareillage, aep_regulation, aep_point_mesure,
+         aep_point_livraison, aep_piece, aep_raccord et
+         aep_canalisation_branchement.
+         Magic Box (groupe General) : branchements automatiques sur des
+         troncons cliques, par parcelle, batiment ou numero BAN, des deux
+         cotes ou d'un seul, avec apercu avant trace ; verbe
+         branchements_auto.
+         Corrections : un clic droit ou un double-clic de fin sur le dernier
+         regard creait une conduite de longueur nulle ; la coupe d'une
+         conduite recopiait la cle fid d'un GeoPackage et laissait la couche
+         bloquee en edition ;
+         api.controle_stareau plantait ; deux messages d'erreur (reportlab,
+         rotation des sauvegardes .bet) levaient eux-memes une erreur.
     2.1.1  Correctif de publication : metadata.txt illisible par
            plugins.qgis.org (signe pour cent dans le changelog). Contenu
            identique a la 2.1.

@@ -13,6 +13,7 @@ from qgis.PyQt.QtWidgets import QMessageBox, QDialog, QFormLayout, QLineEdit, QD
 from qgis.PyQt.QtGui import QColor, QCursor
 
 from . import i18n
+from . import reseaux as R
 
 from .spatial_utils import nearest_point_feature, nearest_line_feature
 from .qt_exec import exec_dialog
@@ -60,7 +61,7 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
 
         # Rubber band pour le tracé temporaire
         self.rubber = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
-        color = QColor(255, 0, 0) if reseau == "EU" else QColor(0, 0, 255)
+        color = R.couleur(reseau)
         self.rubber.setColor(color)
         self.rubber.setWidth(2)
 
@@ -333,6 +334,12 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
             self._cancel()
             return
 
+        # AEP : le robinet de branchement est le nœud de départ, posé sur la
+        # conduite principale au point de piquage (sans la couper, comme un
+        # piquage EU/EP).
+        if R.est_aep(self.reseau):
+            self._create_robinet(self.snapped_points[0])
+
         # Création du branchement
         self._create_branchement()
         self._reset()
@@ -432,9 +439,30 @@ class DrawBranchementTool(QgsMapToolEmitPoint):
             self.tabouret_layer.startEditing()
         feat = QgsFeature(self.tabouret_layer.fields())
         feat.setGeometry(QgsGeometry.fromPointXY(point))
+        if R.est_aep(self.reseau) and self.tabouret_layer.fields().indexOf('type') >= 0:
+            feat.setAttribute('type', R.terminal_aep_defaut())
         self.tabouret_layer.addFeature(feat)
         if not self._differer_ecriture:
             self.tabouret_layer.commitChanges()
+
+    def _create_robinet(self, point):
+        """Pose le nœud `robinet_branchement` au piquage (AEP).
+
+        Piquage sur un nœud existant (branchement tiré depuis un appareil ou
+        un coude) : aucun robinet n'est ajouté, le nœud est déjà là.
+        """
+        existant, _ = nearest_point_feature(self.regard_layer, QgsPointXY(point), 0.01)
+        if existant is not None:
+            return
+        if not self.regard_layer.isEditable():
+            self.regard_layer.startEditing()
+        feat = QgsFeature(self.regard_layer.fields())
+        feat.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(point)))
+        if self.regard_layer.fields().indexOf('type') >= 0:
+            feat.setAttribute('type', R.AEP_NOEUD_BRANCHEMENT)
+        self.regard_layer.addFeature(feat)
+        if not self._differer_ecriture:
+            self.regard_layer.commitChanges()
 
     def _create_regard(self, point):
         """Crée un regard au point donné (avec formulaire simplifié)."""

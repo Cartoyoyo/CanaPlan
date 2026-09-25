@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtCore import Qt
 
 from ..tools import i18n
+from ..tools import reseaux as R
 from .profil_dialog import PAPER_SIZES, _EXPORT_DPI
 
 try:
@@ -48,10 +49,20 @@ def _fmt(val, spec='{:.2f}'):
     return spec.format(val) if val is not None else '—'
 
 
-_EU_COLORS = ['#CC0000', '#E03535', '#FF5555', '#AA1111', '#FF2222',
-              '#DD3333', '#BB0000', '#EE4444', '#993300', '#FF6600']
-_EP_COLORS = ['#0044CC', '#1166DD', '#3388EE', '#0022AA', '#2255FF',
-              '#1144BB', '#003399', '#4477EE', '#005599', '#0077CC']
+# Couleur principale et fond clair de chaque réseau (registre tools/reseaux).
+def _couleur(reseau):
+    return R.hex_fonce(reseau)
+
+
+def _fond(reseau):
+    return R.hex_clair(reseau)
+
+
+def _reseaux_presents(conduites):
+    """Réseaux du profil, dans l'ordre EU, EP, AEP."""
+    presents = {c['reseau'] for c in conduites}
+    return [r for r in R.RESEAUX if r in presents]
+
 
 # 5 lignes partagées : libellé regard / libellé conduite
 _N_ROWS = 5
@@ -70,7 +81,7 @@ _FONT_LABEL = 6.8
 
 class ProfilGroupeDialog(QDialog):
     """
-    Profil groupé EU + EP.
+    Profil groupé EU + EP (+ AEP).
 
     Bandes supérieures : noms des regards et piquages.
     Graphique altimétrique avec cheminées (sans texte).
@@ -87,7 +98,7 @@ class ProfilGroupeDialog(QDialog):
             'noms_piquages': True,
             'distances_piquages': True,
         }
-        self.setWindowTitle(i18n.tr('pg_titre'))
+        self.setWindowTitle(self._titre())
         self.setMinimumSize(600, 400)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
@@ -99,6 +110,13 @@ class ProfilGroupeDialog(QDialog):
 
         self._build_ui()
         self._draw()
+
+    def _titre(self):
+        """« Profil groupé EU + EP + AEP » : les réseaux réellement présents."""
+        reseaux = _reseaux_presents(self.data.get('conduites', []))
+        if not reseaux or reseaux == ['EU', 'EP']:
+            return i18n.tr('pg_titre')
+        return i18n.tr('pg_titre_reseaux', reseaux=" + ".join(reseaux))
 
     # ------------------------------------------------------------------ UI
 
@@ -144,9 +162,8 @@ class ProfilGroupeDialog(QDialog):
         conduites = self.data['conduites']
         ref_len   = self.data['ref_length']
 
-        _EU_C = _EU_COLORS[0]
-        _EP_C = _EP_COLORS[0]
-        colors = [_EU_C if c['reseau'] == 'EU' else _EP_C for c in conduites]
+        colors = [_couleur(c['reseau']) for c in conduites]
+        reseaux = _reseaux_presents(conduites)
 
         all_y = []
         for c in conduites:
@@ -158,18 +175,19 @@ class ProfilGroupeDialog(QDialog):
         y_max    = (max(all_y) + 1.5) if all_y else 10.0
         x_margin = ref_len * 0.03
 
-        conduites_eu = [(c, col) for c, col in zip(conduites, colors)
-                        if c['reseau'] == 'EU']
-        conduites_ep = [(c, col) for c, col in zip(conduites, colors)
-                        if c['reseau'] == 'EP']
-        has_eu = bool(conduites_eu)
-        has_ep = bool(conduites_ep)
+        par_reseau = {r: [(c, col) for c, col in zip(conduites, colors)
+                          if c['reseau'] == r] for r in reseaux}
 
-        # Regards uniques ordonnés par abscisse (pour la bande noms)
+        # Regards uniques ordonnés par abscisse (pour la bande noms). Les
+        # nœuds AEP muets (coudes…) n'y figurent pas : il y en a un à chaque
+        # sommet de conduite.
         regard_entries = []
         seen_reg = set()
         for c in conduites:
-            for x, nom in [(c['x0'], c['nom_r0']), (c['x1'], c['nom_r1'])]:
+            for x, nom, muet in [(c['x0'], c['nom_r0'], c.get('muet0')),
+                                 (c['x1'], c['nom_r1'], c.get('muet1'))]:
+                if muet:
+                    continue
                 key = (nom or '', round(x, 2))
                 if key not in seen_reg:
                     seen_reg.add(key)
@@ -191,20 +209,20 @@ class ProfilGroupeDialog(QDialog):
             end_c = max(terms, key=lambda c: c['x1']) if terms else s[-1][0]
             return start, end_c['nom_r1'], s[0][1]
 
-        eu_s, eu_e, eu_c = _chain_ends('EU')
-        ep_s, ep_e, ep_c = _chain_ends('EP')
-
-        self.figure.text(0.5, 0.99, i18n.tr('pg_titre'),
+        self.figure.text(0.5, 0.99, self._titre(),
                          fontsize=9, fontweight='bold',
                          ha='center', va='top', color='black')
-        if eu_s and eu_s != '—':
-            self.figure.text(0.11, 0.99, f"EU : {eu_s} → {eu_e}",
-                             fontsize=8, fontweight='bold',
-                             ha='left', va='top', color=eu_c)
-        if ep_s and ep_s != '—':
-            self.figure.text(0.97, 0.99, f"EP : {ep_s} → {ep_e}",
-                             fontsize=8, fontweight='bold',
-                             ha='right', va='top', color=ep_c)
+        # Extrémités de chaque chaîne : EU à gauche, EP à droite, AEP sous
+        # le titre — les places historiques de EU et EP ne bougent pas.
+        places = {'EU': (0.11, 0.99, 'left'), 'EP': (0.97, 0.99, 'right'),
+                  'AEP': (0.5, 0.965, 'center')}
+        for reseau in reseaux:
+            s, e, col = _chain_ends(reseau)
+            if s and s != '—':
+                x, y, ha = places[reseau]
+                self.figure.text(x, y, f"{reseau} : {s} → {e}",
+                                 fontsize=8, fontweight='bold',
+                                 ha=ha, va='top', color=col)
 
         avec_cartouche = self.opts.get('cartouche', True)
 
@@ -229,8 +247,11 @@ class ProfilGroupeDialog(QDialog):
             self.canvas.draw()
             return
 
-        n_cart = (1 if has_eu else 0) + (1 if has_ep else 0)
-        ratios = [0.6, 1.0, 5.4] + [2] * n_cart
+        n_cart = len(reseaux)
+        # Au-delà de deux cartouches, le graphique garderait trop peu de place :
+        # les cartouches se resserrent un peu.
+        h_cart = 2 if n_cart <= 2 else 1.6
+        ratios = [0.6, 1.0, 5.4] + [h_cart] * n_cart
         gs = GridSpec(
             3 + n_cart, 1, figure=self.figure,
             height_ratios=ratios,
@@ -248,19 +269,11 @@ class ProfilGroupeDialog(QDialog):
         self._draw_profile(ax_p, conduites, colors, ref_len,
                            y_min, y_max, x_margin)
 
-        cart_idx = 3
-        if has_eu:
-            ax_eu = self.figure.add_subplot(gs[cart_idx])
-            show_x = not has_ep
+        for i, reseau in enumerate(reseaux):
+            ax_c = self.figure.add_subplot(gs[3 + i])
             self._draw_cartouche_reseau(
-                ax_eu, conduites_eu, '#CC0000', 'EU',
-                ref_len, x_margin, show_xaxis=show_x)
-            cart_idx += 1
-        if has_ep:
-            ax_ep = self.figure.add_subplot(gs[cart_idx])
-            self._draw_cartouche_reseau(
-                ax_ep, conduites_ep, '#0044CC', 'EP',
-                ref_len, x_margin, show_xaxis=True)
+                ax_c, par_reseau[reseau], _couleur(reseau), reseau,
+                ref_len, x_margin, show_xaxis=(i == n_cart - 1))
 
         self.canvas.draw()
 
@@ -291,7 +304,6 @@ class ProfilGroupeDialog(QDialog):
             ax.axhline(0, color='#333333', linewidth=1.0)
             return
         show_dist = self.opts.get('distances_piquages', True)
-        _PIQ_COLOR = {'EU': _EU_COLORS[0], 'EP': _EP_COLORS[0]}
         reg_xs = sorted(r['x'] for r in regard_entries)
         for piq in self.data.get('piquages', []):
             nom = piq.get('nom', '')
@@ -309,7 +321,7 @@ class ProfilGroupeDialog(QDialog):
                 label = nom
             txt = ax.text(x_piq, 0.05, label, rotation=45,
                           ha='left', va='bottom', fontsize=5.5,
-                          color=_PIQ_COLOR.get(reseau, _EU_COLORS[0]))
+                          color=_couleur(reseau))
             txt.set_clip_on(True)
             txt.set_clip_path(ax.patch)
         ax.axhline(0, color='#333333', linewidth=1.0)
@@ -348,20 +360,22 @@ class ProfilGroupeDialog(QDialog):
             elif fe1 is not None:
                 ax.plot(x1, fe1, 'o', color=color, markersize=6, zorder=4)
 
-        # Cheminées des regards (uniques) — couleur = première conduite qui référence le regard
+        # Cheminées des regards (uniques par réseau) — un regard EU et un
+        # nœud AEP à la même abscisse restent deux ouvrages distincts.
         regards_by_x = {}
         for c, color in zip(conduites, colors):
             diam   = _fval(c['feat']['diametre'])
             diam_m = (diam / 1000.0) if diam else 0.3
-            for x, nom, tn, fe in [
-                (c['x0'], c['nom_r0'], c['tn0'], c['fe0']),
-                (c['x1'], c['nom_r1'], c['tn1'], c['fe1']),
+            for x, nom, tn, fe, muet in [
+                (c['x0'], c['nom_r0'], c['tn0'], c['fe0'], c.get('muet0')),
+                (c['x1'], c['nom_r1'], c['tn1'], c['fe1'], c.get('muet1')),
             ]:
-                key = round(x, 2)
+                key = (c['reseau'], round(x, 2))
                 if key not in regards_by_x:
                     regards_by_x[key] = {'x': x, 'nom': nom, 'tn': tn,
                                          'fe': fe, 'diam_m': diam_m,
-                                         'color': color}
+                                         'color': color, 'muet': muet,
+                                         'aep': R.est_aep(c['reseau'])}
                 else:
                     r = regards_by_x[key]
                     if fe is not None and (r['fe'] is None or fe < r['fe']):
@@ -378,6 +392,18 @@ class ProfilGroupeDialog(QDialog):
             x, fe, tn, nom = r['x'], r['fe'], r['tn'], r['nom']
             diam_m         = r['diam_m']
             rc             = r['color']
+
+            if r['aep']:
+                # AEP : pas de regard. Un appareil se montre par sa tige de
+                # manœuvre (génératrice supérieure → TN) et un losange ; un
+                # nœud muet ne se dessine pas.
+                if not r['muet'] and fe is not None:
+                    gs = fe + diam_m
+                    if tn is not None:
+                        ax.plot([x, x], [gs, tn], '-', color=rc,
+                                linewidth=0.9, zorder=5)
+                    ax.plot(x, gs, 'D', color=rc, markersize=4.5, zorder=6)
+                continue
 
             if fe is not None and tn is not None:
                 gs = fe + 0.9 * diam_m   # accroche juste sous la génératrice sup.
@@ -397,14 +423,13 @@ class ProfilGroupeDialog(QDialog):
             # nom dans la bande supérieure, plus ici
 
         # Piquages (branchements) — flèches uniquement, texte dans la bande
-        _PIQ_COLOR = {'EU': _EU_COLORS[0], 'EP': _EP_COLORS[0]}
         if self.opts.get('fleches_piquages', True):
             y_arrow_top = y_max
             for piq in self.data.get('piquages', []):
                 x_piq  = piq['x']
                 fe_piq = piq['fe'] if piq['fe'] is not None else y_min
                 reseau = piq.get('reseau', 'EU')
-                pcol   = _PIQ_COLOR.get(reseau, _EU_COLORS[0])
+                pcol   = _couleur(reseau)
                 ax.annotate(
                     '', xy=(x_piq, fe_piq),
                     xytext=(x_piq, y_arrow_top),
@@ -429,9 +454,9 @@ class ProfilGroupeDialog(QDialog):
         cols   = []
         seen_r = {}   # (nom, round(x,2)) → True  pour éviter les doublons
 
-        def _add_regard(x, nom, tn, fe):
+        def _add_regard(x, nom, tn, fe, muet=False):
             key = (nom or '', round(x, 2))
-            if key in seen_r:
+            if muet or key in seen_r:
                 return
             seen_r[key] = True
             prof = ((tn - fe) if (tn is not None and fe is not None) else None)
@@ -444,7 +469,7 @@ class ProfilGroupeDialog(QDialog):
             }))
 
         for c, _col in cc:
-            _add_regard(c['x0'], c['nom_r0'], c['tn0'], c['fe0'])
+            _add_regard(c['x0'], c['nom_r0'], c['tn0'], c['fe0'], c.get('muet0'))
             mid = (c['x0'] + c['x1']) / 2.0
             cols.append(('C', mid, c['feat']))
 
@@ -452,7 +477,7 @@ class ProfilGroupeDialog(QDialog):
         x0_set = {round(c['x0'], 2) for c, _ in cc}
         for c, _ in cc:
             if round(c['x1'], 2) not in x0_set:
-                _add_regard(c['x1'], c['nom_r1'], c['tn1'], c['fe1'])
+                _add_regard(c['x1'], c['nom_r1'], c['tn1'], c['fe1'], c.get('muet1'))
 
         # Réordonne par x (les regards intercalés peuvent être hors ordre)
         cols.sort(key=lambda t: t[1])
@@ -494,7 +519,7 @@ class ProfilGroupeDialog(QDialog):
                 ax.axhspan(i, i + 1, color='#F0F0F0', zorder=0)
 
         # ── Bandes colorées pour les conduites ────────────────────────────
-        cond_bg = '#FFECEC' if reseau == 'EU' else '#ECF0FF'
+        cond_bg = _fond(reseau)
         for c, _col in cc:
             ax.axvspan(c['x0'], c['x1'], alpha=0.18, color=cond_bg, zorder=1)
 
@@ -609,13 +634,11 @@ class ProfilGroupeDialog(QDialog):
             e = end_c.get('nom_r1', '')
             return s.replace(' ', '_') if s else None, e.replace(' ', '_') if e else None
 
-        ep_s, ep_e = _ends('EP')
-        eu_s, eu_e = _ends('EU')
-
         parts = []
-        for val in (eu_s, eu_e, ep_s, ep_e):
-            if val:
-                parts.append(val)
+        for reseau in _reseaux_presents(conduites):
+            for val in _ends(reseau):
+                if val and val != '—':
+                    parts.append(val)
         if not parts:
             parts = ['profil_groupe']
         default_name = '_'.join(parts) + f'_PROFIL.{fmt}'

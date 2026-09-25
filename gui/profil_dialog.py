@@ -6,6 +6,7 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtCore import Qt
 
 from ..tools import i18n
+from ..tools import reseaux as R
 from qgis.PyQt.QtWidgets import QApplication
 
 # ── Formats papier paysage (largeur × hauteur en mm) ─────────────────────────
@@ -187,7 +188,11 @@ class ProfilDialog(QDialog):
             'distances_piquages': True,
         }
 
-        self.color = '#CC0000' if data['reseau'] == 'EU' else '#0055CC'
+        from ..tools import reseaux as R
+        self.color = {'EU': '#CC0000', 'EP': '#0055CC'}.get(
+            data['reseau'], R.hex_fonce(data['reseau']))
+        # AEP : pas de cheminée aux nœuds, un repère aux seuls appareils.
+        self._aep = R.est_aep(data['reseau'])
 
         nom_dep = _sval(data['regards'][0],  'nom')
         nom_arr = _sval(data['regards'][-1], 'nom')
@@ -430,6 +435,9 @@ class ProfilDialog(QDialog):
             fe   = fe_vals[i]
             tn   = tn_vals[i]
             gs   = _gen_sup(i)
+            if self._aep:
+                self._dessiner_appareil_aep(ax, self.data['regards'][i], abs_, gs, tn)
+                continue
             if fe is not None and tn is not None and gs is not None:
                 # Fût
                 xs_fill = [abs_ - w, abs_ - w, abs_ + w, abs_ + w, abs_ - w]
@@ -471,6 +479,22 @@ class ProfilDialog(QDialog):
 
     # ------------------------------------------------------------------ cartouche
 
+    def _dessiner_appareil_aep(self, ax, noeud, abs_, gs, tn):
+        """Repère d'un appareil AEP sur le profil : trait vertical de la
+        génératrice supérieure au TN (tige de manœuvre) et losange à la
+        conduite. Les nœuds muets ne se dessinent pas."""
+        from ..tools import reseaux as R
+        try:
+            code = noeud['type']
+        except KeyError:
+            code = None
+        if not R.aep_dessine(code) or gs is None:
+            return
+        if tn is not None:
+            ax.plot([abs_, abs_], [gs, tn], '-', color=self.color,
+                    linewidth=0.9, zorder=5)
+        ax.plot(abs_, gs, 'D', color=self.color, markersize=4.5, zorder=6)
+
     def _draw_cartouche(self, ax, n_reg, n_cond, n_rows,
                         noms, tn_vals, fe_vals, prof_vals,
                         abscisses, conduites, total_l, x_margin=0.0):
@@ -481,7 +505,8 @@ class ProfilDialog(QDialog):
 
         # Y-tick labels = noms des lignes
         ax.set_yticks([n_rows - i - 0.5 for i in range(n_rows)])
-        ax.set_yticklabels([i18n.tr(row[0]) for row in self._ROWS],
+        ax.set_yticklabels([i18n.tr(R.cle_role(row[0], self.data['reseau']))
+                            for row in self._ROWS],
                            fontsize=6.5)
         ax.tick_params(left=False, bottom=False, labelbottom=False, labelsize=6.5)
         for spine in ax.spines.values():

@@ -24,6 +24,11 @@ noeudterminal.
 Les arcs sont orientes dans le sens d'ecoulement (amont = fil d'eau le plus
 haut), la geometrie etant inversee si necessaire : StaR-Eau attache
 altitude_fil_eau_amont a noeudinitial.
+
+Eau potable : le type de fichier « EAU » (nommage Stareau-fr…EAU…) exporte le
+reseau AEP vers les tables stareau_aep / stareau_aep_brcht, voir
+tools/stareau_export_aep.py. « ASS » exporte l'assainissement : le geostandard
+nomme un fichier par domaine.
 """
 
 import os
@@ -53,7 +58,13 @@ CRS_STAREAU = "EPSG:2154"
 # sommets exactement sur les regards, 5 cm couvre les recalages.
 SNAP_TOL = 0.05
 
-_RESEAUX = ("EU", "EP")
+_RESEAUX = ("EU", "EP")          # reseaux du domaine assainissement (ASS)
+_TOUS_RESEAUX = ("EU", "EP", "AEP")
+
+
+def domaine_fichier(params):
+    """'EAU' ou 'ASS' selon le type de fichier choisi."""
+    return "EAU" if (params or {}).get("type_fichier") == "EAU" else "ASS"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -365,6 +376,18 @@ LAYER_ORDER = (
 )
 
 
+def _declarer_tables_aep():
+    """Ajoute les tables AEP a LAYER_SCHEMAS et LAYER_ORDER."""
+    from . import stareau_export_aep as aep
+    import sys
+    module = sys.modules[__name__]
+    for nom in aep.ORDRE:
+        LAYER_SCHEMAS[nom] = (
+            (lambda n=nom: aep.schemas(module)[n]),
+            aep.GEOMETRIES.get(nom, QgsWkbTypes.Type.Point))
+    return LAYER_ORDER + aep.ORDRE
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Remplissage des champs communs
 # ─────────────────────────────────────────────────────────────────────────────
@@ -410,7 +433,7 @@ def source_layers(project=None):
     """Retourne {(role, reseau): layer} pour toutes les couches BET presentes."""
     project = project or QgsProject.instance()
     found = {}
-    for reseau in _RESEAUX:
+    for reseau in _TOUS_RESEAUX:
         for role in ("conduite", "branchement", "regard", "tabouret"):
             layer_id = get_layer_id(role, reseau)
             layer = project.mapLayer(layer_id) if layer_id else None
@@ -423,7 +446,7 @@ def source_layers(project=None):
 #  Controle de conformite
 # ─────────────────────────────────────────────────────────────────────────────
 
-def check_conformity(project=None):
+def check_conformity(project=None, domaine=None):
     """Verifie que les donnees permettent un export StaR-Eau conforme.
 
     Retourne une liste de dicts :
@@ -433,6 +456,8 @@ def check_conformity(project=None):
     Un point bloquant produit un objet non conforme au standard (champ
     NOT NULL impossible a deduire) ; un avertissement degrade la qualite
     sans empecher l'integration.
+
+    `domaine` : 'ASS' (EU/EP), 'EAU' (AEP) ou None pour les deux.
     """
     layers = source_layers(project)
     issues = []
@@ -445,6 +470,13 @@ def check_conformity(project=None):
             "layer_id": layer.id(),
             "fid": feat.id(),
         })
+
+    if domaine in (None, "EAU"):
+        import sys
+        from . import stareau_export_aep
+        stareau_export_aep.controler(layers, sys.modules[__name__], add)
+    if domaine == "EAU":
+        return issues
 
     for reseau in _RESEAUX:
         regard_layer = layers.get(("regard", reseau))
@@ -523,6 +555,14 @@ def _build_features(params, project=None):
     schemas = {name: builder() for name, (builder, _) in LAYER_SCHEMAS.items()}
     mat_defaut = params.get("materiau_defaut", "nr")
     ids = _IdFactory(params)
+
+    if domaine_fichier(params) == "EAU":
+        import sys
+        from . import stareau_export_aep
+        _declarer_tables_aep()
+        aep = stareau_export_aep.construire(
+            params, layers, sys.modules[__name__], ids, stats)
+        return {k: v for k, v in aep.items() if v}, stats
 
     for reseau in _RESEAUX:
         common = _common_values(params, reseau)
@@ -782,15 +822,17 @@ def export_stareau(params, out_path, project=None, progress=None):
     if os.path.exists(out_path):
         os.remove(out_path)
 
+    ordre = (_declarer_tables_aep() if domaine_fichier(params) == "EAU"
+             else LAYER_ORDER)
     written = {}
     first = True
-    for i, name in enumerate(LAYER_ORDER):
+    for i, name in enumerate(ordre):
         feats = features.get(name) or []
         if not feats:
             continue
         if progress:
             progress(i18n.tr('sec_ecriture', couche=name),
-                     int(100 * i / len(LAYER_ORDER)))
+                     int(100 * i / len(ordre)))
 
         builder, wkb_type = LAYER_SCHEMAS[name]
         mem = QgsMemoryProviderUtils.createMemoryLayer(

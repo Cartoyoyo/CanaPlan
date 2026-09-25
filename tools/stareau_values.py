@@ -218,6 +218,104 @@ TYPE_RACCORD = (
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  Listes eau potable (aep_*)
+# ─────────────────────────────────────────────────────────────────────────────
+# Source : Documentation/Modele/dictionnaires de donnees/Liste_valeurs_aep.xlsx
+# Seules les listes que l'export alimente sont reprises. Le premier element
+# est le defaut d'un chantier de distribution neuf.
+
+AEP_FONCTION_CANALISATION = (
+    ("distribution",     "Distribution"),
+    ("transport_distri", "Transport-distribution"),
+    ("transport",        "Transport"),
+    ("adduction",        "Adduction"),
+)
+
+AEP_CONTENU_CANALISATION = (
+    ("eau_potable",  "Eau potable"),
+    ("eau_brute",    "Eau brute"),
+    ("eau_impropre", "Eau impropre à la consommation humaine"),
+)
+
+AEP_TYPE_PRESSION = (
+    ("gravitaire",       "Gravitaire"),
+    ("surpresse",        "Surpressé"),
+    ("reduit",           "Réduit"),
+    ("surpresse_reduit", "Surpressé - réduit"),
+)
+
+AEP_FONCTION_BRANCHEMENT = (
+    ("usager",    "Usager"),
+    ("incendie",  "Incendie"),
+    ("purge",     "Purge"),
+    ("vidange",   "Vidange"),
+    ("livraison", "Point livraison"),
+)
+
+AEP_TYPE_VANNE = (
+    ("opercule",   "À opercule"),
+    ("papillon",   "Papillon"),
+    ("quart_tour", "1/4 tour"),
+    ("boisseau",   "À boisseau sphérique"),
+    ("diaphragme", "À diaphragme"),
+    ("pointeau",   "À pointeau"),
+    ("guillotine", "Guillotine"),
+    ("clapet",     "Clapet"),
+)
+
+AEP_FONCTION_VANNE = (
+    ("coupure",       "Vanne de coupure"),
+    ("sectorisation", "Sectorisation"),
+    ("purge",         "Purge"),
+    ("securisation",  "Sécurisation"),
+    ("sans_fonction", "Sans fonction"),
+)
+
+AEP_SENS_FERMETURE = (
+    ("FSH", "Fermeture horaire"),
+    ("FAH", "Fermeture anti-horaire"),
+)
+
+AEP_TYPE_POINT_LIVRAISON = (
+    ("citerneau",      "Citerneau"),
+    ("regard",         "Regard visitable"),
+    ("mural",          "Coffret mural"),
+    ("socle",          "Coffret sur socle"),
+    ("abri",           "Abri non gélif"),
+    ("sans",           "Sans enveloppe"),
+    ("support",        "Support mural"),
+    ("incendie",       "Défense incendie"),
+    ("lavoir",         "Lavoir"),
+    ("fontaine",       "Fontaine"),
+    ("borne_arrosage", "Borne arrosage"),
+    ("borne_puisage",  "Borne puisage"),
+)
+
+# Classe StaR-Eau de chaque type de nœud CanaPlan (tools/reseaux.py) :
+# (table, colonne du type, code). Le robinet de branchement n'y figure pas :
+# posé sur la conduite sans la couper, il devient un aep_raccord (« point de
+# raccordement entre le branchement et la canalisation, non sécant »).
+# Poteaux et bouches incendie : StaR-Eau range la défense incendie parmi les
+# points de livraison (type « incendie ») ; le type de PEI (PI / BI, liste
+# defense_incendie.pei_type) est porté par ref_externe.
+AEP_CLASSE_NOEUD = {
+    "vanne":                 ("aep_vanne",           None,                None),
+    "ventouse":              ("aep_appareillage",    "type_appareillage", "ventouse"),
+    "vidange":               ("aep_appareillage",    "type_appareillage", "vidange"),
+    "reducteur_pression":    ("aep_regulation",      "type_regulation",   "reducteur"),
+    "compteur":              ("aep_point_mesure",    "type_point_mesure", "volume"),
+    "poteau_incendie":       ("aep_point_livraison", "type_point_livraison", "incendie"),
+    "bouche_incendie":       ("aep_point_livraison", "type_point_livraison", "incendie"),
+    "raccordement_existant": ("aep_piece",           "type_piece",        "raccord"),
+    "te":                    ("aep_piece",           "type_piece",        "te"),
+    "reducteur_dn":          ("aep_piece",           "type_piece",        "cone"),
+    "coude":                 ("aep_piece",           "type_piece",        "coude"),
+    "bouchon":               ("aep_piece",           "type_piece",        "bouchon"),
+}
+AEP_PEI = {"poteau_incendie": "PI", "bouche_incendie": "BI"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  Materiaux de conduite proposes a la saisie
 # ─────────────────────────────────────────────────────────────────────────────
 

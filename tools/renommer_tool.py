@@ -9,6 +9,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from . import i18n
+from . import reseaux as R
 
 from .graph_utils import _to_float, build_graph, bfs
 from .qt_exec import exec_dialog
@@ -159,6 +160,10 @@ class RenommerTool(QgsMapTool):
                 i18n.tr('po_aucun_chemin'))
             return
 
+        if R.est_aep(self.reseau):
+            self._renommer_aep(r_ids, c_feats, regards)
+            return
+
         defaults = _DEFAULTS.get(self.reseau, _DEFAULTS['EU'])
         dlg = _PrefixDialog(defaults['regard'], defaults['tabouret'],
                             self.iface.mainWindow())
@@ -275,6 +280,111 @@ class RenommerTool(QgsMapTool):
         else:
             msg += "\n" + i18n.tr('ot_renum_sans_tabouret')
         QMessageBox.information(None, i18n.tr('ot_renumerotation'), msg)
+
+    # ------------------------------------------------------------------ AEP
+
+    def _renommer_aep(self, r_ids, c_feats, regards):
+        """Numérote les appareils AEP du chemin, un compteur par type.
+
+        Préfixes du registre (V, RB, VT, VD, PI, BI, RP, CPT, PU), deux chiffres
+        au moins, dans l'ordre du chemin depuis le nœud de départ. Les
+        robinets de branchement, posés au milieu des tronçons, prennent
+        l'abscisse de leur piquage : leur ordre suit celui des branchements
+        le long de la conduite, donc celui des lots. Nœuds muets et
+        raccordements sur existant ne sont pas touchés.
+        """
+        depart = self._demander_depart()
+        if depart is None:
+            return
+
+        # Abscisse cumulée de chaque nœud du chemin, et repère de chaque
+        # conduite pour y situer les piquages (même calcul que les tabourets).
+        noeuds = self.couches['regard']
+        abscisse = {}
+        reperes = {}
+        cumul = 0.0
+        for i, c in enumerate(c_feats):
+            abscisse.setdefault(r_ids[i], cumul)
+            line = c.geometry().asPolyline()
+            length = c.geometry().length()
+            amont = regards.get(r_ids[i])
+            sens = 1.0
+            if line and amont is not None and not amont.geometry().isEmpty():
+                pt = QgsPointXY(amont.geometry().asPoint())
+                if pt.distance(QgsPointXY(line[0])) > pt.distance(QgsPointXY(line[-1])):
+                    sens = -1.0
+            reperes[c.id()] = (cumul, sens, length)
+            cumul += length
+        if r_ids:
+            abscisse.setdefault(r_ids[-1], cumul)
+
+        # Robinets : abscisse du piquage de leur branchement.
+        from .spatial_utils import nearest_point_feature
+        for br in self.couches['branchement'].getFeatures():
+            repere = reperes.get(br['id_conduite'])
+            if repere is None or br.geometry().isEmpty():
+                continue
+            origine, sens, length = repere
+            pk = _to_float(br['pk_debut']) or 0.0
+            depart_br = QgsPointXY(br.geometry().asPolyline()[0])
+            rob, _ = nearest_point_feature(noeuds, depart_br, self._SNAP_TOL_M)
+            if rob is not None and rob.id() not in abscisse:
+                abscisse[rob.id()] = origine + (pk if sens > 0 else length - pk)
+
+        par_type = {}
+        for f in noeuds.getFeatures():
+            if f.id() not in abscisse:
+                continue
+            prefixe = R.aep_prefixe(f['type'])
+            if prefixe:
+                par_type.setdefault(f['type'], []).append((abscisse[f.id()], f.id()))
+
+        idx_nom = noeuds.fields().indexOf('nom')
+        noeuds.startEditing()
+        lignes = []
+        for code in R.aep_numerotes():
+            items = sorted(par_type.get(code, []))
+            if not items:
+                continue
+            prefixe = R.aep_prefixe(code)
+            for n, (_s, fid) in enumerate(items):
+                noeuds.changeAttributeValue(fid, idx_nom, f"{prefixe}{depart + n:02d}")
+            lignes.append(i18n.tr(
+                'ot_renum_aep_ligne', type=R.libelle_type(code), nb=len(items),
+                debut=f"{prefixe}{depart:02d}",
+                fin=f"{prefixe}{depart + len(items) - 1:02d}"))
+        noeuds.commitChanges()
+
+        from ..gui.etiquettes import sync_labels_after_rename
+        sync_labels_after_rename(noeuds, 'regard', self.reseau)
+        self.iface.mapCanvas().refresh()
+        QMessageBox.information(
+            None, i18n.tr('ot_renumerotation'),
+            "\n".join(lignes) if lignes else i18n.tr('ot_renum_aep_aucun'))
+
+    def _demander_depart(self):
+        dlg = QDialog(self.iface.mainWindow())
+        dlg.setWindowTitle(i18n.tr('ot_renum_titre'))
+        lay = QVBoxLayout(dlg)
+        form = QFormLayout()
+        sb = QSpinBox()
+        sb.setRange(0, 9999)
+        sb.setValue(1)
+        form.addRow(i18n.tr('ot_lbl_depart_aep'), sb)
+        lay.addLayout(form)
+        prefixes = ", ".join(f"{R.aep_prefixe(c)} = {R.libelle_type(c)}"
+                             for c in R.aep_numerotes())
+        note = QLabel(i18n.tr('ot_renum_aep_note', prefixes=prefixes))
+        note.setWordWrap(True)
+        lay.addWidget(note)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
+                                | QDialogButtonBox.StandardButton.Cancel)
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        lay.addWidget(btns)
+        if exec_dialog(dlg) != QDialog.DialogCode.Accepted:
+            return None
+        return sb.value()
 
     # ------------------------------------------------------------------ helpers
 

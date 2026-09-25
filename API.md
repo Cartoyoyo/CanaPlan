@@ -297,7 +297,8 @@ mention des sources OSM / Esri.
 | `implanter_regards(axe, entraxe_max=50.0, tol_axe=0.5)` | Abscisses des regards, sans dessiner. |
 | `tracer_conduite(reseau, axe=None, points=None, entraxe_max=50.0, tol_axe=0.5, vider=False, diametre=None, materiau=None)` | Conduite + regards. |
 | `creer_branchements(reseau, distance_max=10.0, couche_bati="PCI - Bati", vider=False, diametre=None, materiau=None, couche_parcelles="PCI - Parcelles", front_min=1.0, ecart_min=1.0, garde_regard=0.5)` | Un branchement centré par bâtiment riverain, jusqu'à la limite de parcelle. |
-| `inserer_regard(point, reseau=None)` | Insère un regard et coupe la conduite. |
+| `branchements_auto(reseau, conduites=None, mode="parcelle", cote="deux", distance_max=10.0, apercu=False, diametre=None, materiau=None)` | Magic Box : un branchement par parcelle (`parcelle`), bâtiment (`bati`) ou adresse BAN (`numero`) riveraine des conduites `conduites` (fid, None = toutes), des deux côtés ou d'un seul (`gauche` / `droite`, sens de numérisation). Cibles déjà raccordées ignorées. `apercu=True` : propositions sans écriture. Rend `propositions`, `ecartes` (cible, cause), `faits`, `echecs`. |
+| `inserer_regard(point, reseau=None)` | Insère un regard et coupe la conduite. En AEP, le nœud créé est sans type (coude) : utiliser `appareil_aep`. |
 | `supprimer(reseau, role, ids)` | Suppression brute par identifiant. |
 | `vider(reseau, roles=…)` | Vide les couches métier. |
 
@@ -341,7 +342,9 @@ nom de couche : toute couche de polygones du projet convient.
 | `saisir(reseau, role, valeurs, ou=None)` | Écrit des attributs en masse. |
 | `extremites(reseau, pres_de=None)` | Rend `amont`, `aval`, `amont_fid`, `aval_fid`, `nommes`, `repere`. `pres_de` = nom de voie, `[x, y]` L93 ou `QgsGeometry`. |
 | `tn_mnt(reseau, roles=('regard','tabouret'), ecraser=True)` | TN depuis le MNT IGN : LiDAR HD si la dalle existe, RGE ALTI sinon. Source rendue ouvrage par ouvrage. |
-| `renumeroter(reseau, prefixe_regard=None, prefixe_tabouret=None, depart=1, de=None, vers=None)` | Amont → aval. |
+| `renumeroter(reseau, prefixe_regard=None, prefixe_tabouret=None, depart=1, de=None, vers=None)` | Amont → aval. En AEP : un compteur par type d'appareil (`V01`, `RB01`, `PI01`…) à partir de `depart`, préfixes ignorés ; coudes, tés, réductions, bouchons et raccordements non numérotés. |
+| `appareil_aep(point, type_appareil)` | AEP : donne le type au nœud sous `point` (QgsPointXY ou `[x, y]`), ou insère un nœud sur la conduite la plus proche (≤ 5 m) et la coupe. Types : `vanne`, `robinet_branchement`, `ventouse`, `vidange`, `poteau_incendie`, `bouche_incendie`, `reducteur_pression`, `compteur`, `raccordement_existant`, `te`, `reducteur_dn`, `coude`, `bouchon`. |
+| `couverture_aep(couverture=None)` | AEP : fil d'eau = TN − couverture − DN et profondeur = TN − fil d'eau, sur tous les nœuds et compteurs qui ont un TN. `None` = couverture de la Configuration rapide (1,00 m). |
 | `caler_cotes(reseau, tn=None, ancrage=None, pente=None, tabourets=None)` | TN, profondeurs, fils d'eau. |
 | `recalculer_pentes(reseau="EU", tolerance=0.05)` | Pentes depuis les fils d'eau. |
 | `controler_branchements(reseau, pente_max=30.0)` | Pente de chaque branchement + non cotés. |
@@ -417,14 +420,14 @@ Retour = état obtenu, pas arguments reçus. Rôle inconnu → lève.
 | Fonction | Rôle |
 |---|---|
 | `profil(reseau="EU", format="A3", dossier=None)` | Profil en long PDF. |
-| `profil_groupe(reference="EU", format="A3", dossier=None)` | Profil EU + EP. |
+| `profil_groupe(reference="EU", format="A3", dossier=None)` | Profil EU + EP (+ AEP si le projet en a un ; `reference="AEP"` possible). |
 | `reglages_plan(echelle=200, format="A4", orientation="portrait", dpi=150, cadrage="auto", titre=None, plan_ensemble=True)` | Réglages pour `PrintTool`. |
 | `exporter(dossier=None, pdf_complet=True, fonds_wms=True, **reglages)` | Export synchrone. |
 | `exporter_async(...)` | Rend un ticket, main rendue en 0,000 s. |
 | `tache(ticket)` | État : `en cours`, `fini`, `erreur`, `inconnu`. |
 | `exporter_dxf(dossier=None, emprise=None)` | DXF 2018 de l'emprise visible. |
-| `controle_stareau()` | Conformité CNIG/ASTEE. |
-| `exporter_stareau(parametres, chemin)` | GeoPackage StaR-Eau. |
+| `controle_stareau(type_fichier="ASS")` | Conformité CNIG/ASTEE. `"ASS"` = assainissement EU/EP, `"EAU"` = réseau AEP. |
+| `exporter_stareau(parametres, chemin)` | GeoPackage StaR-Eau. `parametres["type_fichier"] = "EAU"` exporte le réseau AEP (tables `aep_*`), sinon l’assainissement. |
 
 Formats : A4, A3, A2, A1, A0. `cadrage="auto"` calcule les planches ; marges
 déduites de la largeur réelle des étiquettes affichées.

@@ -15,6 +15,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor, QKeySequence
 
 from ..tools import i18n, layer_ok as _layer_ok
+from ..tools import reseaux as R
 from ..tools.spatial_utils import nearest_point_feature
 from ..tools.stareau_values import materiaux_labels as _materiaux_labels
 from .chain_profile_widget import ChainProfileWidget
@@ -89,6 +90,8 @@ TABOURET_COLS = [
     ('diametre',   i18n.tr('col_diametre'),      0),
 ]
 _FE_FIELD = {'regard': 'fe_radier', 'tabouret': 'fe_entree'}
+# AEP : colonne Type en plus, sur les nœuds comme sur les terminaux.
+_TYPE_COL = ('type', i18n.tr('col_type'), None)
 
 
 class TableauSaisieDialog(QDialog):
@@ -104,10 +107,13 @@ class TableauSaisieDialog(QDialog):
         'conduite': 'qc_conduites', 'branchement': 'qc_branchements',
     }
 
-    def __init__(self, couches_eu, couches_ep, iface=None, parent=None):
+    def __init__(self, couches_eu, couches_ep, iface=None, parent=None,
+                 couches_aep=None):
         super().__init__(parent)
         self.iface = iface
         self.couches = {'EU': couches_eu, 'EP': couches_ep}
+        if couches_aep:
+            self.couches['AEP'] = couches_aep
         self.reseau = 'EU'
         self._updating = False
         self._undoing = False
@@ -141,7 +147,7 @@ class TableauSaisieDialog(QDialog):
         self._set_mini_map_layers()
         self._reload_all()
 
-    def set_couches(self, couches_eu, couches_ep):
+    def set_couches(self, couches_eu, couches_ep, couches_aep=None):
         """Raccroche le tableau a de nouvelles couches et le recharge.
 
         Appele apres l'enregistrement du projet : les couches memoire
@@ -149,6 +155,11 @@ class TableauSaisieDialog(QDialog):
         toute ecriture ulterieure partirait sur des objets morts.
         """
         self.couches = {'EU': couches_eu, 'EP': couches_ep}
+        if couches_aep:
+            self.couches['AEP'] = couches_aep
+        elif self.reseau == 'AEP':
+            self.reseau = 'EU'
+        self.btn_aep.setVisible('AEP' in self.couches)
         self._undo_stack = []
         self._batch_items = []
         self._batch_table = None
@@ -170,11 +181,14 @@ class TableauSaisieDialog(QDialog):
         top.addWidget(QLabel(i18n.tr('ts_reseau_label')))
         self.btn_eu = QPushButton("EU")
         self.btn_ep = QPushButton("EP")
-        for btn, r in ((self.btn_eu, 'EU'), (self.btn_ep, 'EP')):
+        self.btn_aep = QPushButton("AEP")
+        for btn, r in ((self.btn_eu, 'EU'), (self.btn_ep, 'EP'),
+                       (self.btn_aep, 'AEP')):
             btn.setCheckable(True)
             btn.clicked.connect(lambda _c, rr=r: self._set_reseau(rr))
             top.addWidget(btn)
         self.btn_eu.setChecked(True)
+        self.btn_aep.setVisible('AEP' in self.couches)
         top.addStretch()
 
         self.search = QLineEdit()
@@ -197,6 +211,13 @@ class TableauSaisieDialog(QDialog):
         from ..tools import territoire
         btn_tn_auto.setVisible(territoire.est_france())
         top.addWidget(btn_tn_auto)
+
+        # AEP : réseau sous pression, la profondeur se déduit de la couverture.
+        self.btn_couverture = QPushButton(i18n.tr('ts_couverture_btn'))
+        self.btn_couverture.setToolTip(i18n.tr('ts_couverture_tip'))
+        self.btn_couverture.clicked.connect(self._appliquer_couverture)
+        self.btn_couverture.setVisible(False)
+        top.addWidget(self.btn_couverture)
         layout.addLayout(top)
 
         self.tabs = QTabWidget()
@@ -295,6 +316,12 @@ class TableauSaisieDialog(QDialog):
         self.reseau = reseau
         self.btn_eu.setChecked(reseau == 'EU')
         self.btn_ep.setChecked(reseau == 'EP')
+        self.btn_aep.setChecked(reseau == 'AEP')
+        self.btn_couverture.setVisible(R.est_aep(reseau))
+        # Onglets : « Nœuds » et « Compteurs » en AEP.
+        for i, role in enumerate(('regard', 'tabouret', 'conduite', 'branchement')):
+            self.tabs.setTabText(
+                i, i18n.tr(R.cle_role(self.ROLE_LABELS[role], reseau)))
         self.setWindowTitle(i18n.tr('ts_titre_reseau', reseau=reseau))
         self._clear_selection()
         self._chain_nodes = None
@@ -329,6 +356,8 @@ class TableauSaisieDialog(QDialog):
 
     def _load_regard_tabouret(self, role):
         cols = REGARD_COLS if role == 'regard' else TABOURET_COLS
+        if R.est_aep(self.reseau):
+            cols = cols + [_TYPE_COL]
         layer = self.couches[self.reseau][role]
         table = self.tables[role]
 
@@ -357,7 +386,13 @@ class TableauSaisieDialog(QDialog):
             fid = feat.id()
             for col, (fname, _label, decimals) in enumerate(cols):
                 raw = feat[fname] if layer.fields().indexOf(fname) >= 0 else None
+                if fname == 'type':
+                    raw = R.libelle_type(raw if raw not in (None, NULL) else
+                                         (R.AEP_NOEUD_TYPE_DEFAUT if role == 'regard'
+                                          else R.AEP_TERMINAL_TYPE_DEFAUT))
                 item = self._make_item(raw, decimals, fid, fname)
+                if fname == 'type':
+                    item.setToolTip(i18n.tr('ts_type_tip'))
                 table.setItem(row, col, item)
                 self._item_registry[(role, fid, fname)] = item
 
@@ -769,6 +804,10 @@ class TableauSaisieDialog(QDialog):
 
         layer = self.couches[self.reseau][role]
 
+        if fname == 'type':
+            self._editer_type(role, item, layer, fid)
+            return
+
         if decimals is None:
             value = item.text().strip() or None
         else:
@@ -785,6 +824,106 @@ class TableauSaisieDialog(QDialog):
                 table = self.tables[role]
                 self._autofill_row(role, table, item.row())
                 self._propagate_ouvrage(role, fid)
+
+    def _editer_type(self, role, item, layer, fid):
+        """Type AEP saisi au clavier : code ou libellé, dans la langue courante.
+
+        Un texte qui ne correspond à aucun type est refusé et la cellule
+        reprend l'ancienne valeur : les codes sont normatifs (StaR-Eau), une
+        faute de frappe ne doit pas finir en base.
+        """
+        codes = (R.AEP_NOEUD_TYPES if role == 'regard' else R.AEP_TERMINAL_TYPES)
+        saisie = item.text().strip().lower()
+        code = None
+        for c in codes:
+            if saisie in (c.lower(), R.libelle_type(c).lower(),
+                          (R.aep_prefixe(c) or '\0').lower()):
+                code = c
+                break
+        feat = layer.getFeature(fid)
+        ancien = feat['type'] if feat.isValid() else None
+        self._updating = True
+        try:
+            if code is None:
+                item.setText(R.libelle_type(ancien) if ancien not in (None, NULL) else '')
+                self.lbl_status.setText(i18n.tr(
+                    'ts_type_inconnu', saisie=item.text() or saisie,
+                    types=", ".join(R.libelle_type(c) for c in codes)))
+                return
+            item.setText(R.libelle_type(code))
+        finally:
+            self._updating = False
+        with self._operation():
+            self._write_attr(layer, fid, 'type', code, role=role)
+        layer.triggerRepaint()
+
+    def _appliquer_couverture(self):
+        """AEP : fil d'eau = TN − couverture − DN, profondeur = TN − fil d'eau.
+
+        DN d'un nœud : le plus gros des tronçons qui y aboutissent (le plus
+        profond l'emporte, une réduction de diamètre ne remonte pas la
+        conduite amont). DN d'un terminal : celui de son branchement. Les
+        ouvrages sans TN sont laissés tels quels et comptés à part. Une seule
+        opération : Ctrl+Z annule tout le lot.
+        """
+        if not R.est_aep(self.reseau):
+            return
+        from qgis.PyQt.QtWidgets import QInputDialog
+        cv, ok = QInputDialog.getDouble(
+            self, i18n.tr('ts_couverture_btn'), i18n.tr('ts_couverture_q'),
+            R.couverture_aep(), 0.0, 10.0, 2)
+        if not ok:
+            return
+        R.set_couverture_aep(cv)
+
+        couches = self.couches['AEP']
+        dn_noeud = {}
+        for role_ligne, role_pt, bout in (('conduite', 'regard', (0, -1)),
+                                          ('branchement', 'tabouret', (-1,))):
+            pts = couches[role_pt]
+            for f in couches[role_ligne].getFeatures():
+                g = f.geometry()
+                if g.isEmpty():
+                    continue
+                line = g.asPolyline()
+                dn = _fnum(f['diametre']) or 0.0
+                for i in bout:
+                    n, _d = nearest_point_feature(pts, QgsPointXY(line[i]), _SNAP_TOL)
+                    if n is not None:
+                        cle = (role_pt, n.id())
+                        dn_noeud[cle] = max(dn_noeud.get(cle, 0.0), dn)
+
+        nb, sans_tn = 0, 0
+        with self._operation():
+            for role in ('regard', 'tabouret'):
+                layer = couches[role]
+                fe_field = _FE_FIELD[role]
+                for f in layer.getFeatures():
+                    tn = _fnum(f['tn'])
+                    if tn is None:
+                        sans_tn += 1
+                        continue
+                    dn = dn_noeud.get((role, f.id()))
+                    if dn is None and role == 'regard':
+                        # Robinet de branchement : au milieu d'un tronçon,
+                        # il prend le DN de la conduite qui le porte.
+                        from ..tools.spatial_utils import nearest_line_feature
+                        cf, _p, _d = nearest_line_feature(
+                            couches['conduite'], f.geometry().asPoint(), 0.05)
+                        if cf is not None:
+                            dn = _fnum(cf['diametre'])
+                    if dn is None:
+                        dn = _fnum(f['diametre']) or 0.0
+                    fe = R.fe_depuis_couverture(tn, dn, cv)
+                    prof = round(tn - fe, 2)
+                    self._write_attr(layer, f.id(), fe_field, fe, role=role)
+                    self._write_attr(layer, f.id(), 'profondeur', prof, role=role)
+                    nb += 1
+        self._reload_all()
+        if self._chain_nodes:
+            self._refresh_chain_table()
+        self.lbl_status.setText(i18n.tr(
+            'ts_couverture_ok', nb=nb, cv=i18n.nombre(cv, 2), sans_tn=sans_tn))
 
     def _handle_conduite_edit(self, item):
         """Cellule éditée dans le tableau des conduites : Longueur, Pente,
@@ -1332,7 +1471,7 @@ class TableauSaisieDialog(QDialog):
                     if it is not None and it.foreground().color() == _COLOR_MISSING:
                         n_missing += 1
         self.lbl_status.setText(
-            i18n.tr('ts_resume',
+            i18n.tr(R.cle_role('ts_resume', self.reseau),
                     regards=counts['regard'], tabourets=counts['tabouret'],
                     conduites=counts['conduite'],
                     branchements=counts['branchement'],

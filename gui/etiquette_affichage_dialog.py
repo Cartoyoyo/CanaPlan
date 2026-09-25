@@ -12,7 +12,7 @@ from ..tools import i18n
 from ..tools import errlog
 
 _ROLES   = ('regard', 'tabouret', 'conduite', 'branchement')
-_RESEAUX = ('EU', 'EP')
+_RESEAUX = ('EU', 'EP', 'AEP')
 
 # Clés i18n, traduites à l'affichage
 _ROLE_LABELS = {
@@ -25,12 +25,14 @@ _ROLE_LABELS = {
 # Champs disponibles par rôle : (clé, libellé affiché)
 ROLE_FIELDS_AVAIL = {
     'regard': [
+        ('type',       'col_type'),     # AEP seulement : classe de l'ouvrage
         ('nom',        'col_nom'),
         ('tn',         'col_tn'),
         ('fe_radier',  'col_fe_radier'),
         ('profondeur', 'col_profondeur'),
     ],
     'tabouret': [
+        ('type',       'col_type'),     # AEP seulement : type de compteur
         ('nom',        'col_nom'),
         ('tn',         'col_tn'),
         ('fe_entree',  'col_fe_entree'),
@@ -75,9 +77,12 @@ def prefs_from_dict(d):
     prefs = {
         'visibility': {r: {role: True for role in _ROLES} for r in _RESEAUX},
         'fields':     _copy_default_fields(),
+        'robinets':   True,
     }
     if not d:
         return prefs
+    if 'robinets' in d:
+        prefs['robinets'] = bool(d['robinets'])
 
     vis = d.get('visibility', {})
     for reseau in _RESEAUX:
@@ -104,13 +109,17 @@ def _copy_default_fields():
 
 class EtiquetteAffichageDialog(QDialog):
 
-    def __init__(self, prefs=None, parent=None):
+    def __init__(self, prefs=None, parent=None, reseaux=None):
         super().__init__(parent)
+        # Lignes affichées : les réseaux présents dans le projet. Les autres
+        # gardent leurs préférences telles quelles (voir get_prefs).
+        self._reseaux = tuple(reseaux) if reseaux else ('EU', 'EP')
         self.setWindowTitle(i18n.tr('ea_titre'))
         self.setMinimumWidth(480)
         self._prefs = prefs_from_dict(prefs)
         self._vis_checks  = {}   # (reseau, role) → QCheckBox
         self._field_checks = {}  # (role, field)  → QCheckBox
+        self._robinets_check = None   # colonne AEP « Robinets »
         self._build_ui()
 
     # ------------------------------------------------------------------ UI
@@ -139,8 +148,9 @@ class EtiquetteAffichageDialog(QDialog):
             grid.addWidget(lbl, 0, col + 1)
 
         # Lignes EU / EP
-        for row, reseau in enumerate(_RESEAUX):
-            color = "#cc0000" if reseau == "EU" else "#0000cc"
+        from ..tools.reseaux import hex_fonce
+        for row, reseau in enumerate(self._reseaux):
+            color = hex_fonce(reseau)
             lbl = QLabel(f"<b><font color='{color}'>■ {reseau}</font></b>")
             grid.addWidget(lbl, row + 1, 0)
             for col, role in enumerate(_ROLES):
@@ -150,6 +160,20 @@ class EtiquetteAffichageDialog(QDialog):
                                        reseau=reseau))
                 self._vis_checks[(reseau, role)] = cb
                 grid.addWidget(cb, row + 1, col + 1, alignment=Qt.AlignmentFlag.AlignCenter)
+            if reseau == 'AEP':
+                # Robinets de branchement : portés par la couche des nœuds,
+                # mais souvent trop nombreux pour être étiquetés.
+                col_rob = len(_ROLES) + 1
+                lbl_rob = QLabel(i18n.tr('ea_robinets'))
+                lbl_rob.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                f3 = QFont(); f3.setBold(True)
+                lbl_rob.setFont(f3)
+                grid.addWidget(lbl_rob, 0, col_rob)
+                cb = QCheckBox()
+                cb.setChecked(self._prefs.get('robinets', True))
+                cb.setToolTip(i18n.tr('ea_robinets_tip'))
+                self._robinets_check = cb
+                grid.addWidget(cb, row + 1, col_rob, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Boutons rapides visibilité
         btn_row = QHBoxLayout()
@@ -207,6 +231,8 @@ class EtiquetteAffichageDialog(QDialog):
     def _set_all_vis(self, state):
         for cb in self._vis_checks.values():
             cb.setChecked(state)
+        if self._robinets_check is not None:
+            self._robinets_check.setChecked(state)
 
     def _set_role_fields(self, role, state):
         for (r, f), cb in self._field_checks.items():
@@ -219,7 +245,9 @@ class EtiquetteAffichageDialog(QDialog):
         return {
             'visibility': {
                 reseau: {
-                    role: self._vis_checks[(reseau, role)].isChecked()
+                    role: (self._vis_checks[(reseau, role)].isChecked()
+                           if (reseau, role) in self._vis_checks
+                           else self._prefs['visibility'][reseau][role])
                     for role in _ROLES
                 }
                 for reseau in _RESEAUX
@@ -231,4 +259,7 @@ class EtiquetteAffichageDialog(QDialog):
                 }
                 for role in _ROLES
             },
+            'robinets': (self._robinets_check.isChecked()
+                         if self._robinets_check is not None
+                         else self._prefs.get('robinets', True)),
         }

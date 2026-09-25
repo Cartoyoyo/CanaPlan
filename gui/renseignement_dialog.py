@@ -11,6 +11,7 @@ from qgis.PyQt.QtGui import QFont, QRegularExpressionValidator, QKeyEvent
 from qgis.PyQt.QtCore import Qt, QTimer, QEvent, QLocale, QRegularExpression, pyqtSignal
 
 from ..tools import i18n
+from ..tools import reseaux as R
 from .quick_config_widgets import NETWORK_COLORS
 
 import re
@@ -23,6 +24,7 @@ _UNIT_RE = re.compile(r'^(.*?)\s*\(([^()]*)\)\s*$')
 
 # label, type, (decimals,) ou liste de suggestions
 FIELD_CONFIG = {
+    'type':       ('col_type',        'type_aep', None),
     'nom':        ('col_nom',         'str',   None),
     'tn':         ('col_tn',          'num',   3),
     'fe_radier':  ('col_fe_radier',   'num',   3),
@@ -39,12 +41,13 @@ FIELD_CONFIG = {
 # Regroupement des champs par rôle : (clé i18n du cadre, champs du cadre).
 # L'ordre de lecture donne l'ordre de saisie (Tab).
 ROLE_SECTIONS = {
+    # `type` n'existe que sur les couches AEP : ailleurs la ligne est sautée.
     'regard': [
-        ('rens_sec_identification', ['nom']),
+        ('rens_sec_identification', ['type', 'nom']),
         ('rens_sec_altimetrie',     ['tn', 'profondeur', 'fe_radier']),
     ],
     'tabouret': [
-        ('rens_sec_identification', ['nom']),
+        ('rens_sec_identification', ['type', 'nom']),
         ('rens_sec_altimetrie',     ['tn', 'profondeur', 'fe_entree']),
     ],
     'conduite': [
@@ -154,7 +157,8 @@ class RenseignementDialog(QDialog):
 
         self.setWindowTitle(
             i18n.tr('rens_titre',
-                    type=i18n.tr(ROLE_LABELS.get(role, role)), nom=reseau)
+                    type=i18n.tr(R.cle_role(ROLE_LABELS.get(role, role), reseau)),
+                    nom=reseau)
         )
         self.setMinimumWidth(420)
         self._build_ui()
@@ -192,6 +196,11 @@ class RenseignementDialog(QDialog):
         nom_w = self.widgets.get('nom')
         if isinstance(nom_w, QLineEdit):
             nom_w.textChanged.connect(lambda _: self._refresh_header())
+        # … et la classe AEP choisie.
+        type_w = self.widgets.get('type')
+        if isinstance(type_w, QComboBox):
+            type_w.currentIndexChanged.connect(lambda _: self._refresh_header())
+            self._refresh_header()   # l'en-tête a été posé avant la liste
 
     def _make_header(self):
         """Bandeau coloré : type d'ouvrage, nom, pastille du réseau."""
@@ -229,7 +238,12 @@ class RenseignementDialog(QDialog):
         return header
 
     def _refresh_header(self):
-        type_label = i18n.tr(ROLE_LABELS.get(self.role, self.role))
+        type_label = i18n.tr(R.cle_role(ROLE_LABELS.get(self.role, self.role),
+                                        self.reseau))
+        # AEP : l'en-tête nomme la classe de l'ouvrage (« Vanne V01 »).
+        type_w = self.widgets.get('type')
+        if isinstance(type_w, QComboBox) and type_w.currentData():
+            type_label = R.libelle_type(type_w.currentData())
 
         nom_w = self.widgets.get('nom')
         nom = nom_w.text().strip() if isinstance(nom_w, QLineEdit) else ''
@@ -267,7 +281,10 @@ class RenseignementDialog(QDialog):
                     if geom and not geom.isEmpty():
                         raw_val = round(geom.length(), 2)
 
-            widget = self._make_widget(ftype, extra, raw_val)
+            if ftype == 'type_aep':
+                widget = self._make_type_combo(raw_val)
+            else:
+                widget = self._make_widget(ftype, extra, raw_val)
             self.widgets[name] = widget
 
             extras = []
@@ -372,6 +389,32 @@ class RenseignementDialog(QDialog):
         lay.addWidget(buttons)
         return pied
 
+    def _make_type_combo(self, raw_val):
+        """Classe AEP : liste fermée des codes du registre, libellés traduits.
+
+        Nœud : appareils numérotés d'abord (avec leur préfixe), puis pièces
+        et raccordement. Compteur : types de terminaux. Un code inconnu
+        rencontré dans la donnée est gardé en tête pour ne pas l'écraser à
+        l'enregistrement sans que l'opérateur l'ait choisi.
+        """
+        w = QComboBox()
+        if self.role == 'regard':
+            codes = list(R.AEP_NOEUD_TYPES)
+            defaut = R.AEP_NOEUD_TYPE_DEFAUT
+        else:
+            codes = list(R.AEP_TERMINAL_TYPES)
+            defaut = R.AEP_TERMINAL_TYPE_DEFAUT
+        actuel = None if raw_val is None or raw_val == NULL else str(raw_val)
+        if actuel and actuel not in codes:
+            w.addItem(actuel, actuel)
+        for code in codes:
+            prefixe = R.aep_prefixe(code) if self.role == 'regard' else None
+            libelle = R.libelle_type(code) + (f"  ({prefixe})" if prefixe else "")
+            w.addItem(libelle, code)
+        idx = w.findData(actuel or defaut)
+        w.setCurrentIndex(max(0, idx))
+        return w
+
     def _make_widget(self, ftype, extra, raw_val):
         if ftype == 'num':
             w = NumericEdit(decimals=extra)
@@ -467,6 +510,8 @@ class RenseignementDialog(QDialog):
 
             if isinstance(widget, NumericEdit):
                 val = widget.value()          # None si vide
+            elif name == 'type' and isinstance(widget, QComboBox):
+                val = widget.currentData()    # code normatif, pas le libellé
             elif isinstance(widget, QComboBox):
                 val = widget.currentText().strip() or None
             else:
@@ -475,6 +520,8 @@ class RenseignementDialog(QDialog):
             self.layer.changeAttributeValue(fid, idx, val)
 
         self.layer.commitChanges()
+        if 'type' in self.widgets:
+            self.layer.triggerRepaint()   # le symbole suit la classe
 
         # Recharge l'entité : « Appliquer » puis « OK » doivent repartir de
         # valeurs à jour, pas d'une référence périmée.

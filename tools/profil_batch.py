@@ -225,18 +225,19 @@ def export_profils_eu_ep(couches, reseau, paper_format, output_dir):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Export profil groupé EU+EP — axe = tronçon principal du réseau de référence
+#  Export profil groupé EU / EP / AEP — axe = tronçon principal du réseau de référence
 # ─────────────────────────────────────────────────────────────────────────────
 
 _BUFFER_DIST = 3.0   # mètres autour de l'axe (idem ProfilGroupeTool)
 
 
 def export_profils_groupe(couches_eu, couches_ep, paper_format, output_dir,
-                          reseau_ref='EU'):
+                          reseau_ref='EU', couches_aep=None):
     """
-    Profil groupé EU+EP avec axe = tronçon principal du réseau reseau_ref.
-    Le nom de fichier inclut les 1ers/derniers regards EU et EP :
-    {eu_dep}_{eu_arr}_{ep_dep}_{ep_arr}_PROFIL.pdf
+    Profil groupé EU + EP (+ AEP si `couches_aep`) avec axe = tronçon principal
+    du réseau `reseau_ref`.
+    Le nom de fichier enchaîne les 1ers/derniers regards de chaque réseau :
+    {eu_dep}_{eu_arr}_{ep_dep}_{ep_arr}[_{aep_dep}_{aep_arr}]_PROFIL.pdf
     Retourne (True, output_path) si réussi, sinon (False, None).
     """
     try:
@@ -249,7 +250,8 @@ def export_profils_groupe(couches_eu, couches_ep, paper_format, output_dir,
     from ..gui.profil_dialog import _EXPORT_DPI
     import os
 
-    ref_couches = couches_eu if reseau_ref == 'EU' else couches_ep
+    jeux = _jeux(couches_eu, couches_ep, couches_aep)
+    ref_couches = dict(jeux).get(reseau_ref) or couches_eu
     regards, _ = _main_trunk_chain(ref_couches)
     if not regards:
         return False, None
@@ -258,7 +260,7 @@ def export_profils_groupe(couches_eu, couches_ep, paper_format, output_dir,
     if len(pts) < 2:
         return False, None
 
-    data = _compute_groupe_data(couches_eu, couches_ep, pts)
+    data = calculer_donnees_groupe(jeux, pts)
     if data is None or not data['conduites']:
         return False, None
 
@@ -270,9 +272,9 @@ def export_profils_groupe(couches_eu, couches_ep, paper_format, output_dir,
         end_c   = max(c_list, key=lambda c: c['x1'])
         return _safe_name(start_c.get('nom_r0')), _safe_name(end_c.get('nom_r1'))
 
-    eu_s, eu_e = _ends('EU')
-    ep_s, ep_e = _ends('EP')
-    parts = [v for v in (eu_s, eu_e, ep_s, ep_e) if v]
+    parts = []
+    for reseau, _c in jeux:
+        parts.extend(v for v in _ends(reseau) if v and v != '—')
     if not parts:
         parts = ['profil_groupe']
     output_path = os.path.join(output_dir, '_'.join(parts) + '_PROFIL.pdf')
@@ -297,53 +299,73 @@ def export_profils_groupe(couches_eu, couches_ep, paper_format, output_dir,
         return False, None
 
 
+def _jeux(couches_eu, couches_ep, couches_aep=None):
+    """[(réseau, couches)] des réseaux fournis, dans l'ordre EU, EP, AEP."""
+    jeux = [('EU', couches_eu), ('EP', couches_ep)]
+    if couches_aep:
+        jeux.append(('AEP', couches_aep))
+    return [(r, c) for r, c in jeux if c]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-#  Calcul des données pour ProfilGroupeDialog (miroir de ProfilGroupeTool)
+#  Calcul des données pour ProfilGroupeDialog (outil carte et export)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _compute_groupe_data(couches_eu, couches_ep, pts):
+def _nom(v):
+    return str(v) if v and (QGIS_NULL is None or v != QGIS_NULL) else '—'
+
+
+def calculer_donnees_groupe(jeux, pts, buffer_dist=_BUFFER_DIST):
+    """Conduites et piquages des réseaux `jeux` projetés sur l'axe `pts`.
+
+    jeux : [(réseau, couches)], réseaux EU, EP et/ou AEP.
+
+    Une conduite n'entre que si ses deux extrémités sont à moins de
+    `buffer_dist` de l'axe ; un piquage, que si sa conduite mère est entrée.
+    Chaque réseau a sa propre table de regards : sans cela, un nœud AEP posé
+    à moins d'un mètre d'un regard EU (réseaux parallèles dans la même rue)
+    lui prenait son TN et son fil d'eau.
+
+    AEP : `muet0` / `muet1` signalent les nœuds sans appareil (coudes, tés…),
+    que le dessin ne représente ni en cheminée ni dans le cartouche.
+    """
+    from .spatial_utils import PointGrid
+    from . import reseaux as R
+
     ref_line = QgsGeometry.fromPolylineXY(pts)
     ref_len  = ref_line.length()
     if ref_len < 0.01:
         return None
+    buffer_geom = ref_line.buffer(buffer_dist, 8)
 
-    buffer_geom = ref_line.buffer(_BUFFER_DIST, 8)
+    def dedans(pt):
+        return buffer_geom.contains(QgsGeometry.fromPointXY(pt))
 
-    regard_lookup = []
-    for couches in (couches_eu, couches_ep):
-        if couches is None:
-            continue
+    conduites_data = []
+    piquages = []
+    for reseau, couches in jeux:
         rl = couches.get('regard')
-        if rl is None or sip.isdeleted(rl):
+        cl = couches.get('conduite')
+        if rl is None or sip.isdeleted(rl) or cl is None or sip.isdeleted(cl):
             continue
+        aep = R.est_aep(reseau) and rl.fields().indexOf('type') >= 0
+
+        lookup = []
         for feat in rl.getFeatures():
             g = feat.geometry()
             if g.isEmpty():
                 continue
-            v = feat['nom']
-            regard_lookup.append((
-                QgsPointXY(g.asPoint()),
-                {
-                    'tn':        _fval(feat, 'tn'),
-                    'fe_radier': _fval(feat, 'fe_radier'),
-                    'nom':       str(v) if v and (QGIS_NULL is None or v != QGIS_NULL) else '—',
-                }
-            ))
+            code = feat['type'] if aep else None
+            lookup.append((QgsPointXY(g.asPoint()), {
+                'tn':        _fval(feat, 'tn'),
+                'fe_radier': _fval(feat, 'fe_radier'),
+                'nom':       _nom(feat['nom']),
+                'type':      code,
+                'muet':      aep and not R.aep_dessine(code),
+            }))
+        grille = PointGrid(lookup)
 
-    from .spatial_utils import PointGrid
-    _regard_grid = PointGrid(regard_lookup)
-
-    def snap_regard(pt, tol=1.0):
-        return _regard_grid.nearest(pt, tol)
-
-    conduites_data = []
-
-    for reseau, couches in (('EU', couches_eu), ('EP', couches_ep)):
-        if couches is None:
-            continue
-        cl = couches.get('conduite')
-        if cl is None or sip.isdeleted(cl):
-            continue
+        cdata_reseau = {}
         for feat in cl.getFeatures():
             g = feat.geometry()
             if g.isEmpty():
@@ -351,20 +373,15 @@ def _compute_groupe_data(couches_eu, couches_ep, pts):
             line = g.asPolyline()
             if len(line) < 2:
                 continue
-
             pt0, pt1 = QgsPointXY(line[0]), QgsPointXY(line[-1])
-            if not (buffer_geom.contains(QgsGeometry.fromPointXY(pt0)) and
-                    buffer_geom.contains(QgsGeometry.fromPointXY(pt1))):
+            if not (dedans(pt0) and dedans(pt1)):
                 continue
-
             x0 = ref_line.lineLocatePoint(QgsGeometry.fromPointXY(pt0))
             x1 = ref_line.lineLocatePoint(QgsGeometry.fromPointXY(pt1))
-            r0, r1 = snap_regard(pt0), snap_regard(pt1)
-
+            r0, r1 = grille.nearest(pt0, 1.0), grille.nearest(pt1, 1.0)
             if x0 > x1:
                 x0, x1, r0, r1 = x1, x0, r1, r0
-
-            conduites_data.append({
+            c = {
                 'reseau': reseau,
                 'feat':   feat,
                 'x0':     x0,
@@ -375,20 +392,16 @@ def _compute_groupe_data(couches_eu, couches_ep, pts):
                 'tn1':    r1['tn']        if r1 else None,
                 'nom_r0': r0['nom']       if r0 else '—',
                 'nom_r1': r1['nom']       if r1 else '—',
-            })
+                'muet0':  bool(r0 and r0['muet']),
+                'muet1':  bool(r1 and r1['muet']),
+            }
+            conduites_data.append(c)
+            cdata_reseau[feat.id()] = c
 
-    # Piquages
-    piquages = []
-    cid_to_cdata = {(c['reseau'], c['feat'].id()): c for c in conduites_data}
-
-    for reseau, couches in (('EU', couches_eu), ('EP', couches_ep)):
-        if couches is None:
-            continue
         br_layer  = couches.get('branchement')
         tab_layer = couches.get('tabouret')
         if br_layer is None or sip.isdeleted(br_layer):
             continue
-
         tab_by_pt = {}
         if tab_layer and not sip.isdeleted(tab_layer):
             for tf in tab_layer.getFeatures():
@@ -396,9 +409,8 @@ def _compute_groupe_data(couches_eu, couches_ep, pts):
                 if g.isEmpty():
                     continue
                 tp = QgsPointXY(g.asPoint())
-                key = (round(tp.x(), 3), round(tp.y(), 3))
-                v = tf['nom']
-                tab_by_pt[key] = str(v) if v and (QGIS_NULL is None or v != QGIS_NULL) else ''
+                v = _nom(tf['nom'])
+                tab_by_pt[(round(tp.x(), 3), round(tp.y(), 3))] = '' if v == '—' else v
 
         for br in br_layer.getFeatures():
             g = br.geometry()
@@ -408,17 +420,41 @@ def _compute_groupe_data(couches_eu, couches_ep, pts):
             if len(line) < 2:
                 continue
             start_pt = QgsPointXY(line[0])
+            if not dedans(start_pt):
+                continue
+            parent = cdata_reseau.get(br['id_conduite'])
+            if not parent:
+                continue
             x_piq = ref_line.lineLocatePoint(QgsGeometry.fromPointXY(start_pt))
-            fe_piq = None
-            parent = cid_to_cdata.get((reseau, br['id_conduite']))
-            if parent:
-                x0, x1 = parent['x0'], parent['x1']
-                fe0, fe1 = parent['fe0'], parent['fe1']
-                if x1 > x0 and fe0 is not None and fe1 is not None:
-                    t = max(0.0, min(1.0, (x_piq - x0) / (x1 - x0)))
+            # FE interpolé sur la conduite mère. Priorité à la projection sur
+            # l'axe (alignement visuel avec la ligne FE dessinée) ; si elle
+            # dégénère (conduite ~perpendiculaire à l'axe), repli sur
+            # pk_debut / longueur réelle.
+            x0, x1 = parent['x0'], parent['x1']
+            fe0, fe1 = parent['fe0'], parent['fe1']
+            if x1 > x0 and fe0 is not None and fe1 is not None:
+                t = max(0.0, min(1.0, (x_piq - x0) / (x1 - x0)))
+                fe_piq = fe0 + t * (fe1 - fe0)
+            else:
+                pk = _to_float(br['pk_debut']) or 0.0
+                longueur = (_to_float(parent['feat']['longueur'])
+                            or parent['feat'].geometry().length())
+                if fe0 is not None and fe1 is not None and longueur > 0:
+                    t = max(0.0, min(1.0, pk / longueur))
                     fe_piq = fe0 + t * (fe1 - fe0)
+                else:
+                    fe_piq = fe0 if fe0 is not None else fe1
             end_pt = QgsPointXY(line[-1])
-            nom_tab = tab_by_pt.get((round(end_pt.x(), 3), round(end_pt.y(), 3)), '')
-            piquages.append({'x': x_piq, 'fe': fe_piq, 'nom': nom_tab, 'reseau': reseau})
+            piquages.append({
+                'x':      x_piq,
+                'fe':     fe_piq,
+                'nom':    tab_by_pt.get((round(end_pt.x(), 3), round(end_pt.y(), 3)), ''),
+                'reseau': reseau,
+            })
 
     return {'conduites': conduites_data, 'ref_length': ref_len, 'piquages': piquages}
+
+
+def _compute_groupe_data(couches_eu, couches_ep, pts, couches_aep=None):
+    """Compatibilité : ancienne signature EU/EP."""
+    return calculer_donnees_groupe(_jeux(couches_eu, couches_ep, couches_aep), pts)

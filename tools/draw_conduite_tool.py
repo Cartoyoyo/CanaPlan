@@ -12,6 +12,7 @@ from qgis.PyQt.QtWidgets import QMessageBox, QToolTip
 from qgis.PyQt.QtGui import QColor, QCursor
 
 from . import i18n
+from . import reseaux as R
 
 from .spatial_utils import nearest_point_feature, rect_request
 
@@ -59,7 +60,7 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
         self.conduite_ids = []       # ids des tronçons créés (pour undo)
 
         # Rubber band pour le segment en cours de tracé
-        color = QColor(255, 0, 0) if reseau == "EU" else QColor(0, 0, 255)
+        color = R.couleur(reseau)
         self.rubber = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
         self.rubber.setColor(color)
         self.rubber.setWidth(2)
@@ -135,12 +136,20 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
         elif event.key() == Qt.Key.Key_Backspace:
             self._undo_last()
 
+    # En deçà, deux clics successifs désignent le même point : pas de tronçon.
+    _LONGUEUR_MIN_M = 0.01
+
     def _add_point(self, point):
         """Ajoute un point : crée un regard et un tronçon si ce n'est pas le premier."""
         snapped = self._snap_to_regard(point)
         if snapped:
             point = snapped
-        else:
+        if (self.last_point is not None
+                and QgsPointXY(point).distance(self.last_point) < self._LONGUEUR_MIN_M):
+            # Clic droit ou double-clic de fin sur le dernier regard : il y est
+            # aimanté, et le tronçon créé irait de ce regard à lui-même.
+            return
+        if not snapped:
             nearby = self._find_nearby_regard(point)
             if nearby:
                 from qgis.utils import iface as _iface
@@ -167,6 +176,10 @@ class DrawConduiteTool(QgsMapToolEmitPoint):
             self.regard_layer.startEditing()
         feat = QgsFeature(self.regard_layer.fields())
         feat.setGeometry(QgsGeometry.fromPointXY(point))
+        # AEP : chaque sommet reçoit le type de création (vanne), à changer
+        # ensuite par « Poser un appareil », Renseigner ou le Tableau de saisie.
+        if R.est_aep(self.reseau) and self.regard_layer.fields().indexOf('type') >= 0:
+            feat.setAttribute('type', R.AEP_NOEUD_TYPE_CREATION)
         self.regard_layer.addFeature(feat)
         if not self._differer_ecriture:
             self.regard_layer.commitChanges()

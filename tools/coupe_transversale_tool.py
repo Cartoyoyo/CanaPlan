@@ -36,12 +36,13 @@ class CoupeTransversaleTool(QgsMapTool):
     Échap              : annuler.
     """
 
-    def __init__(self, canvas, iface, couches_eu, couches_ep):
+    def __init__(self, canvas, iface, couches_eu, couches_ep, couches_aep=None):
         super().__init__(canvas)
         self.canvas     = canvas
         self.iface      = iface
         self.couches_eu = couches_eu
         self.couches_ep = couches_ep
+        self.couches_aep = couches_aep
 
         self._points = []
         self._band   = None
@@ -121,8 +122,15 @@ class CoupeTransversaleTool(QgsMapTool):
 
         crossings = []
         warnings  = []
+        # AEP sans aucune cote : gardées de côté, tracées en cotes relatives
+        # si aucune conduite coupée n'a de cotes réelles (voir plus bas).
+        aep_relatives = []
+        from . import reseaux as R
 
-        for reseau, couches in (('EU', self.couches_eu), ('EP', self.couches_ep)):
+        jeux = [('EU', self.couches_eu), ('EP', self.couches_ep)]
+        if self.couches_aep:
+            jeux.append(('AEP', self.couches_aep))
+        for reseau, couches in jeux:
             cl = couches.get('conduite')
             rl = couches.get('regard')
             if cl is None or sip.isdeleted(cl):
@@ -184,6 +192,18 @@ class CoupeTransversaleTool(QgsMapTool):
                 tn0 = _to_float(r0['tn'])        if r0 else None
                 tn1 = _to_float(r1['tn'])        if r1 else None
 
+                if R.est_aep(reseau):
+                    # Réseau sous pression : le fil d'eau manquant se déduit de
+                    # la couverture, comme « Couverture → FE ».
+                    dn_mm = _to_float(c_feat['diametre']) or 0.0
+                    if fe0 is None and tn0 is not None:
+                        fe0 = R.fe_depuis_couverture(tn0, dn_mm)
+                    if fe1 is None and tn1 is not None:
+                        fe1 = R.fe_depuis_couverture(tn1, dn_mm)
+                    if tn0 is None and tn1 is None:
+                        aep_relatives.append((c_feat, x_cut, r0, r1, dn_mm))
+                        continue
+
                 if fe0 is None and fe1 is None:
                     warnings.append(
                         i18n.tr('ct_sans_fe', id=c_feat.id(), reseau=reseau))
@@ -220,6 +240,30 @@ class CoupeTransversaleTool(QgsMapTool):
                     'nom_amont': _nom_regard(r0),
                     'nom_aval':  _nom_regard(r1),
                 })
+
+        # Cotes relatives (terrain = 0) : seulement quand rien d'autre n'est
+        # coté, pour ne jamais mêler des cotes relatives et des cotes NGF.
+        if aep_relatives and not crossings:
+            for c_feat, x_cut, r0, r1, dn_mm in aep_relatives:
+                materiau = ''
+                if c_feat['materiau'] and (QGIS_NULL is None or c_feat['materiau'] != QGIS_NULL):
+                    materiau = str(c_feat['materiau'])
+                crossings.append({
+                    'x':         x_cut,
+                    'tn':        0.0,
+                    'fe':        R.fe_depuis_couverture(0.0, dn_mm),
+                    'diam_m':    (dn_mm or 200.0) / 1000.0,
+                    'materiau':  materiau,
+                    'reseau':    'AEP',
+                    'width':     config.get('largeur_conduite_aep', 0.60),
+                    'nom_amont': _nom_regard(r0),
+                    'nom_aval':  _nom_regard(r1),
+                })
+            warnings.append(i18n.tr('ct_aep_relatif',
+                                    cv=i18n.nombre(R.couverture_aep(), 2)))
+        elif aep_relatives:
+            for c_feat, *_r in aep_relatives:
+                warnings.append(i18n.tr('ct_sans_tn', id=c_feat.id(), reseau='AEP'))
 
         if warnings:
             self.iface.messageBar().pushMessage(
@@ -259,6 +303,9 @@ class CoupeTransversaleSingleTool(CoupeTransversaleTool):
     def __init__(self, canvas, iface, reseau, couches):
         if reseau == 'EU':
             super().__init__(canvas, iface, couches, self._EMPTY)
+        elif reseau == 'AEP':
+            super().__init__(canvas, iface, self._EMPTY, self._EMPTY,
+                             couches_aep=couches)
         else:
             super().__init__(canvas, iface, self._EMPTY, couches)
         self._reseau_label = reseau

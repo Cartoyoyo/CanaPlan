@@ -30,10 +30,12 @@ class MoveTool(QgsMapTool):
     """
     finished = pyqtSignal()
 
-    def __init__(self, canvas, couches_eu, couches_ep):
+    def __init__(self, canvas, couches_eu, couches_ep, couches_aep=None):
         super().__init__(canvas)
         self.canvas = canvas
         self.couches = {'EU': couches_eu, 'EP': couches_ep}
+        if couches_aep:
+            self.couches['AEP'] = couches_aep
 
         # Mode actif : None | 'geom' | 'label'
         self._mode = None
@@ -381,6 +383,7 @@ class MoveTool(QgsMapTool):
         elif self._sel_role == 'tabouret':
             self._move_branchement_tabouret_end(couches['branchement'],
                                                 old_point, new_point)
+        self._synchroniser_aep()
 
         self._reset()
         self.canvas.refresh()
@@ -783,7 +786,8 @@ class MoveTool(QgsMapTool):
         self._piquage_snap_band.setWidth(2)
 
         self._piquage_line_prev = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
-        col = QColor(200, 80, 0) if reseau == 'EU' else QColor(0, 80, 200)
+        from .reseaux import couleur
+        col = couleur(reseau)
         self._piquage_line_prev.setColor(col)
         self._piquage_line_prev.setWidth(2)
         self._piquage_line_prev.setLineStyle(Qt.PenStyle.DotLine)
@@ -888,8 +892,16 @@ class MoveTool(QgsMapTool):
                 layer.changeAttributeValue(feat.id(), idx_cote, round(cote, 3))
 
         layer.commitChanges()
+        self._synchroniser_aep()
         self._reset()
         self.canvas.refresh()
+
+    def _synchroniser_aep(self):
+        """Robinets de branchement AEP recalés sur leurs branchements."""
+        couches = self.couches.get('AEP')
+        if couches:
+            from .aep_topo import synchroniser_robinets
+            synchroniser_robinets(couches)
 
     def _interp_cote_piquage(self, cond_feat, pk):
         """Interpolation linéaire FE_dep → FE_arr au PK donné sur la conduite."""

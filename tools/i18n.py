@@ -5246,16 +5246,21 @@ TR = {
               "Doppelklick oder Rechtsklick = beenden  ·  Esc = abbrechen",
     },
     'ot_aucune_conduite_coupe': {
-        'fr': "Aucune conduite EU ou EP croisée par le trait de coupe.\n"
-              "Vérifiez que le trait intersecte bien les conduites.",
-        'en': "No EU or EP pipe crossed by the section line.\nCheck that the "
-              "line actually intersects the pipes.",
-        'es': "Ninguna tubería EU o EP cruzada por la línea de sección.\n"
-              "Compruebe que la línea corta realmente las tuberías.",
-        'pt': "Nenhuma conduta EU ou EP cruzada pela linha de corte.\nVerifique "
-              "se a linha interseta realmente as condutas.",
-        'de': "Keine EU- oder EP-Leitung von der Schnittlinie gekreuzt.\nPrüfen "
-              "Sie, ob die Linie die Leitungen wirklich schneidet.",
+        'fr': "Aucune conduite cotée croisée par le trait de coupe.\n"
+              "Vérifiez que le trait intersecte bien les conduites et que "
+              "leurs ouvrages ont un TN et un fil d'eau.",
+        'en': "No levelled pipe crossed by the section line.\nCheck that the "
+              "line actually intersects the pipes and that their structures "
+              "have ground and invert levels.",
+        'es': "Ninguna tubería con cotas cruzada por la línea de sección.\n"
+              "Compruebe que la línea corta las tuberías y que sus obras "
+              "tienen cota de terreno y de solera.",
+        'pt': "Nenhuma conduta cotada cruzada pela linha de corte.\nVerifique "
+              "se a linha interseta as condutas e se as suas obras têm cota "
+              "de terreno e de soleira.",
+        'de': "Keine vermessene Leitung von der Schnittlinie gekreuzt.\nPrüfen "
+              "Sie, ob die Linie die Leitungen schneidet und ob deren Bauwerke "
+              "Gelände- und Sohlhöhen haben.",
     },
     'ot_erreur_dxf': {
         'fr': "Erreur lors de l'export DXF :\n{erreur}",
@@ -6256,3 +6261,10 @@ TR = {
         'de': "Hintergrund: {sources}",
     },
 }
+
+# Module AEP (eau potable) : traductions rangées dans leur propre fichier.
+from .i18n_aep import TR_AEP as _TR_AEP  # noqa: E402
+TR.update(_TR_AEP)
+
+from .i18n_magic import TR_MAGIC as _TR_MAGIC  # noqa: E402
+TR.update(_TR_MAGIC)

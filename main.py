@@ -12,6 +12,7 @@ from qgis.core import (
 
 from .tools import i18n
 from .tools import errlog
+from .tools import reseaux as R
 from .tools.qt_exec import exec_dialog
 
 SKETCHES_PREFIX = "CanaPlan/"
@@ -93,6 +94,17 @@ class ReseauAssainissementPlugin(QObject):
             self.run_branchement_ep,
             checkable=True
         )
+        # Réseau AEP (eau potable) : mêmes outils que EU/EP, plus la pose
+        # d'appareils sur les nœuds.
+        for cle, icone, libelle, cb in [
+            ('conduite_aep',    "conduite_aep.svg",    "Dessiner une conduite AEP",       self.run_conduite_aep),
+            ('branchement_aep', "branchement_aep.svg", "Dessiner un branchement AEP",     self.run_branchement_aep),
+            ('appareil_aep',    "insert_regard.svg",   "Poser un appareil AEP",           self.run_appareil_aep),
+            ('profil_aep',      "profil.svg",          "Profil en long AEP",              self.run_profil_aep),
+            ('coupe_aep',       "profil.svg",          "Coupe transversale AEP",          self.run_coupe_aep),
+            ('renommer_aep',    "renommer.svg",        "Renuméroter les appareils AEP",   self.run_renommer_aep),
+        ]:
+            self.action_dict[cle] = self._add_action(icone, libelle, cb, checkable=True)
         self.action_dict['renseignement'] = self._add_action(
             "renseignement.svg",
             "Renseigner un élément",
@@ -319,6 +331,13 @@ class ReseauAssainissementPlugin(QObject):
             checkable=False
         )
 
+        self.action_dict['magic_box'] = self._add_action(
+            "magic_box.svg",
+            "Magic Box",
+            self.run_magic_box,
+            checkable=False
+        )
+
         # Ajouter aussi dans le menu, organisé par catégories (même
         # regroupement que le panneau latéral)
         self.menu = self.iface.pluginMenu().addMenu("CanaPlan")
@@ -334,9 +353,10 @@ class ReseauAssainissementPlugin(QObject):
 
         menu_groups = [
             ('grp_projet', ['nouveau_projet_assistant', 'projets_recents', 'enregistrer_projet', 'enregistrer_projet_sous', 'charger_projet', 'import_dxf', 'import_star_dt']),
-            ('grp_general', ['renseignement', 'tableau_saisie', 'insert_regard', 'move', 'copy_attributes', 'delete', 'config']),
+            ('grp_general', ['renseignement', 'tableau_saisie', 'insert_regard', 'move', 'copy_attributes', 'delete', 'magic_box', 'config']),
             ('grp_eu', ['conduite_eu', 'branchement_eu', 'profil_eu', 'coupe_eu', 'renommer_eu']),
             ('grp_ep', ['conduite_ep', 'branchement_ep', 'profil_ep', 'coupe_ep', 'renommer_ep']),
+            ('grp_aep', ['conduite_aep', 'branchement_aep', 'appareil_aep', 'profil_aep', 'coupe_aep', 'renommer_aep']),
             ('grp_etiquettes', ['creer_etiquettes', 'afficher_etiquettes', 'taille_etiquettes', 'forcer_etiquettes', 'affichage_etiquettes', 'annotation']),
             ('grp_sorties', ['imprimer', 'profil_groupe', 'coupe_transversale', 'cubature', 'coupe_tranchee_composee', 'export_stareau']),
             ('grp_fond', ['fond_projet']),
@@ -665,7 +685,7 @@ class ReseauAssainissementPlugin(QObject):
         if project_dir():
             return
         from .tools.layer_keys import get_layer_id
-        for reseau in ('eu', 'ep'):
+        for reseau in R.RESEAUX:
             if get_layer_id('conduite', reseau):
                 return
         from .gui.welcome_dialog import WelcomeDialog
@@ -696,7 +716,8 @@ class ReseauAssainissementPlugin(QObject):
         self._activate_tool(key, tool)
 
     def _run_tool_dual(self, checked, key, ToolClass, needs_iface=False):
-        """Active un outil qui opère sur EU et EP simultanément."""
+        """Active un outil qui opère sur tous les réseaux à la fois (EU, EP,
+        et AEP quand le projet en a un)."""
         if not checked:
             self._deactivate_current()
             return
@@ -705,11 +726,36 @@ class ReseauAssainissementPlugin(QObject):
         couches_ep = self._get_couches("EP")
         if not couches_eu or not couches_ep:
             return
+        couches_aep = self._couches_si_presentes("AEP")
         canvas = self.iface.mapCanvas()
-        tool = (ToolClass(canvas, self.iface, couches_eu, couches_ep)
+        tool = (ToolClass(canvas, self.iface, couches_eu, couches_ep,
+                          couches_aep=couches_aep)
                 if needs_iface else
-                ToolClass(canvas, couches_eu=couches_eu, couches_ep=couches_ep))
+                ToolClass(canvas, couches_eu=couches_eu, couches_ep=couches_ep,
+                          couches_aep=couches_aep))
         self._activate_tool(key, tool)
+
+    def reseaux_actifs(self):
+        """Réseaux à traiter par les actions globales (étiquettes, export…).
+
+        EU et EP sont toujours là : leurs couches se créent à la demande depuis
+        la version 1.0. L'AEP ne compte que si ses couches existent déjà — sans
+        quoi chaque projet d'assainissement verrait apparaître un groupe AEP
+        vide au premier clic sur « Créer les étiquettes ».
+        """
+        actifs = list(R.GRAVITAIRES)
+        if self._couches_si_presentes("AEP"):
+            actifs.append("AEP")
+        return actifs
+
+    def _couches_si_presentes(self, reseau):
+        """Couches du réseau si sa couche conduite existe dans le projet, sinon
+        None — sans rien créer."""
+        from .tools.layer_keys import get_layer_id
+        layer_id = get_layer_id('conduite', reseau)
+        if not layer_id or QgsProject.instance().mapLayer(layer_id) is None:
+            return None
+        return self._get_couches(reseau)
 
     # --- Résolution des couches (avec auto-création) ---
 
@@ -733,10 +779,13 @@ class ReseauAssainissementPlugin(QObject):
                 self._get_or_create_group(reseau).addLayer(layer)
                 set_layer_id(role, reseau, layer.id())
             else:
-                self._ensure_fields(layer, role)
+                self._ensure_fields(layer, role, reseau)
 
             couches[role] = layer
 
+        if R.est_aep(reseau):
+            from .tools.style_aep import publier_variables
+            publier_variables(couches)
         return couches
 
     def _get_or_create_group(self, reseau):
@@ -747,14 +796,25 @@ class ReseauAssainissementPlugin(QObject):
             group = root.insertGroup(0, reseau)
         return group
 
-    def _ensure_fields(self, layer, role):
-        """Ajoute à la couche les champs manquants définis dans LAYER_DEFINITIONS."""
+    def _champs(self, role, reseau):
+        """Champs d'une couche : définition commune + champs propres à l'AEP."""
         defn = self.LAYER_DEFINITIONS.get(role)
         if not defn:
+            return []
+        champs = list(defn['fields'])
+        if R.est_aep(reseau):
+            for nom, type_nom, alias in R.CHAMPS_AEP.get(role, []):
+                champs.append((nom, getattr(QMetaType.Type, type_nom), alias))
+        return champs
+
+    def _ensure_fields(self, layer, role, reseau=None):
+        """Ajoute à la couche les champs manquants définis dans LAYER_DEFINITIONS."""
+        champs = self._champs(role, reseau)
+        if not champs:
             return
         existing = {f.name() for f in layer.fields()}
         to_add = []
-        for field_name, field_type, alias in defn['fields']:
+        for field_name, field_type, alias in champs:
             if field_name not in existing:
                 f = QgsField(field_name, field_type)
                 f.setAlias(alias)
@@ -765,11 +825,8 @@ class ReseauAssainissementPlugin(QObject):
         dp.addAttributes(to_add)
         layer.updateFields()
 
-    # --- Couleurs par réseau ---
-    COLORS = {
-        'EU': QColor(255, 0, 0),    # rouge
-        'EP': QColor(0, 0, 255),    # bleu
-    }
+    # --- Couleurs par réseau (registre tools/reseaux.py) ---
+    COLORS = {r: R.couleur(r) for r in R.RESEAUX}
 
     def _create_layer(self, role, reseau):
         """Crée une couche mémoire pour le rôle et le réseau donnés,
@@ -789,7 +846,7 @@ class ReseauAssainissementPlugin(QObject):
 
         dp = layer.dataProvider()
         fields = []
-        for field_name, field_type, alias in defn['fields']:
+        for field_name, field_type, alias in self._champs(role, reseau):
             f = QgsField(field_name, field_type)
             f.setAlias(alias)
             fields.append(f)
@@ -802,6 +859,11 @@ class ReseauAssainissementPlugin(QObject):
     def _apply_style(self, layer, role, reseau):
         """Applique la symbologie selon le role et le reseau."""
         color = self.COLORS[reseau]
+
+        if R.est_aep(reseau) and role in ('regard', 'tabouret'):
+            from .tools.style_aep import appliquer_style_aep
+            appliquer_style_aep(layer, role, color)
+            return
 
         if role in ('conduite', 'branchement'):
             # Epaisseur proportionnelle au diametre (mm -> m)
@@ -875,6 +937,30 @@ class ReseauAssainissementPlugin(QObject):
     def run_branchement_ep(self, checked):
         from .tools.draw_branchement_tool import DrawBranchementTool
         self._run_tool_single(checked, "branchement_ep", "EP", DrawBranchementTool)
+
+    def run_conduite_aep(self, checked):
+        from .tools.draw_conduite_tool import DrawConduiteTool
+        self._run_tool_single(checked, "conduite_aep", "AEP", DrawConduiteTool)
+
+    def run_branchement_aep(self, checked):
+        from .tools.draw_branchement_tool import DrawBranchementTool
+        self._run_tool_single(checked, "branchement_aep", "AEP", DrawBranchementTool)
+
+    def run_appareil_aep(self, checked):
+        from .tools.appareil_aep_tool import AppareilAepTool
+        self._run_tool_single(checked, "appareil_aep", "AEP", AppareilAepTool)
+
+    def run_profil_aep(self, checked):
+        from .tools.profil_tool import ProfilTool
+        self._run_tool_single(checked, "profil_aep", "AEP", ProfilTool, needs_iface=True)
+
+    def run_renommer_aep(self, checked):
+        from .tools.renommer_tool import RenommerTool
+        self._run_tool_single(checked, "renommer_aep", "AEP", RenommerTool, needs_iface=True)
+
+    def run_coupe_aep(self, checked):
+        from .tools.coupe_transversale_tool import CoupeTransversaleSingleTool
+        self._run_tool_single(checked, "coupe_aep", "AEP", CoupeTransversaleSingleTool, needs_iface=True)
 
     def run_renseignement(self, checked):
         from .tools.renseignement_tool import RenseignementTool
@@ -952,16 +1038,14 @@ class ReseauAssainissementPlugin(QObject):
                 return
             from .tools.cubature_tool import CubatureTool
             tool = CubatureTool(self.iface.mapCanvas(), self.iface,
-                                couches_eu, couches_ep, opts)
+                                couches_eu, couches_ep, opts,
+                                couches_aep=self._couches_si_presentes("AEP"))
             self._activate_tool(key, tool)
         else:
             # Calcul direct sans outil carte
             all_results = []
-            reseaux = []
-            if opts['perimetre'] in ('tout', 'EU'):
-                reseaux.append(('EU', self._get_couches("EU")))
-            if opts['perimetre'] in ('tout', 'EP'):
-                reseaux.append(('EP', self._get_couches("EP")))
+            reseaux = [(r, self._get_couches(r)) for r in self.reseaux_actifs()
+                       if opts['perimetre'] in ('tout', r)]
 
             for reseau, couches in reseaux:
                 if not couches:
@@ -1013,7 +1097,7 @@ class ReseauAssainissementPlugin(QObject):
         # Mémorise la taille courante avant de tout recréer
         label_size = _read_label_size(QgsProject.instance(), QSettings())
 
-        for reseau in ("EU", "EP"):
+        for reseau in self.reseaux_actifs():
             couches = self._get_couches(reseau)
             recalc_pentes(couches['conduite'], couches['regard'],
                           branchement_layer=couches['branchement'],
@@ -1033,7 +1117,8 @@ class ReseauAssainissementPlugin(QObject):
         stored = getattr(self, '_label_display_prefs', None)
         if stored:
             full = prefs_from_dict(stored)
-            apply_label_display_prefs(self, full['visibility'])
+            apply_label_display_prefs(self, full['visibility'],
+                                      full.get('robinets'))
             if full.get('fields'):
                 apply_label_fields(self, full['fields'])
 
@@ -1046,22 +1131,27 @@ class ReseauAssainissementPlugin(QObject):
     def run_affichage_etiquettes(self):
         from .gui.etiquette_affichage_dialog import EtiquetteAffichageDialog, prefs_from_dict
         from .gui.etiquettes import (apply_label_display_prefs,
-                                      apply_label_fields, get_label_display_prefs)
+                                      apply_label_fields, get_label_display_prefs,
+                                      get_etiquettes_robinets)
         current_vis = get_label_display_prefs(self)
         # Récupère les prefs stockées en mémoire (fields) si disponibles
         stored = getattr(self, '_label_display_prefs', None) or {}
         prefs = prefs_from_dict(stored) if stored else prefs_from_dict({'visibility': current_vis})
+        prefs['robinets'] = get_etiquettes_robinets()
         # Synchronise la visibilité courante réelle
-        for reseau in ('EU', 'EP'):
+        for reseau in self.reseaux_actifs():
             for role in ('regard', 'tabouret', 'conduite', 'branchement'):
-                prefs['visibility'][reseau][role] = current_vis.get(reseau, {}).get(role, True)
+                prefs['visibility'].setdefault(reseau, {})[role] = \
+                    current_vis.get(reseau, {}).get(role, True)
 
-        dlg = EtiquetteAffichageDialog(prefs=prefs, parent=self.iface.mainWindow())
+        dlg = EtiquetteAffichageDialog(prefs=prefs, parent=self.iface.mainWindow(),
+                                       reseaux=self.reseaux_actifs())
         if exec_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
         new_prefs = dlg.get_prefs()
         self._label_display_prefs = new_prefs
-        apply_label_display_prefs(self, new_prefs['visibility'])
+        apply_label_display_prefs(self, new_prefs['visibility'],
+                                  new_prefs['robinets'])
         apply_label_fields(self, new_prefs['fields'])
         self.iface.mapCanvas().refresh()
 
@@ -1108,7 +1198,7 @@ class ReseauAssainissementPlugin(QObject):
     def toggle_affichage_etiquettes(self, checked):
         """Affiche ou masque les etiquettes ; recalcule les pentes dans tous les cas."""
         from .tools.calc_pentes import recalc_pentes
-        for reseau in ("EU", "EP"):
+        for reseau in self.reseaux_actifs():
             couches = self._get_couches(reseau)
             recalc_pentes(couches['conduite'], couches['regard'],
                           branchement_layer=couches['branchement'],
@@ -1737,7 +1827,8 @@ class ReseauAssainissementPlugin(QObject):
         from .tools.projet_bet import project_dir
 
         dlg_export = ExportDialog(self.iface.mainWindow(),
-                                  default_dir=project_dir())
+                                  default_dir=project_dir(),
+                                  avec_aep='AEP' in self.reseaux_actifs())
         if exec_dialog(dlg_export) != QDialog.DialogCode.Accepted:
             return
         choices = dlg_export.get_choices()
@@ -1757,16 +1848,18 @@ class ReseauAssainissementPlugin(QObject):
         do_plan_dxf  = choices['plan_dxf']
         do_profil_eu  = choices['profil_eu']
         do_profil_ep  = choices['profil_ep']
+        do_profil_aep = choices.get('profil_aep', False)
         do_profil_grp = choices['profil_groupe']
         do_cubature   = choices['cubature']
-        do_coupes     = choices['coupe_eu'] or choices['coupe_ep']
+        do_coupes     = (choices['coupe_eu'] or choices['coupe_ep']
+                         or choices.get('coupe_aep', False))
 
         if not any([do_plan_pdf, do_plan_dxf, do_profil_eu, do_profil_ep,
-                    do_profil_grp, do_cubature, do_coupes]):
+                    do_profil_aep, do_profil_grp, do_cubature, do_coupes]):
             return
 
         # ── Profils en long (export immédiat, sans interaction carte) ──────
-        if do_profil_eu or do_profil_ep or do_profil_grp:
+        if do_profil_eu or do_profil_ep or do_profil_aep or do_profil_grp:
             self._export_profils_batch(choices)
 
         # ── Cubature et coupes types (export immédiat, sans interaction) ───
@@ -1882,6 +1975,7 @@ class ReseauAssainissementPlugin(QObject):
             'output_dir':            work_dir,
             'profil_eu':             True,
             'profil_ep':             True,
+            'profil_aep':            'AEP' in self.reseaux_actifs(),
             'profil_groupe':         False,
             'cubature':              True,
             'cubature_perimetre':    'tout',
@@ -1895,6 +1989,7 @@ class ReseauAssainissementPlugin(QObject):
             'cubature_remblai':      True,
             'coupe_eu':              True,
             'coupe_ep':              True,
+            'coupe_aep':             'AEP' in self.reseaux_actifs(),
         })
 
         msgs = []
@@ -1979,7 +2074,7 @@ class ReseauAssainissementPlugin(QObject):
         # Les fonds (cadastre, ortho) couvrent tout le département : les
         # inclure ferait cadrer sur eux et non sur le chantier.
         couches = []
-        for reseau in ("EU", "EP"):
+        for reseau in self.reseaux_actifs():
             jeu = self._get_couches(reseau) or {}
             for cle in ('conduite', 'regard', 'branchement', 'tabouret'):
                 couche = jeu.get(cle)
@@ -2210,11 +2305,8 @@ class ReseauAssainissementPlugin(QObject):
         config    = get_cubature_config()
         perimetre = choices.get('cubature_perimetre', 'tout')
 
-        reseaux = []
-        if perimetre in ('tout', 'EU'):
-            reseaux.append(('EU', self._get_couches("EU")))
-        if perimetre in ('tout', 'EP'):
-            reseaux.append(('EP', self._get_couches("EP")))
+        reseaux = [(r, self._get_couches(r)) for r in self.reseaux_actifs()
+                   if perimetre in ('tout', r)]
 
         all_results = []
         for reseau, couches in reseaux:
@@ -2266,7 +2358,8 @@ class ReseauAssainissementPlugin(QObject):
         if not out_dir or not os.path.isdir(out_dir):
             return []
 
-        demandes = [r for r in ('EU', 'EP') if choices.get('coupe_' + r.lower())]
+        demandes = [r for r in self.reseaux_actifs()
+                    if choices.get('coupe_' + r.lower())]
         if not demandes:
             return []
 
@@ -2337,12 +2430,25 @@ class ReseauAssainissementPlugin(QObject):
                 else:
                     msgs.append(i18n.tr('msg_profils_vide', reseau="EP"))
 
+            couches_aep = self._couches_si_presentes("AEP")
+            if choices.get('profil_aep') and couches_aep:
+                fmt = choices.get('profil_aep_format') or choices['profil_eu_format']
+                n_ok, n_skip, out_path = export_profils_eu_ep(
+                    couches_aep, "AEP", fmt, out_dir)
+                if n_ok:
+                    msgs.append(i18n.tr(
+                        'msg_profils_ok', reseau="AEP", nb=n_ok,
+                        fichier=os.path.basename(out_path)))
+                else:
+                    msgs.append(i18n.tr('msg_profils_vide', reseau="AEP"))
+
             if choices['profil_groupe']:
                 couches_eu = self._get_couches("EU")
                 couches_ep = self._get_couches("EP")
                 ok, out_path = export_profils_groupe(
                     couches_eu, couches_ep, choices['profil_groupe_format'], out_dir,
-                    reseau_ref=choices['profil_groupe_reseau'])
+                    reseau_ref=choices['profil_groupe_reseau'],
+                    couches_aep=couches_aep)
                 msgs.append(
                     i18n.tr('msg_profil_groupe_ok',
                             fichier=os.path.basename(out_path)) if ok
@@ -2505,6 +2611,11 @@ class ReseauAssainissementPlugin(QObject):
                 "Star-DT", i18n.tr('msg_rien_a_importer'),
                 level=Qgis.MessageLevel.Warning, duration=4)
 
+    def run_magic_box(self):
+        self._ensure_project_loaded()
+        from .gui.magic_box_dialog import ouvrir_magic_box
+        ouvrir_magic_box(self)
+
     def show_config_dialog(self):
         from .config_dialog import ConfigDialog
         dialog = ConfigDialog(self.iface)
@@ -2518,7 +2629,8 @@ class ReseauAssainissementPlugin(QObject):
             return
         from .gui.tableau_saisie_dialog import TableauSaisieDialog
         self._tableau_saisie_dialog = TableauSaisieDialog(
-            couches_eu, couches_ep, iface=self.iface, parent=self.iface.mainWindow())
+            couches_eu, couches_ep, iface=self.iface, parent=self.iface.mainWindow(),
+            couches_aep=self._couches_si_presentes("AEP"))
         self._tableau_saisie_dialog.show()
         self._tableau_saisie_dialog.raise_()
         self._tableau_saisie_dialog.activateWindow()

@@ -30,8 +30,11 @@ class ExportDialog(QDialog):
     pour que la fenêtre reste d'un seul tenant à l'écran.
     """
 
-    def __init__(self, parent=None, default_dir=None):
+    def __init__(self, parent=None, default_dir=None, avec_aep=False):
         super().__init__(parent)
+        # Lignes AEP (profil, cubature, coupe type) seulement si le projet
+        # porte un réseau AEP : les projets d'assainissement n'en voient rien.
+        self._avec_aep = avec_aep
         self.setWindowTitle(i18n.tr('exp_titre'))
         self.setMinimumWidth(500)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
@@ -99,6 +102,10 @@ class ExportDialog(QDialog):
             layout, i18n.tr('exp_profils_reseau', code="EU"))
         self.cb_ep,  self.fmt_ep  = self._profil_row(
             layout, i18n.tr('exp_profils_reseau', code="EP"))
+        self.cb_aep = self.fmt_aep = None
+        if self._avec_aep:
+            self.cb_aep, self.fmt_aep = self._profil_row(
+                layout, i18n.tr('exp_profils_reseau', code="AEP"))
         self.cb_grp, self.fmt_grp, self.ref_grp = self._profil_groupe_row(layout)
 
     def _bloc_cubature(self, layout):
@@ -119,6 +126,8 @@ class ExportDialog(QDialog):
         self.cub_perimetre.addItem(i18n.tr('cb_tout'),    'tout')
         self.cub_perimetre.addItem(i18n.tr('cb_eu_seul'), 'EU')
         self.cub_perimetre.addItem(i18n.tr('cb_ep_seul'), 'EP')
+        if self._avec_aep:
+            self.cub_perimetre.addItem(i18n.tr('cb_aep_seul'), 'AEP')
 
         self.cub_conduites = QCheckBox(i18n.tr('cb_conduites'))
         self.cub_conduites.setChecked(True)
@@ -147,9 +156,12 @@ class ExportDialog(QDialog):
 
         self.cb_coupe_eu = QCheckBox(i18n.tr('exp_coupe_type', code="EU"))
         self.cb_coupe_ep = QCheckBox(i18n.tr('exp_coupe_type', code="EP"))
-        for case in (self.cb_coupe_eu, self.cb_coupe_ep):
+        self.cb_coupe_aep = QCheckBox(i18n.tr('exp_coupe_type', code="AEP"))
+        self.cb_coupe_aep.setVisible(self._avec_aep)
+        for case in (self.cb_coupe_eu, self.cb_coupe_ep, self.cb_coupe_aep):
             case.setToolTip(i18n.tr('exp_coupe_note'))
-        layout.addWidget(_hrow(self.cb_coupe_eu, self.cb_coupe_ep))
+        layout.addWidget(_hrow(self.cb_coupe_eu, self.cb_coupe_ep,
+                               self.cb_coupe_aep))
 
         self._coupe_box = QWidget()
         box = QHBoxLayout(self._coupe_box)
@@ -171,6 +183,7 @@ class ExportDialog(QDialog):
         self._coupe_box.setEnabled(False)
         self.cb_coupe_eu.toggled.connect(self._sync_coupe_box)
         self.cb_coupe_ep.toggled.connect(self._sync_coupe_box)
+        self.cb_coupe_aep.toggled.connect(self._sync_coupe_box)
         layout.addWidget(self._coupe_box)
 
     _STYLE_RACCOURCI = (
@@ -259,7 +272,8 @@ class ExportDialog(QDialog):
 
     def _sync_coupe_box(self):
         self._coupe_box.setEnabled(
-            self.cb_coupe_eu.isChecked() or self.cb_coupe_ep.isChecked())
+            self.cb_coupe_eu.isChecked() or self.cb_coupe_ep.isChecked()
+            or self.cb_coupe_aep.isChecked())
 
     def _browse_dir(self):
         start = self.dir_edit.text().strip() or os.path.expanduser("~")
@@ -315,8 +329,8 @@ class ExportDialog(QDialog):
         ref_lbl = QLabel(i18n.tr('exp_ref'))
         ref_lbl.setEnabled(False)
         ref_combo = QComboBox()
-        ref_combo.addItems(['EU', 'EP'])
-        ref_combo.setFixedWidth(50)
+        ref_combo.addItems(['EU', 'EP', 'AEP'] if self._avec_aep else ['EU', 'EP'])
+        ref_combo.setFixedWidth(58)
         ref_combo.setEnabled(False)
 
         fmt_combo = QComboBox()
@@ -349,6 +363,9 @@ class ExportDialog(QDialog):
             'profil_eu_format':      self.fmt_eu.currentText(),
             'profil_ep':             self.cb_ep.isChecked(),
             'profil_ep_format':      self.fmt_ep.currentText(),
+            'profil_aep':            bool(self.cb_aep and self.cb_aep.isChecked()),
+            'profil_aep_format':     (self.fmt_aep.currentText() if self.fmt_aep
+                                      else self.fmt_eu.currentText()),
             'profil_groupe':         self.cb_grp.isChecked(),
             'profil_groupe_format':  self.fmt_grp.currentText(),
             'profil_groupe_reseau':  self.ref_grp.currentText(),
@@ -361,6 +378,7 @@ class ExportDialog(QDialog):
             'cubature_csv':          self.cub_csv.isChecked(),
             'coupe_eu':              self.cb_coupe_eu.isChecked(),
             'coupe_ep':              self.cb_coupe_ep.isChecked(),
+            'coupe_aep':             self.cb_coupe_aep.isChecked(),
             'coupe_papier':          self.coupe_papier.currentData(),
             'coupe_fichier':         self.coupe_fichier.currentText().lower(),
             'tout_en_un':            self._tout_en_un,

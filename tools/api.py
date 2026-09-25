@@ -348,14 +348,15 @@ def etat():
     """Inventaire du projet : couches métier, fonds, fenêtres ouvertes."""
     projet = QgsProject.instance()
     res = {"reseaux": {}, "fonds": [], "fenetres": _fenetres_ouvertes()}
-    for reseau in ("EU", "EP"):
+    actifs = _plugin().reseaux_actifs()
+    for reseau in actifs:
         jeu = _couches(reseau)
         res["reseaux"][reseau] = {
             role: {"nom": c.name(), "entites": c.featureCount(),
                    "source": c.dataProvider().name()}
             for role, c in jeu.items()
         }
-    metier = {c.id() for r in ("EU", "EP") for c in _couches(r).values()}
+    metier = {c.id() for r in actifs for c in _couches(r).values()}
     for c in projet.mapLayers().values():
         if c.id() not in metier:
             res["fonds"].append(c.name())
@@ -1575,7 +1576,13 @@ def renumeroter(reseau, prefixe_regard=None, prefixe_tabouret=None, depart=1,
         if amont.id() == aval.id():
             raise RuntimeError("`de` et `vers` designent le meme regard.")
     else:
-        tri = sorted(regards, key=lambda f: -f.geometry().asPoint().y())
+        # Seuls les nœuds du graphe (extrémités de tronçon) peuvent servir
+        # d'extrémités : un robinet de branchement AEP, posé au milieu d'un
+        # tronçon, n'en est pas un et ne mène nulle part.
+        from .graph_utils import build_graph
+        graphe, _r = build_graph(jeu["conduite"], jeu["regard"])
+        candidats = [f for f in regards if f.id() in graphe] or regards
+        tri = sorted(candidats, key=lambda f: -f.geometry().asPoint().y())
         amont, aval = tri[0], tri[-1]
 
     defauts = rt._DEFAULTS.get(reseau, rt._DEFAULTS["EU"])
@@ -1595,8 +1602,10 @@ def renumeroter(reseau, prefixe_regard=None, prefixe_tabouret=None, depart=1,
     rt._PrefixDialog = _Prefixes
     try:
         with sans_fenetre() as sf:
-            rt.RenommerTool(_iface().mapCanvas(), _iface(), reseau,
-                            jeu)._rename_path(amont, aval)
+            outil = rt.RenommerTool(_iface().mapCanvas(), _iface(), reseau, jeu)
+            # AEP : un compteur par type d'appareil, premier numéro `depart`.
+            outil._demander_depart = lambda: depart
+            outil._rename_path(amont, aval)
     finally:
         rt._PrefixDialog = origine
 
@@ -2224,7 +2233,7 @@ def _prefs_visibilite(reseau, visibilite):
     prefs = get_label_display_prefs(_plugin())
     if isinstance(visibilite, bool):
         prefs[reseau] = {role: visibilite for role in prefs.get(reseau, {})}
-    elif set(visibilite) <= {"EU", "EP"}:
+    elif set(visibilite) <= {"EU", "EP", "AEP"}:
         for r, v in visibilite.items():
             prefs.setdefault(r, {}).update(v)
     else:
@@ -2418,13 +2427,15 @@ def profil(reseau="EU", format="A3", dossier=None):
 
 
 def profil_groupe(reference="EU", format="A3", dossier=None):
-    """Profil en long combiné EU + EP, calé sur l'axe du réseau `reference`."""
+    """Profil en long combiné EU + EP (+ AEP), calé sur l'axe du réseau `reference`."""
     from .profil_batch import export_profils_groupe
     dossier = _chemin(dossier or os.path.join("~", "Documents", "CanaPlan"))
     os.makedirs(dossier, exist_ok=True)
     with sans_fenetre() as sf:
+        aep = _couches("AEP") if "AEP" in _plugin().reseaux_actifs() else None
         fichiers = export_profils_groupe(_couches("EU"), _couches("EP"),
-                                         format, dossier, reference)
+                                         format, dossier, reference,
+                                         couches_aep=aep)
     return {"fichiers": fichiers, "reference": reference, "messages": sf.messages}
 
 
@@ -2446,6 +2457,118 @@ def cubature(reseau="EU", reglages=None):
                 totaux[k] = round(totaux.get(k, 0) + v, 3)
     return {"reseau": reseau, "lignes": lignes, "totaux": totaux,
             "config": cfg, "nombre": len(lignes)}
+
+
+def appareil_aep(point, type_appareil):
+    """Pose un appareil AEP : type donné au nœud sous `point` (TOL_SNAP_M), ou
+    nœud inséré sur la conduite la plus proche (coupée en deux).
+
+    `type_appareil` : code du registre tools/reseaux.AEP_NOEUD_TYPES
+    ('vanne', 'poteau_incendie', 'ventouse'…). `point` : QgsPointXY ou [x, y].
+    """
+    from qgis.core import QgsFeature, QgsGeometry, QgsPointXY
+    if not isinstance(point, QgsPointXY):
+        point = QgsPointXY(float(point[0]), float(point[1]))
+    from . import reseaux as R
+    from .spatial_utils import nearest_point_feature, nearest_line_feature
+    if type_appareil not in R.AEP_NOEUD_TYPES:
+        raise RuntimeError("Type AEP inconnu : %s. Types : %s"
+                           % (type_appareil, ", ".join(R.AEP_NOEUD_TYPES)))
+    jeu = _couches("AEP")
+    noeuds = jeu["regard"]
+    idx = noeuds.fields().indexOf("type")
+    noeud, _d = nearest_point_feature(noeuds, point, TOL_SNAP_M)
+    if noeud is not None:
+        noeuds.startEditing()
+        noeuds.changeAttributeValue(noeud.id(), idx, type_appareil)
+        noeuds.commitChanges()
+        return {"noeud": noeud.id(), "type": type_appareil, "insere": False}
+    cond, proj, _d = nearest_line_feature(jeu["conduite"], point, 5.0)
+    if cond is None:
+        raise RuntimeError("Aucune conduite AEP à moins de 5 m du point.")
+    from .insert_regard_tool import InsertRegardTool
+    outil = InsertRegardTool(_iface().mapCanvas(), {}, {})
+    feat = QgsFeature(noeuds.fields())
+    feat.setGeometry(QgsGeometry.fromPointXY(proj))
+    feat.setAttribute("type", type_appareil)
+    noeuds.startEditing()
+    noeuds.addFeature(feat)
+    noeuds.commitChanges()
+    outil._split_conduite(jeu["conduite"], cond, proj)
+    return {"type": type_appareil, "insere": True, "x": proj.x(), "y": proj.y()}
+
+
+def branchements_auto(reseau, conduites=None, mode="parcelle", cote="deux",
+                      distance_max=10.0, apercu=False, diametre=None,
+                      materiau=None):
+    """Magic Box : branchements automatiques sur des tronçons choisis.
+
+    `conduites` : identifiants (fid) des conduites du réseau à desservir ;
+    None = toutes. `mode` : "parcelle" (une par parcelle riveraine, même non
+    bâtie), "bati" (une par bâtiment) ou "numero" (une par adresse BAN).
+    `cote` : "deux", "gauche" ou "droite", dans le sens de numérisation de la
+    conduite. Couches de fond requises : parcelles (parcelle, numero), bâti
+    (bati), « BAN Adresses » (numero).
+
+    Même moteur que le bouton Magic Box : piquage perpendiculaire au milieu du
+    front de rue, arrêt sur la limite de parcelle, cibles déjà raccordées
+    laissées telles quelles. `apercu=True` rend les propositions sans rien
+    écrire ; sinon elles sont tracées par l'outil branchement (tabouret,
+    robinet AEP, contrôle topologique), avec `diametre` / `materiau` pour ce
+    seul appel, standard du réseau sinon.
+    """
+    from . import magic_branchements as MB
+    if mode not in MB.MODES:
+        raise RuntimeError("mode inconnu : %s. Modes : %s" % (mode, ", ".join(MB.MODES)))
+    if cote not in MB.COTES:
+        raise RuntimeError("cote inconnu : %s. Côtés : %s" % (cote, ", ".join(MB.COTES)))
+    manquantes = MB.couches_manquantes(mode)
+    if manquantes:
+        raise RuntimeError("Couches de fond absentes : %s (voir fonds())."
+                           % ", ".join(manquantes))
+    jeu = _couches(reseau)
+    fids = (list(conduites) if conduites is not None
+            else [f.id() for f in jeu["conduite"].getFeatures()])
+    res = MB.calculer(jeu, fids, mode, distance_max, cote)
+    propositions = [{"cible": p["cible"],
+                     "piquage": [round(p["pa"].x(), 3), round(p["pa"].y(), 3)],
+                     "limite": [round(p["pb"].x(), 3), round(p["pb"].y(), 3)]}
+                    for p in res["propositions"]]
+    sortie = {"reseau": reseau, "mode": mode, "cote": cote,
+              "propositions": propositions, "ecartes": res["ecartes"]}
+    if apercu or not res["propositions"]:
+        sortie["faits"] = 0
+        return sortie
+    if diametre is None and materiau is None:
+        diametre, materiau = MB.defauts_branchement(reseau)
+    trace = MB.tracer(_iface().mapCanvas(), reseau, jeu, res["propositions"],
+                      diametre=diametre, materiau=materiau)
+    sortie.update(faits=trace["faits"], echecs=trace["echecs"],
+                  messages=trace["messages"])
+    return sortie
+
+
+def couverture_aep(couverture=None):
+    """AEP : fil d'eau = TN − couverture − DN et profondeur = TN − fil d'eau,
+    sur tous les nœuds et terminaux qui ont un TN. Même calcul que le bouton
+    « Couverture → FE » du Tableau de saisie."""
+    from . import reseaux as R
+    from ..gui.tableau_saisie_dialog import TableauSaisieDialog
+    from qgis.PyQt.QtWidgets import QInputDialog
+    cv = R.couverture_aep() if couverture is None else float(couverture)
+    dlg = TableauSaisieDialog(_couches("EU"), _couches("EP"), iface=_iface(),
+                              couches_aep=_couches("AEP"))
+    origine = QInputDialog.getDouble
+    QInputDialog.getDouble = staticmethod(lambda *a, **k: (cv, True))
+    try:
+        dlg._set_reseau("AEP")
+        dlg._appliquer_couverture()
+        texte = dlg.lbl_status.text()
+    finally:
+        QInputDialog.getDouble = origine
+        dlg.close()
+        dlg.deleteLater()
+    return {"couverture": cv, "message": texte}
 
 
 def coupe_type(reseau="EU", dossier=None, reglages=None):
@@ -2487,16 +2610,20 @@ def exporter_dxf(dossier=None, emprise=None):
     return {"fichiers": nouveaux, "messages": sf.messages}
 
 
-def controle_stareau():
+def controle_stareau(type_fichier="ASS"):
     """Contrôle de conformité StaR-Eau (CNIG/ASTEE) avant export.
 
     Retourne les non-conformités : champs obligatoires vides, ouvrages
     orphelins, géométries douteuses. À passer avant `exporter_stareau`.
+    `type_fichier` : "ASS" (assainissement EU/EP) ou "EAU" (réseau AEP),
+    comme la clé `type_fichier` des paramètres d'export.
     """
     _france_seulement("controle_stareau")
     from .stareau_export import check_conformity, source_layers
-    return {"couches_sources": [c.name() for c in source_layers() if c],
-            "controle": check_conformity()}
+    domaine = "EAU" if type_fichier == "EAU" else "ASS"
+    return {"couches_sources": [c.name() for c in source_layers().values() if c],
+            "type_fichier": domaine,
+            "controle": check_conformity(domaine=domaine)}
 
 
 def exporter_stareau(parametres, chemin):
@@ -3246,10 +3373,11 @@ DOMAINES = {
                "enregistrer_sous", "projets_recents"],
     "Fonds de plan": ["fonds", "attendre_fonds"],
     "Dessin": ["implanter_regards", "tracer_conduite", "creer_branchements",
-               "inserer_regard", "supprimer", "vider"],
+               "branchements_auto", "inserer_regard", "supprimer", "vider"],
     "Attributs et cotes": ["saisir", "extremites", "renumeroter", "tn_mnt",
                            "caler_cotes",
                            "recalculer_pentes", "controler_branchements"],
+    "Eau potable (AEP)": ["appareil_aep", "couverture_aep"],
     "Présentation": ["styles", "etiquettes", "config"],
     "Calculs": ["cubature", "coupe_type"],
     "Sorties": ["profil", "profil_groupe", "reglages_plan", "exporter",

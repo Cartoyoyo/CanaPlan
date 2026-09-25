@@ -44,6 +44,7 @@ class SidePanel(QDockWidget):
         self._item(folder_general, icon_dir, "move.svg",          "move")
         self._item(folder_general, icon_dir, "copy_attrib.svg",   "copy_attributes")
         self._item(folder_general, icon_dir, "delete.svg",        "delete")
+        self._item(folder_general, icon_dir, "magic_box.svg",     "magic_box")
         self._item(folder_general, icon_dir, "config.svg",        "config",
                    tr_key="panel_config")
 
@@ -60,6 +61,14 @@ class SidePanel(QDockWidget):
         self._item(folder_ep, icon_dir, "profil.svg",         "profil_ep")
         self._item(folder_ep, icon_dir, "profil.svg",         "coupe_ep")
         self._item(folder_ep, icon_dir, "renommer.svg",       "renommer_ep")
+
+        folder_aep = self._folder("grp_aep")
+        self._item(folder_aep, icon_dir, "conduite_aep.svg",    "conduite_aep")
+        self._item(folder_aep, icon_dir, "branchement_aep.svg", "branchement_aep")
+        self._item(folder_aep, icon_dir, "insert_regard.svg",   "appareil_aep")
+        self._item(folder_aep, icon_dir, "profil.svg",          "profil_aep")
+        self._item(folder_aep, icon_dir, "profil.svg",          "coupe_aep")
+        self._item(folder_aep, icon_dir, "renommer.svg",        "renommer_aep")
 
         folder_etiquettes = self._folder("grp_etiquettes")
         self._item(folder_etiquettes, icon_dir, "etiquettes.svg",        "creer_etiquettes")
@@ -107,7 +116,8 @@ class SidePanel(QDockWidget):
         self._item(fdc_int, icon_dir, "config.svg", "monde_bati_osm")
 
         for folder in (folder_projet, folder_general, folder_eu, folder_ep,
-                       folder_etiquettes, folder_impression, folder_fdc):
+                       folder_aep, folder_etiquettes, folder_impression,
+                       folder_fdc):
             self.tree.addTopLevelItem(folder)
         self.tree.expandAll()
 

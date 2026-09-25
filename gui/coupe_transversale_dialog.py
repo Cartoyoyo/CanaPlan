@@ -45,6 +45,7 @@ MATERIAU_REMBLAI_COLORS = {
 RESEAU_EDGE_COLORS = {
     'EU': '#c62828',
     'EP': '#1565c0',
+    'AEP': '#00838F',
 }
 
 # ------------------------------------------------------------------ formats papier (mm, portrait)

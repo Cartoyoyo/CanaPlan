@@ -49,7 +49,7 @@ def _copy_to_memory(layer):
 
 _PREFIX = "CanaPlan/"
 _ROLES  = ('conduite', 'branchement', 'regard', 'tabouret')
-_RESEAUX = ('EU', 'EP')
+_RESEAUX = ('EU', 'EP', 'AEP')   # AEP facultatif : absent des .bet d'assainissement
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -275,8 +275,10 @@ def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
     crs       = project.crs()
 
     from ..gui.etiquettes import apply_etiquettes
+    from .layer_keys import get_layer_id
 
-    n_layers    = len(_ROLES) * len(_RESEAUX)
+    n_layers    = len(_ROLES) * sum(
+        1 for r in _RESEAUX if project.mapLayer(get_layer_id('conduite', r) or ''))
     total_steps = n_layers * 4 + 2   # copie + retrait + écriture + rechargement + zip + extrait
 
     if silencieux:
@@ -436,7 +438,7 @@ def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
         _remove_temp_gpkg(gpkg_temp)
         QMessageBox.critical(
             iface.mainWindow(), i18n.tr('enregistrer_projet'),
-            fi18n.tr('pb_rotation_echec', erreur=e))
+            i18n.tr('pb_rotation_echec', erreur=e))
         return
 
     try:
@@ -510,7 +512,8 @@ def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
         apply_label_size_all(plugin, label_size['unit'], label_size['value'],
                              label_size.get('min_scale'))
     if full_prefs:
-        apply_label_display_prefs(plugin, full_prefs['visibility'])
+        apply_label_display_prefs(plugin, full_prefs['visibility'],
+                                  full_prefs.get('robinets'))
         if full_prefs.get('fields'):
             apply_label_fields(plugin, full_prefs['fields'])
 
@@ -518,8 +521,11 @@ def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
     # memoire detruites en phase 2 : on le raccroche aux couches rechargees,
     # sinon sa prochaine ecriture (ou sa fermeture) tombe sur un objet mort.
     dlg = getattr(plugin, '_tableau_saisie_dialog', None)
+    # Variables de style AEP (identifiants des couches rechargées).
+    couches_aep = plugin._couches_si_presentes("AEP")
     if dlg is not None and not sip.isdeleted(dlg):
-        dlg.set_couches(plugin._get_couches("EU"), plugin._get_couches("EP"))
+        dlg.set_couches(plugin._get_couches("EU"), plugin._get_couches("EP"),
+                        couches_aep=couches_aep)
 
     progress.setValue(total_steps)
     progress.close()
@@ -647,6 +653,15 @@ def load_projet(plugin, iface, bet_path=None):
     for reseau in _RESEAUX:
         reseau_meta    = layers_meta.get(reseau, {})
         labels_enabled = labels_state.get(reseau, False)
+        if reseau == 'AEP' and not reseau_meta:
+            # Projet sans AEP (tous les .bet d'avant la 2.2) : on retire les
+            # couches AEP d'un projet ouvert précédemment, sans rien signaler.
+            for role in _ROLES:
+                old_id = get_layer_id(role, reseau)
+                if old_id and project.mapLayer(old_id):
+                    project.removeMapLayer(old_id)
+                set_layer_id(role, reseau, '')
+            continue
         for role in _ROLES:
             layer_name = reseau_meta.get(role, f"{role}_{reseau}")
 
@@ -678,7 +693,10 @@ def load_projet(plugin, iface, bet_path=None):
                     visibility_state.get(layer_name, True))
             loaded += 1
 
-    # Restaurer la visibilité des groupes EU/EP
+    # Variables de style AEP (identifiants des couches chargées).
+    plugin._couches_si_presentes("AEP")
+
+    # Restaurer la visibilité des groupes EU/EP/AEP
     for reseau in _RESEAUX:
         grp = project.layerTreeRoot().findGroup(reseau)
         if grp:
@@ -699,7 +717,8 @@ def load_projet(plugin, iface, bet_path=None):
         if label_display_prefs:
             full = prefs_from_dict(label_display_prefs)
             plugin._label_display_prefs = full
-            apply_label_display_prefs(plugin, full['visibility'])
+            apply_label_display_prefs(plugin, full['visibility'],
+                                      full.get('robinets'))
             if full.get('fields'):
                 apply_label_fields(plugin, full['fields'])
         action_force = plugin.action_dict.get('forcer_etiquettes')

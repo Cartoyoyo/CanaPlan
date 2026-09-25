@@ -28,10 +28,12 @@ class CopyAttributesTool(QgsMapTool):
     Échap            : annule
     """
 
-    def __init__(self, canvas, couches_eu, couches_ep):
+    def __init__(self, canvas, couches_eu, couches_ep, couches_aep=None):
         super().__init__(canvas)
         self.canvas = canvas
         self.couches = {'EU': couches_eu, 'EP': couches_ep}
+        if couches_aep:
+            self.couches['AEP'] = couches_aep
 
         self._mode = None          # None | 'select'
         self._copied_role = None

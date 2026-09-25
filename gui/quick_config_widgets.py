@@ -35,7 +35,7 @@ MATERIAUX_REMBLAI = ["", "Sable", "2/6", "0/31.5", "Tout-venant", "Recyclé",
 
 # Couleurs des réseaux (mêmes valeurs que main.py:COLORS — EU rouge, EP bleu),
 # reprises ici pour la visibilité dans les widgets de configuration/assistant.
-NETWORK_COLORS = {'EU': '#E30613', 'EP': '#0033CC'}
+NETWORK_COLORS = {'EU': '#E30613', 'EP': '#0033CC', 'AEP': '#00838F'}
 
 
 def network_group_stylesheet(reseau):
@@ -54,6 +54,8 @@ INITIAL_DEFAULTS = {
     "conduite_ep":      (315, "PVC"),
     "branchement_eu":   (160, "PVC"),
     "branchement_ep":   (160, "PVC"),
+    "conduite_aep":     (110, "Fonte ductile"),
+    "branchement_aep":  (32,  "PEHD"),
 }
 
 
@@ -78,6 +80,8 @@ def get_cubature_config():
         'largeur_conduite_ep': s.value(f"{p}/larg_cond_ep", 0.80, float),
         'largeur_branchement_eu': s.value(f"{p}/larg_branch_eu", 0.60, float),
         'largeur_branchement_ep': s.value(f"{p}/larg_branch_ep", 0.60, float),
+        'largeur_conduite_aep': s.value(f"{p}/larg_cond_aep", 0.60, float),
+        'largeur_branchement_aep': s.value(f"{p}/larg_branch_aep", 0.40, float),
         # remblai
         'ep_enrobage': s.value(f"{p}/ep_enrobage", 0.15, float),
         'materiau_lit_pose': s.value(f"{p}/materiau_lit_pose", "Sable", str),
@@ -394,7 +398,7 @@ class ReseauDefautWidget(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        for reseau in ("EU", "EP"):
+        for reseau in ("EU", "EP", "AEP"):
             group = QGroupBox(i18n.tr('qc_reseau', code=reseau))
             group.setStyleSheet(network_group_stylesheet(reseau))
             group_layout = QVBoxLayout()
@@ -417,6 +421,8 @@ class ReseauDefautWidget(QWidget):
                 form.addRow(i18n.tr('qc_role_diametre', role=label), spin)
                 form.addRow(i18n.tr('qc_role_materiau', role=label), mat_combo)
 
+            if reseau == "AEP":
+                self._ajouter_options_aep(form)
             group_layout.addLayout(form)
 
             schema = NetworkSchemaWidget()
@@ -429,8 +435,25 @@ class ReseauDefautWidget(QWidget):
         layout.addStretch()
         self._refresh_network_schemas()
 
+    def _ajouter_options_aep(self, form):
+        """Réglages propres à l'AEP : couverture, terminal, affleurants."""
+        from ..tools import reseaux as R
+        self._couverture = QDoubleSpinBox()
+        self._couverture.setRange(0.0, 5.0)
+        self._couverture.setDecimals(2)
+        self._couverture.setSingleStep(0.10)
+        self._couverture.setSuffix(" m")
+        form.addRow(i18n.tr('qc_couverture_aep'), self._couverture)
+        self._terminal = QComboBox()
+        for code in R.AEP_TERMINAL_TYPES:
+            self._terminal.addItem(R.libelle_type(code), code)
+        form.addRow(i18n.tr('qc_terminal_aep'), self._terminal)
+        self._affleurants = QCheckBox(i18n.tr('qc_affleurants_aep'))
+        self._affleurants.setToolTip(i18n.tr('qc_affleurants_aep_tip'))
+        form.addRow("", self._affleurants)
+
     def _refresh_network_schemas(self):
-        for reseau in ("EU", "EP"):
+        for reseau in ("EU", "EP", "AEP"):
             self._network_schemas[reseau].update_schema(self.get_network_data(reseau))
 
     def get_network_data(self, reseau):
@@ -463,16 +486,32 @@ class ReseauDefautWidget(QWidget):
                     mat_combo.setCurrentIndex(idx)
                 else:
                     mat_combo.setCurrentText(mat)
+        from ..tools import reseaux as R
+        from ..tools import style_aep
+        self._couverture.setValue(R.couverture_aep())
+        self._terminal.setCurrentIndex(
+            max(0, self._terminal.findData(R.terminal_aep_defaut())))
+        self._affleurants.setChecked(style_aep.affleurants_actifs())
 
     def save_settings(self):
         gs = QgsSettings()
         for key, (spin, mat_combo) in self._def_widgets.items():
             gs.setValue(f"{SETTINGS_KEY}/{key}_diametre", spin.value())
             gs.setValue(f"{SETTINGS_KEY}/{key}_materiau", mat_combo.currentText())
+        from ..tools import reseaux as R
+        from ..tools import style_aep
+        R.set_couverture_aep(self._couverture.value())
+        R.set_terminal_aep_defaut(self._terminal.currentData())
+        # Option de rendu : variable du projet ouvert, pas une préférence.
+        if style_aep.affleurants_actifs() != self._affleurants.isChecked():
+            style_aep.set_affleurants(self._affleurants.isChecked())
+            from qgis.utils import iface
+            if iface is not None:
+                iface.mapCanvas().refresh()
 
     def summary(self):
         parts = []
-        for reseau in ("EU", "EP"):
+        for reseau in ("EU", "EP", "AEP"):
             spin_c, mat_c = self._def_widgets[f"conduite_{reseau.lower()}"]
             spin_b, mat_b = self._def_widgets[f"branchement_{reseau.lower()}"]
             parts.append(i18n.tr(
@@ -511,6 +550,8 @@ class CubatureConfigWidget(QWidget):
             ('larg_cond_ep',   0.80),
             ('larg_branch_eu', 0.60),
             ('larg_branch_ep', 0.60),
+            ('larg_cond_aep',   0.60),
+            ('larg_branch_aep', 0.40),
         ]:
             spin = QDoubleSpinBox()
             spin.setRange(0.1, 5.0)
@@ -534,6 +575,7 @@ class CubatureConfigWidget(QWidget):
         self._cubature_combo.addItems([
             i18n.tr('qc_conduite_eu'), i18n.tr('qc_conduite_ep'),
             i18n.tr('qc_branchement_eu'), i18n.tr('qc_branchement_ep'),
+            i18n.tr('qc_conduite_aep'), i18n.tr('qc_branchement_aep'),
         ])
         self._cubature_combo.currentIndexChanged.connect(self._refresh_cubature_schema)
         schema_top_layout.addWidget(self._cubature_combo)
@@ -550,6 +592,8 @@ class CubatureConfigWidget(QWidget):
             1: ('larg_cond_ep', 'qc_conduite_ep'),
             2: ('larg_branch_eu', 'qc_branchement_eu'),
             3: ('larg_branch_ep', 'qc_branchement_ep'),
+            4: ('larg_cond_aep', 'qc_conduite_aep'),
+            5: ('larg_branch_aep', 'qc_branchement_aep'),
         }
 
         layout.addStretch()
@@ -573,6 +617,7 @@ class CubatureConfigWidget(QWidget):
         defaults = {
             'ep_lit_pose': 0.10, 'larg_cond_eu': 0.80, 'larg_cond_ep': 0.80,
             'larg_branch_eu': 0.60, 'larg_branch_ep': 0.60,
+            'larg_cond_aep': 0.60, 'larg_branch_aep': 0.40,
         }
         for key, widget in self._cub_widgets.items():
             val = gs.value(f"CanaPlan/cubature/{key}", defaults.get(key, 0), float)

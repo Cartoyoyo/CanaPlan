@@ -27,10 +27,12 @@ class DeleteTool(QgsMapTool):
     """
     finished = pyqtSignal()
 
-    def __init__(self, canvas, couches_eu, couches_ep):
+    def __init__(self, canvas, couches_eu, couches_ep, couches_aep=None):
         super().__init__(canvas)
         self.canvas = canvas
         self.couches = {'EU': couches_eu, 'EP': couches_ep}
+        if couches_aep:
+            self.couches['AEP'] = couches_aep
 
         # --- lasso ---
         self._pending = []      # (role, feat, layer, reseau) accumulés
@@ -347,6 +349,9 @@ class DeleteTool(QgsMapTool):
         cles = {'regard': 'col_regard', 'tabouret': 'col_tabouret',
                 'conduite': 'col_conduite', 'branchement': 'col_branchement'}
         cle = cles.get(role)
+        if cle:
+            from .reseaux import cle_role
+            cle = cle_role(cle, reseau)
         type_txt = i18n.tr(cle).lower() if cle else role
         msg = (i18n.tr('ot_suppr_cascade', type=type_txt, nb=total - 1)
                if total > 1 else i18n.tr('ot_suppr_simple', type=type_txt))
@@ -362,7 +367,15 @@ class DeleteTool(QgsMapTool):
             for fid in fids:
                 lyr.deleteFeature(fid)
             lyr.commitChanges()
+        self._synchroniser_aep()
         self.canvas.refresh()
+
+    def _synchroniser_aep(self):
+        """Robinets de branchement AEP recalés sur leurs branchements."""
+        couches = self.couches.get('AEP')
+        if couches:
+            from .aep_topo import synchroniser_robinets
+            synchroniser_robinets(couches)
 
     # ------------------------------------------------------------------ lasso
 
@@ -445,6 +458,7 @@ class DeleteTool(QgsMapTool):
             for fid in fids:
                 lyr.deleteFeature(fid)
             lyr.commitChanges()
+        self._synchroniser_aep()
 
         self._clear_highlights()
         self._pending.clear()

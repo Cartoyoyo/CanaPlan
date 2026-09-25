@@ -456,10 +456,11 @@ def _build_point_symbol_index():
         if not name.lower().startswith(_TARGET_PREFIXES):
             continue
         role = 'regard' if name.lower().startswith('regard_') else 'tabouret'
-        reseau = 'EU' if 'eu' in name.lower() else 'EP'
+        suffixe = name.rsplit('_', 1)[-1].upper()
+        reseau = suffixe if suffixe in ('EU', 'EP', 'AEP') else 'EP'
         rgb = _read_symbol_color(lyr)
         if rgb is None:
-            rgb = (255, 0, 0) if reseau == 'EU' else (0, 0, 255)
+            rgb = {'EU': (255, 0, 0), 'AEP': (0, 150, 190)}.get(reseau, (0, 0, 255))
         features = []
         for feat in lyr.getFeatures():
             geom = feat.geometry()

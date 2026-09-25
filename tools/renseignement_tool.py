@@ -22,10 +22,12 @@ class RenseignementTool(QgsMapTool):
     """
     finished = pyqtSignal()
 
-    def __init__(self, canvas, couches_eu, couches_ep):
+    def __init__(self, canvas, couches_eu, couches_ep, couches_aep=None):
         super().__init__(canvas)
         self.canvas = canvas
         self.couches = {'EU': couches_eu, 'EP': couches_ep}
+        if couches_aep:
+            self.couches['AEP'] = couches_aep
         self._hover = None            # (role, feat, layer, reseau)
         self._hover_band = None
         self._hover_annotation = None  # (item_id, item)

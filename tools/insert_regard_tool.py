@@ -24,13 +24,15 @@ class InsertRegardTool(QgsMapToolEmitPoint):
 
     DETECT_TOLERANCE_PX = 50
 
-    def __init__(self, canvas, couches_eu, couches_ep):
+    def __init__(self, canvas, couches_eu, couches_ep, couches_aep=None):
         super().__init__(canvas)
         self.canvas = canvas
         self.couches = {
             'EU': couches_eu,
             'EP': couches_ep,
         }
+        if couches_aep:
+            self.couches['AEP'] = couches_aep
 
         # Indicateur de snap (croix + trait de projection)
         self.snap_cross = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
@@ -106,6 +108,9 @@ class InsertRegardTool(QgsMapToolEmitPoint):
             regard_layer.startEditing()
         regard_feat = QgsFeature(regard_layer.fields())
         regard_feat.setGeometry(QgsGeometry.fromPointXY(best_proj))
+        if best_reseau == 'AEP' and regard_layer.fields().indexOf('type') >= 0:
+            from .reseaux import AEP_NOEUD_TYPE_CREATION
+            regard_feat.setAttribute('type', AEP_NOEUD_TYPE_CREATION)
         regard_layer.addFeature(regard_feat)
         regard_layer.commitChanges()
 
@@ -184,10 +189,18 @@ class InsertRegardTool(QgsMapToolEmitPoint):
 
         layer.deleteFeature(feat.id())
 
+        # La clé primaire du fournisseur (`fid` d'un GeoPackage) ne se recopie
+        # pas : les deux morceaux la dupliqueraient, l'écriture échouerait sur
+        # la contrainte d'unicité et laisserait la couche bloquée en édition.
+        attributs = feat.attributes()
+        for idx in layer.dataProvider().pkAttributeIndexes():
+            if 0 <= idx < len(attributs):
+                attributs[idx] = None
+
         for sub_line in (line1, line2):
             new_geom = QgsGeometry.fromPolylineXY(sub_line)
             new_feat = QgsFeature(layer.fields())
-            new_feat.setAttributes(feat.attributes())
+            new_feat.setAttributes(attributs)
             new_feat.setGeometry(new_geom)
             new_feat.setAttribute('longueur', new_geom.length())
             layer.addFeature(new_feat)

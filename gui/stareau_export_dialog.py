@@ -82,9 +82,25 @@ class StarEauExportDialog(QDialog):
         layout.addWidget(self.buttons)
 
         self._restore()
+        # Projet d'eau potable seul : le fichier est un fichier EAU, quel que
+        # soit le dernier choix mémorisé (fait sur un chantier d'assainissement).
+        from ..tools.stareau_export import source_layers
+        presents = {reseau for (_role, reseau) in source_layers()}
+        if presents == {"AEP"} or ("AEP" in presents and not self._a_des_objets(("EU", "EP"))):
+            self.cb_type_fichier.setCurrentText("EAU")
+        self.cb_type_fichier.currentIndexChanged.connect(self._sur_type_fichier)
+        self.grp_aep.setEnabled(self._domaine() == "EAU")
         self._refresh_name()
         self._watch_layers()
         self.run_check()
+
+    @staticmethod
+    def _a_des_objets(reseaux):
+        """Vrai si l'un des `reseaux` a au moins une conduite."""
+        from ..tools.stareau_export import source_layers
+        return any(layer.featureCount() for (role, reseau), layer
+                   in source_layers().items()
+                   if role == "conduite" and reseau in reseaux)
 
     # ── Onglet Fichier ──────────────────────────────────────────────────────
 
@@ -285,6 +301,31 @@ class StarEauExportDialog(QDialog):
         contenu_layout.addRow(warn)
 
         layout.addWidget(contenu_group)
+
+        # Eau potable : utilisé quand le type de fichier est « EAU ».
+        self.grp_aep = QGroupBox(i18n.tr('se_aep_titre'))
+        aep_form = QFormLayout(self.grp_aep)
+        self.cb_aep_fonction = self._combo(sv.AEP_FONCTION_CANALISATION)
+        aep_form.addRow(i18n.tr('se_lbl_fonction_cana'), self.cb_aep_fonction)
+        self.cb_aep_contenu = self._combo(sv.AEP_CONTENU_CANALISATION)
+        aep_form.addRow(i18n.tr('se_aep_contenu'), self.cb_aep_contenu)
+        self.cb_aep_pression = self._combo(sv.AEP_TYPE_PRESSION)
+        aep_form.addRow(i18n.tr('se_aep_pression'), self.cb_aep_pression)
+        self.cb_aep_fonction_brt = self._combo(sv.AEP_FONCTION_BRANCHEMENT)
+        aep_form.addRow(i18n.tr('se_lbl_fonction_brt'), self.cb_aep_fonction_brt)
+        self.cb_aep_vanne = self._combo(sv.AEP_TYPE_VANNE)
+        aep_form.addRow(i18n.tr('se_aep_type_vanne'), self.cb_aep_vanne)
+        self.cb_aep_fonction_vanne = self._combo(sv.AEP_FONCTION_VANNE)
+        aep_form.addRow(i18n.tr('se_aep_fonction_vanne'), self.cb_aep_fonction_vanne)
+        self.cb_aep_sens = self._combo(sv.AEP_SENS_FERMETURE)
+        aep_form.addRow(i18n.tr('se_aep_sens'), self.cb_aep_sens)
+        self.cb_aep_livraison = self._combo(sv.AEP_TYPE_POINT_LIVRAISON)
+        aep_form.addRow(i18n.tr('se_aep_livraison'), self.cb_aep_livraison)
+        aide_aep = QLabel(i18n.tr('se_aep_aide'))
+        aide_aep.setWordWrap(True)
+        aep_form.addRow(aide_aep)
+        layout.addWidget(self.grp_aep)
+
         layout.addStretch()
         return page
 
@@ -368,7 +409,7 @@ class StarEauExportDialog(QDialog):
     def run_check(self):
         from ..tools.stareau_export import check_conformity
         try:
-            self._issues = check_conformity()
+            self._issues = check_conformity(domaine=self._domaine())
         except Exception as exc:
             self._issues = []
             self.lbl_check.setText(i18n.tr('se_controle_echec', erreur=exc))
@@ -488,6 +529,16 @@ class StarEauExportDialog(QDialog):
     def _code(combo):
         return sv.code_at(combo._stareau_liste, combo.currentIndex())
 
+    def _domaine(self):
+        return "EAU" if self.cb_type_fichier.currentText() == "EAU" else "ASS"
+
+    def _sur_type_fichier(self):
+        """Le type de fichier choisit le domaine : cadre AEP et contrôle suivent."""
+        if hasattr(self, 'grp_aep'):
+            self.grp_aep.setEnabled(self._domaine() == "EAU")
+        if hasattr(self, 'table'):
+            self.run_check()
+
     def _browse_dir(self):
         start = self.ed_dir.text()
         if not start:
@@ -573,6 +624,14 @@ class StarEauExportDialog(QDialog):
             "type_usager":          self._code(self.cb_usager),
             "materiau_tabouret":    self._code(self.cb_mat_tabouret),
             "type_raccord":         self._code(self.cb_type_raccord),
+            "aep_fonction_canalisation": self._code(self.cb_aep_fonction),
+            "aep_contenu_canalisation":  self._code(self.cb_aep_contenu),
+            "aep_type_pression":         self._code(self.cb_aep_pression),
+            "aep_fonction_branchement":  self._code(self.cb_aep_fonction_brt),
+            "aep_type_vanne":            self._code(self.cb_aep_vanne),
+            "aep_fonction_vanne":        self._code(self.cb_aep_fonction_vanne),
+            "aep_sens_fermeture":        self._code(self.cb_aep_sens),
+            "aep_type_point_livraison":  self._code(self.cb_aep_livraison),
         })
         return params
 
@@ -645,6 +704,14 @@ class StarEauExportDialog(QDialog):
             ("usager",        self.cb_usager),
             ("mat_tabouret",  self.cb_mat_tabouret),
             ("type_raccord",  self.cb_type_raccord),
+            ("aep_fonction",       self.cb_aep_fonction),
+            ("aep_contenu",        self.cb_aep_contenu),
+            ("aep_pression",       self.cb_aep_pression),
+            ("aep_fonction_brt",   self.cb_aep_fonction_brt),
+            ("aep_vanne",          self.cb_aep_vanne),
+            ("aep_fonction_vanne", self.cb_aep_fonction_vanne),
+            ("aep_sens",           self.cb_aep_sens),
+            ("aep_livraison",      self.cb_aep_livraison),
         )
 
     def _save(self):

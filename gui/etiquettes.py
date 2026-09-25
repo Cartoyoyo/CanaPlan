@@ -216,7 +216,70 @@ def _reset_label_visibility(layer):
     layer.commitChanges()
 
 
-_TEXT_COLORS = {'EU': QColor(180, 0, 0), 'EP': QColor(0, 0, 180)}
+_TEXT_COLORS = {'EU': QColor(180, 0, 0), 'EP': QColor(0, 0, 180),
+                'AEP': QColor(0, 110, 125)}
+
+
+def _reseaux(plugin):
+    """Réseaux présents dans le projet : EU, EP, et AEP s'il existe."""
+    actifs = getattr(plugin, 'reseaux_actifs', None)
+    return actifs() if callable(actifs) else ('EU', 'EP')
+
+
+# Variable de projet : 0 = étiquettes des robinets de branchement masquées.
+# Lue par le filtre d'affichage, donc sans reconstruire l'étiquetage.
+VAR_ETIQ_ROBINETS = 'canaplan_etiq_robinets'
+
+
+def _filtre_affichage(reseau, role):
+    """Condition d'affichage ajoutée au champ lbl_visible.
+
+    AEP : les nœuds muets (coudes, tés, réductions, bouchons) ne portent pas
+    d'étiquette — il y en a un à chaque sommet de conduite, le plan en serait
+    illisible. Les robinets de branchement suivent l'option « Robinets » de
+    la gestion des étiquettes.
+    """
+    if reseau == 'AEP' and role == 'regard':
+        from ..tools import reseaux as R
+        muets = ", ".join(f"'{c}'" for c, (d, _p) in R.AEP_NOEUD_TYPES.items()
+                          if not d)
+        return (f' AND "type" IS NOT NULL AND "type" NOT IN ({muets})'
+                f' AND ("type" <> \'{R.AEP_NOEUD_BRANCHEMENT}\''
+                f' OR coalesce(@{VAR_ETIQ_ROBINETS}, 1) = 1)')
+    return ''
+
+
+def get_etiquettes_robinets():
+    """True si les étiquettes des robinets de branchement sont affichées."""
+    from qgis.core import QgsExpressionContextUtils, QgsProject
+    val = QgsExpressionContextUtils.projectScope(QgsProject.instance()) \
+        .variable(VAR_ETIQ_ROBINETS)
+    return val is None or str(val) not in ('0', 'False', 'false')
+
+
+def set_etiquettes_robinets(plugin, visible):
+    """Affiche/masque les étiquettes des robinets de branchement AEP."""
+    from qgis.core import QgsExpressionContextUtils, QgsProject
+    QgsExpressionContextUtils.setProjectVariable(
+        QgsProject.instance(), VAR_ETIQ_ROBINETS, 1 if visible else 0)
+    if 'AEP' not in _reseaux(plugin):
+        return
+    layer = plugin._get_couches('AEP').get('regard')
+    labeling = layer.labeling() if layer is not None else None
+    if labeling is None or isinstance(labeling, QgsRuleBasedLabeling):
+        if layer is not None:
+            layer.triggerRepaint()
+        return
+    # Couches étiquetées avant l'option : leur filtre ne lit pas encore la
+    # variable, on le remet à jour.
+    pal = labeling.settings()
+    pc = pal.dataDefinedProperties()
+    pc.setProperty(QgsPalLayerSettings.Property.Show,
+                   QgsProperty.fromExpression(f'coalesce("{LBL_VISIBLE}", 1)'
+                                              + _filtre_affichage('AEP', 'regard')))
+    pal.setDataDefinedProperties(pc)
+    layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
+    layer.triggerRepaint()
 
 # Clés i18n, traduites au moment de nommer les règles
 _ROLE_LABELS = {
@@ -458,7 +521,8 @@ def _make_point_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
 
     pc = QgsPropertyCollection()
     pc.setProperty(QgsPalLayerSettings.Property.Show,
-                   QgsProperty.fromExpression(f'coalesce("{LBL_VISIBLE}", 1)'))
+                   QgsProperty.fromExpression(f'coalesce("{LBL_VISIBLE}", 1)'
+                                              + _filtre_affichage(reseau, role)))
     pc.setProperty(QgsPalLayerSettings.Property.PositionX, QgsProperty.fromField(LBL_X))
     pc.setProperty(QgsPalLayerSettings.Property.PositionY, QgsProperty.fromField(LBL_Y))
     pc.setProperty(QgsPalLayerSettings.Property.Hali, QgsProperty.fromValue('Center'))
@@ -535,10 +599,10 @@ def apply_etiquettes(layer, role, reseau=None, size=None, unit=None,
     if role in _LINE_ROLES:
         # Rule-based : auto curviligne tant que l'étiquette n'a pas été
         # déplacée, épinglée et orientée dès qu'elle l'a été.
-        labeling = _make_line_labeling(reseau, role, _expression(role),
+        labeling = _make_line_labeling(reseau, role, _expression(role, reseau),
                                        size, unit, min_scale)
     else:
-        labeling = _make_point_labeling(reseau, role, _expression(role),
+        labeling = _make_point_labeling(reseau, role, _expression(role, reseau),
                                         size, unit, padding, min_scale)
 
     layer.setLabeling(labeling)
@@ -619,7 +683,7 @@ def set_force_all_labels(enabled: bool, canvas=None, plugin=None):
     if plugin is not None:
         def _set(pal):
             pal.displayAll = bool(enabled)
-        for reseau in ('EU', 'EP'):
+        for reseau in _reseaux(plugin):
             for layer in plugin._get_couches(reseau).values():
                 labeling = layer.labeling()
                 if labeling is None:
@@ -633,7 +697,7 @@ def set_force_all_labels(enabled: bool, canvas=None, plugin=None):
 
 def get_label_min_scale(plugin):
     """Seuil d'échelle courant, lu sur la première couche étiquetée (0 = aucun)."""
-    for reseau in ('EU', 'EP'):
+    for reseau in _reseaux(plugin):
         for layer in plugin._get_couches(reseau).values():
             pal = pal_settings(layer.labeling())
             if pal is None:
@@ -644,12 +708,15 @@ def get_label_min_scale(plugin):
     return default_min_scale(*remembered_size())
 
 
-def apply_label_display_prefs(plugin, visibility):
+def apply_label_display_prefs(plugin, visibility, robinets=None):
     """Applique la visibilité des étiquettes par réseau et par rôle.
 
     visibility : {reseau: {role: bool}}  — True = étiquettes activées
+    robinets   : étiquettes des robinets de branchement AEP (None = inchangé)
     """
-    for reseau in ('EU', 'EP'):
+    if robinets is not None:
+        set_etiquettes_robinets(plugin, robinets)
+    for reseau in _reseaux(plugin):
         couches = plugin._get_couches(reseau)
         for role, layer in couches.items():
             enabled = visibility.get(reseau, {}).get(role, True)
@@ -660,7 +727,7 @@ def apply_label_display_prefs(plugin, visibility):
 def get_label_display_prefs(plugin):
     """Lit l'état courant des étiquettes, retourne {reseau: {role: bool}}."""
     prefs = {}
-    for reseau in ('EU', 'EP'):
+    for reseau in _reseaux(plugin):
         couches = plugin._get_couches(reseau)
         prefs[reseau] = {role: layer.labelsEnabled()
                          for role, layer in couches.items()}
@@ -684,7 +751,7 @@ def apply_label_size_all(plugin, mode, value, min_scale=None):
     ratio_padding = LABEL_PADDING_MAP_UNITS / LABEL_SIZE_MAP_UNITS
     padding = value * ratio_padding
 
-    for reseau in ('EU', 'EP'):
+    for reseau in _reseaux(plugin):
         couches = plugin._get_couches(reseau)
         for role, layer in couches.items():
             labeling = layer.labeling()
@@ -698,7 +765,7 @@ def apply_label_size_all(plugin, mode, value, min_scale=None):
                 # de position), le filtre ne trouverait aucun objet.
                 _ensure_label_fields(layer, role)
                 cur = _line_current_settings(labeling)
-                expression = cur[0] if cur else _expression(role)
+                expression = cur[0] if cur else _expression(role, reseau)
                 scale = min_scale if min_scale is not None else (
                     cur[3] if cur else LABEL_MIN_SCALE)
                 layer.setLabeling(
@@ -761,13 +828,43 @@ _SEP = {
 }
 
 
-def build_expression(role, active_fields=None):
+def _fragment_type_aep(role):
+    """Libellé traduit de la classe AEP (« Vanne », « Regard compteur »…).
+
+    Les codes sont normatifs et stockés tels quels : l'expression les traduit
+    au rendu par une table de correspondance construite dans la langue
+    courante (le CASE de QGIS n'a pas de forme « CASE champ WHEN valeur »).
+    Un code inconnu s'affiche brut plutôt que de disparaître.
+    """
+    from ..tools import reseaux as R
+    if role == 'regard':
+        codes, defaut = list(R.AEP_NOEUD_TYPES), R.AEP_NOEUD_TYPE_DEFAUT
+    else:
+        codes, defaut = list(R.AEP_TERMINAL_TYPES), R.AEP_TERMINAL_TYPE_DEFAUT
+    quote = lambda s: "'" + str(s).replace("'", "''") + "'"   # noqa: E731
+    table = ", ".join(f"{quote(c)}, {quote(R.libelle_type(c))}" for c in codes)
+    code = f"coalesce(\"type\", {quote(defaut)})"
+    return f"coalesce(map_get(map({table}), {code}), {code})"
+
+
+def build_expression(role, active_fields=None, reseau=None):
     """Construit l'expression QGIS pour les étiquettes du rôle donné.
 
     active_fields : dict {field: bool} ou None (→ tous actifs)
+    reseau        : 'AEP' ajoute en tête la classe de l'ouvrage (nœud ou
+                    compteur), sauf si le champ 'type' est décoché.
     """
     order = _ROLE_FIELD_ORDER.get(role, [])
     parts = []
+    if (reseau == 'AEP' and role in ('regard', 'tabouret')
+            and (active_fields is None or active_fields.get('type', True))):
+        # Classe et nom sur la même ligne : « Vanne V01 ».
+        if active_fields is None or active_fields.get('nom', True):
+            parts.append(f"trim(concat({_fragment_type_aep(role)}, ' ', "
+                         "coalesce(\"nom\", '')))")
+            order = [f for f in order if f != 'nom']
+        else:
+            parts.append(_fragment_type_aep(role))
     for f in order:
         if active_fields is None or active_fields.get(f, True):
             frag = _FRAGMENTS.get(f)
@@ -782,9 +879,9 @@ def build_expression(role, active_fields=None):
     return f"concat({joined})"
 
 
-def _expression(role):
+def _expression(role, reseau=None):
     """Expression par défaut (tous champs actifs)."""
-    return build_expression(role, None)
+    return build_expression(role, None, reseau)
 
 
 def sync_labels_after_rename(layer, role, reseau=None):
@@ -815,13 +912,13 @@ def sync_labels_after_rename(layer, role, reseau=None):
 
 def apply_label_fields(plugin, fields_prefs):
     """Reconstruit les expressions d'étiquettes selon les champs sélectionnés."""
-    for reseau in ('EU', 'EP'):
+    for reseau in _reseaux(plugin):
         couches = plugin._get_couches(reseau)
         for role, layer in couches.items():
             labeling = layer.labeling()
             if labeling is None:
                 continue
-            expression = build_expression(role, fields_prefs.get(role))
+            expression = build_expression(role, fields_prefs.get(role), reseau)
 
             # Lignes : rule-based → reconstruire avec la taille courante
             if role in _LINE_ROLES or isinstance(labeling, QgsRuleBasedLabeling):

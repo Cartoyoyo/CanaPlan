@@ -14,6 +14,7 @@ from ..tools import i18n
 from qgis.PyQt.QtCore import Qt, QUrl
 from qgis.PyQt.QtGui import QColor, QDesktopServices
 from ..tools import errlog
+from ..tools.reseaux import RESEAUX as _RESEAUX, hex_fonce, hex_clair, cle_role
 
 
 def _libelle_type(valeur):
@@ -31,7 +32,8 @@ def _libelle_type(valeur):
 
 def _libelle_reseau(code, prefixe=False):
     """« Réseau EU — Eaux Usées », traduit. prefixe ajoute le mot Réseau."""
-    libelle = i18n.tr('rap_eaux_usees' if code == 'EU' else 'rap_eaux_pluviales')
+    libelle = i18n.tr({'EU': 'rap_eaux_usees', 'AEP': 'rap_eau_potable'}.get(
+        code, 'rap_eaux_pluviales'))
     if prefixe:
         return i18n.tr('rap_reseau_titre', code=code, libelle=libelle)
     return "%s — %s" % (code, libelle)
@@ -67,6 +69,13 @@ def _params_segments(config, separateur=" — "):
         "%s = %s m" % (i18n.tr('rap_par_larg_branch', reseau='EP'),
                        _nb(cfg.get('largeur_branchement_ep', 0.60))),
     ]
+    if cfg.get('_avec_aep'):
+        segments += [
+            "%s = %s m" % (i18n.tr('rap_par_larg_cond', reseau='AEP'),
+                           _nb(cfg.get('largeur_conduite_aep', 0.60))),
+            "%s = %s m" % (i18n.tr('rap_par_larg_branch', reseau='AEP'),
+                           _nb(cfg.get('largeur_branchement_aep', 0.40))),
+        ]
     return segments
 
 
@@ -200,7 +209,7 @@ class CubatureDialog(QDialog):
             return noeuds
 
         data = []
-        for r_name in ('EU', 'EP'):
+        for r_name in _RESEAUX:
             reseau_results = [r for r in self.results if r.get('reseau') == r_name]
             if not reseau_results:
                 continue
@@ -234,6 +243,9 @@ class CubatureDialog(QDialog):
         super().__init__(parent)
         self.results = results
         self.config = config
+        # Largeurs AEP dans les paramètres affichés, seulement s'il y a de l'AEP.
+        if any(r.get('reseau') == 'AEP' for r in results):
+            self.config = dict(config, _avec_aep=True)
         self.bfs_prefix = bfs_prefix  # ex: "REP01_REP04" pour le mode BFS
         self._ouvrir_dossier = True   # False le temps d'un export groupé
         self.show_remblai = show_remblai
@@ -374,8 +386,8 @@ class CubatureDialog(QDialog):
         total_count = 0
 
         for reseau_name, reseau_results, color_hex in [
-            ('EU', eu_results, '#CC0000'),
-            ('EP', ep_results, '#0044CC'),
+            (r, [x for x in self.results if x.get('reseau') == r], hex_fonce(r))
+            for r in _RESEAUX
         ]:
             if not reseau_results:
                 continue
@@ -606,7 +618,7 @@ class CubatureDialog(QDialog):
                 QApplication.restoreOverrideCursor()
                 QMessageBox.critical(
                     self, i18n.tr('ct_export_pdf_titre'),
-                    fi18n.tr('cb_reportlab', erreur=e))
+                    i18n.tr('cb_reportlab', erreur=e))
         except Exception as e:
             QMessageBox.critical(self, i18n.tr('cb_err_pdf'), str(e))
 
@@ -841,8 +853,9 @@ class CubatureDialog(QDialog):
         grand_count = 0
 
         for reseau_name, reseau_results, color_hex, color_light in [
-            ('EU', eu_results, '#CC0000', '#FFECEC'),
-            ('EP', ep_results, '#0044CC', '#ECF0FF'),
+            (r, [x for x in self.results if x.get('reseau') == r],
+             hex_fonce(r), hex_clair(r))
+            for r in _RESEAUX
         ]:
             if not reseau_results:
                 continue
@@ -1258,7 +1271,7 @@ class CubatureDialog(QDialog):
 
         premier_reseau = True
         for d in self._synthese_data():
-            synth_color = '#CC0000' if d['reseau'] == 'EU' else '#0044CC'
+            synth_color = hex_fonce(d['reseau'])
             reseau_label = _libelle_reseau(d['reseau'])
             bloc = []
             if premier_reseau:
@@ -1280,15 +1293,17 @@ class CubatureDialog(QDialog):
                                      i18n.tr('rap_total_branchements'), synth_color))
             if d['regards_listing']:
                 bloc.append(Spacer(1, 2*mm))
-                bloc.append(Paragraph("▸ " + i18n.tr('rap_regards'), sousgroupe_style))
+                bloc.append(Paragraph("▸ " + i18n.tr(cle_role('rap_regards', d['reseau'])),
+                                      sousgroupe_style))
                 bloc.append(_ouvrages_table(d['regards_listing'],
-                                            i18n.tr('rap_total_regards'),
+                                            i18n.tr(cle_role('rap_total_regards', d['reseau'])),
                                             synth_color))
             if d['tabourets_listing']:
                 bloc.append(Spacer(1, 2*mm))
-                bloc.append(Paragraph("▸ " + i18n.tr('rap_tabourets'), sousgroupe_style))
+                bloc.append(Paragraph("▸ " + i18n.tr(cle_role('rap_tabourets', d['reseau'])),
+                                      sousgroupe_style))
                 bloc.append(_ouvrages_table(d['tabourets_listing'],
-                                            i18n.tr('rap_total_tabourets'),
+                                            i18n.tr(cle_role('rap_total_tabourets', d['reseau'])),
                                             synth_color))
             bloc.append(Spacer(1, 5*mm))
             # Un réseau ne se scinde pas au milieu d'un de ses tableaux.
@@ -1346,6 +1361,8 @@ class CubatureDialog(QDialog):
             total_fill = PatternFill(start_color='E8E8E8', end_color='E8E8E8', fill_type='solid')
             red_fill = PatternFill(start_color='FFECEC', end_color='FFECEC', fill_type='solid')
             blue_fill = PatternFill(start_color='ECF0FF', end_color='ECF0FF', fill_type='solid')
+            _fills = {r: PatternFill(start_color=hex_clair(r)[1:], end_color=hex_clair(r)[1:],
+                                     fill_type='solid') for r in _RESEAUX}
 
             def apply_border(ws, row, cols, extra_border=None):
                 for c in range(1, cols + 1):
@@ -1420,10 +1437,10 @@ class CubatureDialog(QDialog):
 
             row = recap_header_row + 1
             for r_name, reseau_results, color_hex in [
-                ('EU', eu_results, 'CC0000'),
-                ('EP', ep_results, '0044CC'),
+                (r, [x for x in self.results if x.get('reseau') == r], hex_fonce(r)[1:])
+                for r in _RESEAUX
             ]:
-                fill = red_fill if r_name == 'EU' else blue_fill
+                fill = _fills[r_name]
                 reseau_label = _libelle_reseau(r_name)
                 ws_recap.merge_cells(start_row=row, start_column=1, end_row=row, end_column=n_recap)
                 c = ws_recap.cell(row=row, column=1, value=reseau_label)
@@ -1584,7 +1601,7 @@ class CubatureDialog(QDialog):
             grey_font = Font(color='999999')
 
             for row_idx, r in enumerate(self.results, LIGNE_ENTETE + 1):
-                row_fill = red_fill if r.get('reseau') == 'EU' else blue_fill
+                row_fill = _fills.get(r.get('reseau'), blue_fill)
                 diam = r.get('diametre')
                 vals = [
                     r.get('id'), r.get('reseau'), r.get('type'),
@@ -1707,7 +1724,7 @@ class CubatureDialog(QDialog):
 
             row_s = 3
             for d in self._synthese_data():
-                fill = red_fill if d['reseau'] == 'EU' else blue_fill
+                fill = _fills.get(d['reseau'], blue_fill)
                 reseau_label = _libelle_reseau(d['reseau'])
 
                 ws_synth.merge_cells(start_row=row_s, start_column=1, end_row=row_s, end_column=3)
@@ -1759,11 +1776,11 @@ class CubatureDialog(QDialog):
                     return row_s + 2
 
                 row_s = _write_listing(row_s, d['regards_listing'],
-                                       i18n.tr('rap_regards'),
-                                       i18n.tr('rap_total_regards'))
+                                       i18n.tr(cle_role('rap_regards', d['reseau'])),
+                                       i18n.tr(cle_role('rap_total_regards', d['reseau'])))
                 row_s = _write_listing(row_s, d['tabourets_listing'],
-                                       i18n.tr('rap_tabourets'),
-                                       i18n.tr('rap_total_tabourets'))
+                                       i18n.tr(cle_role('rap_tabourets', d['reseau'])),
+                                       i18n.tr(cle_role('rap_total_tabourets', d['reseau'])))
 
                 row_s += 2
 
@@ -1800,14 +1817,17 @@ class CubatureOptionsDialog(QDialog):
         self.rb_tout = QRadioButton(i18n.tr('cb_tout'))
         self.rb_eu = QRadioButton(i18n.tr('cb_eu_seul'))
         self.rb_ep = QRadioButton(i18n.tr('cb_ep_seul'))
+        self.rb_aep = QRadioButton(i18n.tr('cb_aep_seul'))
         self.rb_tout.setChecked(True)
         self._perim_group = QButtonGroup(self)
         self._perim_group.addButton(self.rb_tout, 0)
         self._perim_group.addButton(self.rb_eu, 1)
         self._perim_group.addButton(self.rb_ep, 2)
+        self._perim_group.addButton(self.rb_aep, 3)
         perim_layout.addWidget(self.rb_tout)
         perim_layout.addWidget(self.rb_eu)
         perim_layout.addWidget(self.rb_ep)
+        perim_layout.addWidget(self.rb_aep)
         group_perim.setLayout(perim_layout)
         layout.addWidget(group_perim)
 
@@ -1852,7 +1872,7 @@ class CubatureOptionsDialog(QDialog):
     def options(self):
         """Retourne le dict d'options choisies."""
         perim_id = self._perim_group.checkedId()
-        perim_map = {0: 'tout', 1: 'EU', 2: 'EP'}
+        perim_map = {0: 'tout', 1: 'EU', 2: 'EP', 3: 'AEP'}
         return {
             'perimetre': perim_map.get(perim_id, 'tout'),
             'conduites': self.cb_conduites.isChecked(),

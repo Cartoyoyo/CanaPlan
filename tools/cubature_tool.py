@@ -22,12 +22,14 @@ class CubatureTool(QgsMapTool):
 
     _SNAP_TOL_PX = 20
 
-    def __init__(self, canvas, iface, couches_eu, couches_ep, opts):
+    def __init__(self, canvas, iface, couches_eu, couches_ep, opts,
+                 couches_aep=None):
         super().__init__(canvas)
         self.canvas = canvas
         self.iface = iface
         self.couches_eu = couches_eu
         self.couches_ep = couches_ep
+        self.couches_aep = couches_aep
         self.opts = opts
 
         self._start = None
@@ -170,7 +172,7 @@ class CubatureTool(QgsMapTool):
         results = []
         regard_name_to_point = {}  # nom -> QgsPointXY (pour construire le prefix axe)
 
-        for reseau, couches in (('EU', self.couches_eu), ('EP', self.couches_ep)):
+        for reseau, couches in self._jeux():
             if self.opts.get('perimetre', 'tout') not in ('tout', reseau):
                 continue
 
@@ -287,7 +289,7 @@ class CubatureTool(QgsMapTool):
 
         # Construire le prefix du fichier a partir des regards capturés par réseau
         axe_parts = []
-        for reseau in ('EU', 'EP'):
+        for reseau, _c in self._jeux():
             reseau_noms = set()
             for r in results:
                 if r.get('reseau') == reseau:
@@ -320,10 +322,17 @@ class CubatureTool(QgsMapTool):
         dlg.show()
         self._dialog = dlg
 
+    def _jeux(self):
+        """[(réseau, couches)] des réseaux présents : EU, EP, AEP."""
+        jeux = [('EU', self.couches_eu), ('EP', self.couches_ep)]
+        if self.couches_aep:
+            jeux.append(('AEP', self.couches_aep))
+        return jeux
+
     # ------------------------------------------------------------------ calcul BFS
 
     def _compute_bfs(self, start_feat, end_feat, reseau):
-        couches = self.couches_eu if reseau == 'EU' else self.couches_ep
+        couches = dict(self._jeux()).get(reseau)
         if couches is None:
             return
 
@@ -426,7 +435,7 @@ class CubatureTool(QgsMapTool):
         best, best_d, best_reseau, best_layer = None, float('inf'), None, None
         perimetre = self.opts.get('perimetre', 'tout')
 
-        for name, couches in [('EU', self.couches_eu), ('EP', self.couches_ep)]:
+        for name, couches in self._jeux():
             if perimetre not in ('tout', name):
                 continue
             layer = couches.get('regard') if couches else None
@@ -441,7 +450,7 @@ class CubatureTool(QgsMapTool):
         return best, best_reseau, best_layer
 
     def _find_layer_for_feat(self, feat):
-        for couches in [self.couches_eu, self.couches_ep]:
+        for _r, couches in self._jeux():
             if couches is None:
                 continue
             layer = couches.get('regard')

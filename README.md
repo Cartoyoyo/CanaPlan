@@ -10,10 +10,10 @@
 
 # CanaPlan
 
-**Plugin QGIS de dessin topologique de réseaux d'assainissement — EU / EP, du tracé terrain à la livraison StaR-Eau**
+**Plugin QGIS de dessin topologique de réseaux d'assainissement et d'eau potable — EU / EP / AEP, du tracé terrain à la livraison StaR-Eau**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.40%2B%20%7C%204.x-green?logo=qgis&logoColor=white)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-2.1.1-blue)](#-changelog)
+[![Version](https://img.shields.io/badge/version-2.2-blue)](#-changelog)
 [![Qt](https://img.shields.io/badge/Qt-5%20%7C%206-brightgreen?logo=qt&logoColor=white)](https://qgis.org)
 [![StaR-Eau](https://img.shields.io/badge/StaR--Eau-V2024%20CNIG%2FASTEE-orange)](#-export-star-eau-cnig--astee-v2024)
 [![Langues](https://img.shields.io/badge/langues-FR%20%7C%20EN%20%7C%20ES%20%7C%20PT%20%7C%20DE-purple)](#-langues--languages)
@@ -28,7 +28,7 @@
 
 ## 📝 Description
 
-**CanaPlan** est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement **EU** (Eaux Usées) et **EP** (Eaux Pluviales) directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement.
+**CanaPlan** est un logiciel de dessin projet qui permet de tracer des réseaux d'assainissement **EU** (Eaux Usées) et **EP** (Eaux Pluviales), et depuis la 2.2 des réseaux d'eau potable **AEP**, directement dans QGIS, sur un fond de carte importé directement par le plugin (BAN, cadastre PCI, orthophoto IGN, OSM, ou plan DXF/DWG existant), avec continuité géométrique native : chaque conduite relie deux ouvrages, chaque branchement se recale automatiquement sur sa conduite mère quand elle bouge, avec validation à l'enregistrement.
 
 > ### ⚠️ CanaPlan n'est **pas** un outil de saisie manuelle
 >
@@ -45,6 +45,10 @@
 >
 > Un projet est **France** — Lambert 93, BAN, cadastre, orthophoto et MNT IGN, StaR-Eau — ou **International** : adresses et bâti **OpenStreetMap**, photo aérienne **Esri World Imagery**, système de coordonnées **UTM** proposé d'après l'adresse. Un garde-fou mesure, au chantier, l'écart des longueurs du système choisi et refuse les systèmes en degrés ou en pieds : laissé en Lambert 93, un projet à Abidjan allongeait toutes les longueurs de 25 % sans un message. Voir [🌍 Territoire France / International](#-territoire-france--international).
 
+> ### 💧 Eau potable (AEP)
+>
+> Depuis la **2.2**, l'AEP est un troisième réseau à part entière : conduites, branchements, nœuds et compteurs, avec les **symboles du géostandard StaR-Eau**. Un nœud à chaque sommet, un robinet de branchement posé au piquage, des appareils (vanne, ventouse, vidange, poteau et bouche incendie, réducteur de pression, compteur de réseau) choisis d'un clic, un fil d'eau déduit de la couverture. Profils, cubature, coupes, renumérotation, plans PDF / DXF et export StaR-Eau le traitent comme EU et EP. Voir [💧 Réseau AEP — eau potable](#-réseau-aep--eau-potable).
+
 La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle.
 
 Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard **StaR-Eau V2024** (CNIG / ASTEE).
@@ -53,6 +57,8 @@ Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne 
 
 - [⚙️ Fonctionnalités](#-fonctionnalites)
 - [🖼️ Captures d'écran](#-captures-décran)
+- [💧 Réseau AEP — eau potable](#-réseau-aep--eau-potable)
+- [🪄 Magic Box](#-magic-box)
 - [🖥️ Interface](#-interface)
 - [🗃️ Couches et attributs](#-couches-et-attributs)
 - [🎨 Symbologie](#-symbologie)
@@ -80,6 +86,8 @@ Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne 
 | **Conduite EU / EP** | Trace d'une conduite par clics successifs. Chaque sommet genere automatiquement un regard. |
 | **Branchement EU / EP** | Piquage sur une conduite existante, trace libre jusqu'a un ouvrage (regard ou tabouret). |
 | **Inserer un regard** | Insere un regard sur une conduite existante en cliquant sur la conduite. |
+| **Conduite / Branchement AEP** | Meme trace que EU / EP. Chaque sommet de conduite cree un **nœud** (vanne par defaut) ; le branchement pose un **robinet de branchement** au piquage, sans couper la conduite, et un **compteur** au bout. Voir [💧 Réseau AEP](#-réseau-aep--eau-potable). |
+| **Poser un appareil AEP** | Clic sur un nœud : menu des types (vanne, ventouse, vidange, poteau incendie…). Clic sur une conduite loin de tout nœud : un nœud est insere et la conduite coupee. |
 
 ### 🛠️ Edition
 
@@ -88,6 +96,7 @@ Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne 
 | **Renseigner** | Survol pour mettre en evidence un element (orange), clic pour ouvrir son formulaire d'attributs. Les champs numeriques (TN, FE, profondeur, diametre, longueur, pente, cote piquage) acceptent des **expressions additives** : ex. `1-0.25` -> `0.750`, `2+0.5-0.1` -> `2.400`. Pas de multiplication / division. Le champ recalcule TN / FE / P automatiquement quand l'un des trois est modifie. |
 | **Deplacer** | Deplace un ouvrage (regard ou tabouret) et recale automatiquement les conduites et branchements connectes. Permet aussi de deplacer une etiquette (regard / tabouret / conduite / branchement) sans toucher a l'ouvrage. Mode **piquage** : survol du point de piquage d'un branchement (surligne en orange) puis glisser-deposer pour repositionner le piquage le long de la conduite ; met a jour `id_conduite`, `pk_debut`, `cote_piquage` et recale la geometrie du branchement. |
 | **Effacer** | Supprime un element et ses etiquettes associees. Lasso possible pour une selection multiple. |
+| **Magic Box** | Branchements automatiques sur des troncons choisis a la souris : un par parcelle, par batiment ou par numero de rue, des deux cotes ou d'un seul, avec apercu avant trace. Voir [🪄 Magic Box](#-magic-box). |
 | **Copier les attributs** | Copie les attributs (diametre, materiau...) d'un element vers un ou plusieurs autres du meme type. |
 | **Tableau de saisie - pente** | Saisie groupee en tableau, par onglets **Regards / Tabourets / Conduites / Branchements**, avec calcul automatique de la pente ou de la cote fil d'eau selon le sens choisi. Apercu carte miniature de l'element selectionne, copier/coller depuis Excel, saisie multi-cellules, historique d'annulation (Ctrl+Z). Un onglet **Chaine** trace le profil simplifie entre deux regards choisis. Sur l'onglet Branchements, la **cote de piquage est interpolee sur la conduite mere** au PK du piquage : modifier un fil d'eau de la conduite met a jour en cascade tous les branchements qui y sont piques (cellule affichee en couleur « valeur derivee »). |
 | **TN auto (MNT IGN)** | Bouton du Tableau de saisie qui releve le terrain naturel des regards et tabourets du reseau affiche sur le **MNT LiDAR HD (0,50 m)**, avec repli sur le **RGE ALTI (1 m)** la ou le LiDAR HD ne couvre pas. Un dialogue d'apercu affiche, ouvrage par ouvrage, le TN actuel, le TN propose, l'ecart et la source retenue avant toute ecriture : seules les lignes cochees sont appliquees (par defaut, uniquement les TN manquants — case **« Ecraser les TN deja renseignes »** pour forcer). Un ecart superieur a 0,50 m est signale, le MNT decrivant le terrain nu a la date du vol et non le terrain du projet. Le TN ecrit recalcule automatiquement le fil d'eau ou la profondeur selon le choix fait dans le dialogue. L'ensemble du lot s'ecrit en une seule operation (Ctrl+Z annule tout). Le schema des couches ne portant pas de champ de provenance, la tracabilite passe par un **rapport CSV horodate** ecrit dans le dossier du projet (`altimetrie_<reseau>_<horodatage>.csv`), qui liste aussi les ouvrages non appliques. |
@@ -139,6 +148,7 @@ de piquage y devient une valeur calculee a partir de la pente.
 | Outil | Description |
 |---|---|
 | **Renuméroter EU / EP** | Selectionner deux regards pour renumeroter tous les regards et tabourets du chemin (BFS). Un dialogue permet de saisir les prefixes et le numero de depart. |
+| **Renuméroter AEP** | Meme selection ; un compteur par type d'appareil (`V01`, `RB01`, `PI01`…), dans l'ordre du chemin. Les robinets de branchement suivent l'ordre des piquages ; coudes, tes, reductions et bouchons ne sont pas numerotes. |
 
 ### 🏷️ Etiquettes
 
@@ -563,6 +573,181 @@ ces fonds.
 
 ---
 
+## 💧 Réseau AEP — eau potable
+
+Depuis la 2.2, CanaPlan dessine les réseaux d'eau potable. L'AEP reprend les
+quatre couches d'EU et EP, avec le vocabulaire du métier :
+
+| Couche | EU / EP | AEP |
+|---|---|---|
+| `conduite_AEP` | collecteur | conduite principale |
+| `branchement_AEP` | branchement | branchement |
+| `regard_AEP` | regard | **nœud** : appareil ou pièce, champ `type` |
+| `tabouret_AEP` | tabouret | **compteur** : regard compteur ou extrémité libre |
+
+Le dessin, le déplacement avec recalage, la suppression, les profils et la
+cubature fonctionnent donc sans changement : un nœud AEP est un point de la
+topologie, comme un regard. Le groupe AEP n'apparaît que dans les projets qui
+en ont un : un projet d'assainissement n'en voit rien.
+
+<div align="center">
+  <img src="images/aep_plan.png" alt="Réseau AEP sur ortho et cadastre : conduite, robinets de branchement, compteurs et poteau incendie">
+  <br><sub>Conduite Ø 110 fonte, robinets de branchement au piquage, compteurs en limite de parcelle, poteau incendie PI01.</sub>
+</div>
+
+### Nœuds et appareils
+
+Chaque sommet de conduite reçoit un nœud, créé en **vanne**. On change son
+type avec **Poser un appareil AEP**, **Renseigner** ou le **Tableau de
+saisie** ; un nœud sans type se lit comme un coude.
+
+| Type | Préfixe | Dessiné |
+|---|---|---|
+| Vanne | `V` | oui, dans l'axe de la conduite |
+| Robinet de branchement | `RB` | oui, décalé de 0,35 m vers son branchement |
+| Ventouse | `VT` | oui |
+| Vidange | `VD` | oui, perpendiculaire à la conduite |
+| Poteau incendie | `PI` | oui |
+| Bouche incendie | `BI` | oui |
+| Réducteur de pression | `RP` | oui, dans l'axe de la conduite |
+| Compteur de réseau | `CPT` | oui |
+| Raccordement sur existant | — | oui (croix), non numéroté |
+| Coude, té, réduction, bouchon | — | non : un point discret plus près que le 1/150 |
+
+Le **robinet de branchement** est posé par l'outil branchement, au point de
+piquage, sans couper la conduite. Il suit son branchement quand on déplace
+le piquage, la conduite ou le nœud, et disparaît avec lui.
+
+<div align="center">
+  <img src="images/aep_panneau.png" alt="Dossier AEP du panneau latéral">
+  &nbsp;&nbsp;
+  <img src="images/aep_renseigner.png" alt="Renseigner un nœud AEP : type et nom">
+</div>
+
+### Symboles StaR-Eau
+
+Les symboles sont ceux de la collection `eau_potable` du géostandard
+**StaR-Eau** ([github.com/cnigfr/StaR-Eau](https://github.com/cnigfr/StaR-Eau)),
+embarqués dans `icon/stareau_aep/` et teintés à la couleur du réseau (cyan).
+Leurs tailles sont en mètres : l'emprise au sol ne dépend pas du zoom, et le
+plan au 1/200 garde les proportions de l'écran. Les **bouches à clé** se
+superposent aux vannes et robinets par une option de la Configuration rapide,
+sans créer d'objet.
+
+<div align="center">
+  <img src="images/aep_symboles.png" alt="Symboles AEP StaR-Eau">
+</div>
+
+> Sources : ASTEE, CNIG, Grand Lyon — dépôt StaR-Eau sous **Licence Ouverte
+> Etalab 2.0** (copie jointe dans `icon/stareau_aep/LICENCE_ETALAB_V2.md`) ;
+> les métadonnées des fichiers SVG mentionnent **CC BY-SA 4.0**.
+
+### Altimétrie : la couverture
+
+Un réseau sous pression n'a pas de pente imposée. Le fil d'eau des nœuds et
+des compteurs se déduit du terrain naturel et de la **couverture** (1,00 m par
+défaut, Configuration rapide) :
+
+```
+fil d'eau = TN − couverture − DN / 1000        profondeur = TN − fil d'eau
+```
+
+Le bouton **Couverture → FE** du Tableau de saisie applique ce calcul à tout
+le réseau AEP en une seule opération (Ctrl+Z annule le lot). Le DN d'un nœud
+est celui du plus gros tronçon qui y arrive ; celui d'un compteur, celui de son
+branchement. Le **TN auto (MNT IGN)** fonctionne aussi sur l'AEP.
+
+<div align="center">
+  <img src="images/aep_tableau.png" alt="Tableau de saisie AEP : onglets Nœuds et Compteurs, colonne Type, bouton Couverture → FE">
+</div>
+
+### Profils, coupes et cubature
+
+Le profil en long AEP ne dessine pas de cheminée : chaque appareil porte un
+repère (tige de manœuvre du TN à la génératrice supérieure), et les nœuds
+muets ne figurent ni sur le graphique ni dans le cartouche. Le profil groupé
+superpose EU, EP et AEP, chaque réseau avec sa propre table de nœuds. La
+coupe transversale déduit le fil d'eau manquant de la couverture ; la
+cubature a ses largeurs de tranchée AEP (0,60 m conduite, 0,40 m branchement
+par défaut).
+
+<div align="center">
+  <img src="images/aep_profil.png" alt="Profil en long AEP">
+</div>
+
+### Export StaR-Eau « EAU »
+
+Le type de fichier **EAU** de l'export StaR-Eau écrit les tables `aep_*` ;
+**ASS** reste l'assainissement. Un projet qui ne porte que de l'AEP passe
+directement en EAU.
+
+| CanaPlan | Table StaR-Eau |
+|---|---|
+| Conduite AEP | `aep_canalisation` (cotes de génératrice supérieure = fil d'eau + DN) |
+| Branchement AEP | `aep_canalisation_branchement` |
+| Vanne | `aep_vanne` |
+| Ventouse, vidange | `aep_appareillage` |
+| Réducteur de pression | `aep_regulation` |
+| Compteur de réseau | `aep_point_mesure` |
+| Poteau / bouche incendie | `aep_point_livraison` de type `incendie`, `PI` / `BI` en `ref_externe` |
+| Coude, té, réduction, bouchon, raccordement | `aep_piece` |
+| Robinet de branchement | `aep_raccord` (non sécant, rattaché à sa conduite) |
+| Compteur (bout de branchement) | `aep_point_livraison` |
+
+Un cadre **Eau potable** de l'onglet Contenu fixe fonction et contenu de la
+canalisation, type de pression, type et fonction des vannes, sens de
+fermeture et type de point de livraison.
+
+### Pilotage par script
+
+```python
+from qgis.core import QgsPointXY
+from CanaPlan.tools import api
+api.tracer_conduite("AEP", points=[QgsPointXY(727000, 6560000), QgsPointXY(727080, 6560010)],
+                    diametre=110, materiau="Fonte ductile")
+api.branchements_auto("AEP", mode="parcelle")             # Magic Box : un branchement par parcelle riveraine
+api.appareil_aep([727040, 6560005], "poteau_incendie")   # nœud existant retypé, ou inséré sur la conduite
+api.couverture_aep(1.0)                                  # fil d'eau = TN − couverture − DN
+api.renumeroter("AEP")                                   # V01…, PI01…, RB01…
+api.controle_stareau(type_fichier="EAU")
+```
+
+Voir [API.md](API.md).
+
+---
+
+## 🪄 Magic Box
+
+Nouvelle entrée du groupe **Général** : des fonctions automatiques, lancées
+à coups de tuiles. La première trace des **branchements automatiques** sur
+des tronçons choisis à la souris, pour tous les réseaux (EU, EP, AEP) :
+
+1. **Quoi ?** — un branchement par **parcelle** riveraine (même non bâtie),
+   par **bâtiment** ou par **numéro de rue** (adresses BAN) ;
+2. **Quel côté ?** — les deux côtés de la rue, ou seulement la gauche ou la
+   droite ;
+3. clic sur les tronçons, clic droit ou Entrée pour valider ;
+4. aperçu en pointillés, avec la liste des cibles écartées et leur motif,
+   puis **Tracer** ou **Annuler**.
+
+Le piquage est perpendiculaire à la conduite, au milieu du front de rue de la
+cible ; le branchement s'arrête sur la limite de parcelle, où se pose le
+tabouret (le compteur en AEP). Une cible déjà raccordée n'est pas touchée.
+Le tracé passe par l'outil branchement : tabouret, robinet AEP, contrôle
+topologique et attributs sont les mêmes qu'à la main.
+
+Par script : `api.branchements_auto(reseau, conduites=None, mode="parcelle",
+cote="deux", apercu=False)` — `apercu=True` rend les propositions sans rien
+écrire.
+
+<div align="center">
+  <img src="images/magic_box.png" alt="Magic Box">
+  &nbsp;&nbsp;
+  <img src="images/magic_box_mode.png" alt="Magic Box : parcelle, bâti ou numéro">
+</div>
+
+---
+
 ## 🖥️ Interface
 
 Les outils sont accessibles par trois chemins, qui exposent tous les memes
@@ -572,8 +757,8 @@ actions :
 - le **panneau lateral** (dock), arborescence repliable par categorie ;
 - le **menu** *Extensions ▸ CanaPlan*, organise en sous-menus reprenant
   exactement les categories du panneau lateral : Projet, General,
-  EU – Eaux Usees, EP – Eaux Pluviales, Etiquettes, Sorties & Impression,
-  Fond de carte.
+  EU – Eaux Usees, EP – Eaux Pluviales, AEP – Eau Potable, Etiquettes,
+  Sorties & Impression, Fond de carte.
 
 En tete du menu, **Afficher la barre d'outils** bascule sa visibilite. La
 case est synchronisee nativement par Qt avec l'etat reel de la barre : elle
@@ -589,7 +774,10 @@ toujours celle du plugin installe.
 
 ## 🗃️ Couches et attributs
 
-Le plugin gere 4 types de couches, declinees pour chaque reseau (`_EU` / `_EP`) :
+Le plugin gere 4 types de couches, declinees pour chaque reseau (`_EU` / `_EP` / `_AEP`).
+Les couches AEP portent en plus `type` (classe du nœud ou du compteur) et
+`sym_angle` / `sym_dir` (orientation des symboles, recalculee a chaque
+enregistrement) :
 
 ### Conduite *(LineString)*
 | Champ | Type | Description |
@@ -658,7 +846,11 @@ Toutes les dimensions sont en **map units (metres)** — la symbologie suit le z
 - **EP** — Eaux Pluviales : couleur **bleue**
   - Meme logique que EU
 
-Etiquettes : couleur du reseau (rouge EU / bleu EP), halo blanc 0.8 mm pour les conduites / branchements, fond rectangulaire blanc + cadre + ligne de rappel pour regards / tabourets.
+- **AEP** — Eau potable : couleur **cyan**
+  - Conduites et branchements : meme logique que EU
+  - Nœuds et compteurs : symboles StaR-Eau par type (voir [Symboles StaR-Eau](#symboles-star-eau))
+
+Etiquettes : couleur du reseau (rouge EU / bleu EP / cyan AEP ; en AEP, classe et nom sur une ligne : « Vanne V01 », coudes sans etiquette, robinets en option), halo blanc 0.8 mm pour les conduites / branchements, fond rectangulaire blanc + cadre + ligne de rappel pour regards / tabourets.
 
 ---
 
@@ -821,6 +1013,9 @@ base StaR-Eau.
 | Tabouret | `ass_point_collecte` | `stareau_ass_brcht` |
 | Point de piquage | `ass_raccord` | `stareau_ass_brcht` |
 
+Eau potable : type de fichier **EAU**, tables `aep_*` — voir
+[Export StaR-Eau « EAU »](#export-star-eau--eau-).
+
 Les attributs se transposent directement : `tn` -> `z_tampon`,
 `fe_radier` -> `z_radier`, `profondeur` -> `profondeur_mesure`,
 `diametre` -> `diametre_equivalent`, et les fils d'eau des regards
@@ -939,7 +1134,7 @@ destinataire exige un import PostGIS strict ou la colonne est `NOT NULL`.
 
 Le fichier `.bet` est une archive ZIP contenant :
 - `metadata.json` — version, territoire (France / International), CRS, etat des etiquettes, visibilite des couches
-- `data.gpkg` — toutes les couches EU/EP au format GeoPackage
+- `data.gpkg` — toutes les couches EU/EP (et AEP s'il existe) au format GeoPackage ; les `.bet` d'avant la 2.2 s'ouvrent sans changement
 
 Une rotation de sauvegardes est effectuee automatiquement : `.bet` → `.bak1` → `.bak2`.
 
@@ -1184,7 +1379,7 @@ Le séparateur décimal des rapports suit la langue : `128,31` en français, esp
 
 ### 📝 Description
 
-**CanaPlan** is a design-drawing tool for laying out **wastewater (EU)** and **stormwater (EP)** sewer networks directly inside QGIS, over a basemap the plugin loads for you (BAN addresses, PCI cadastre, IGN orthophoto, OSM, or an existing DXF/DWG drawing), with native geometric continuity: every pipe joins two structures, and every service connection re-anchors itself onto its parent pipe when that pipe moves, with validation on save.
+**CanaPlan** is a design-drawing tool for laying out **wastewater (EU)** and **stormwater (EP)** sewer networks, and since 2.2 **drinking-water (AEP)** networks, directly inside QGIS, over a basemap the plugin loads for you (BAN addresses, PCI cadastre, IGN orthophoto, OSM, or an existing DXF/DWG drawing), with native geometric continuity: every pipe joins two structures, and every service connection re-anchors itself onto its parent pipe when that pipe moves, with validation on save.
 
 Network slope can be set or corrected straight from the drawing and data-entry tools (a four-step project wizard, a bulk entry table). The plugin produces longitudinal profiles (EU / EP / combined), computes trench volumes (excavation and imported backfill materials), generates cross-section drawings, prints multi-sheet orientable PDF plans with an overview sheet, and exports faithful DXF 2018.
 
@@ -1209,6 +1404,8 @@ From field survey to delivery, one tool covers the whole chain: Star-DT / StaR-E
 - **France / International territory:** outside France, addresses and buildings come from OpenStreetMap, aerial imagery from Esri World Imagery, and a UTM zone is proposed from the address. A guard measures the chosen CRS's length distortion on site and rejects degree- or foot-based systems — left in Lambert 93, a project in Abidjan stretched every length by 25 %.
 - **Recipes in the Processing Toolbox** (`canaplan` provider), and a usage disclaimer shown on first use and in trench-volume reports.
 - **Star-DT / StaR-Elec (DT-DICT) import** and DXF/DWG import into GeoPackage.
+- **Drinking-water network (AEP)**, new in 2.2: nodes typed as valve, air valve, drain, fire hydrant, pressure reducer or network meter, drawn with the **StaR-Eau symbols**; a service-connection valve placed at each tap-in; invert levels derived from the cover depth; profiles, trench volumes, cross sections, plans and StaR-Eau "EAU" export all handle AEP. See [💧 Réseau AEP](#-réseau-aep--eau-potable).
+- **Magic Box**: automatic service connections on the pipes you click — one per parcel, per building or per street number, on both sides or one — previewed before drawing.
 
 ### 📋 Requirements
 
@@ -1261,7 +1458,7 @@ Basemaps are saved with the project: WMS streams by reference (URI, opacity, sca
 
 ### 📝 Descripción
 
-**CanaPlan** es una herramienta de dibujo de proyecto que permite trazar redes de saneamiento de **aguas residuales (EU)** y **aguas pluviales (EP)** directamente en QGIS, sobre un mapa base que el propio complemento carga (direcciones BAN, catastro PCI, ortofoto IGN, OSM o un plano DXF/DWG existente), con continuidad geométrica nativa: cada tubería une dos obras y cada acometida se reajusta automáticamente sobre su tubería madre cuando esta se mueve.
+**CanaPlan** es una herramienta de dibujo de proyecto que permite trazar redes de saneamiento de **aguas residuales (EU)** y **aguas pluviales (EP)**, y desde la 2.2 redes de **agua potable (AEP)**, directamente en QGIS, sobre un mapa base que el propio complemento carga (direcciones BAN, catastro PCI, ortofoto IGN, OSM o un plano DXF/DWG existente), con continuidad geométrica nativa: cada tubería une dos obras y cada acometida se reajusta automáticamente sobre su tubería madre cuando esta se mueve.
 
 Del levantamiento de campo a la entrega, una sola herramienta cubre toda la cadena: importación Star-DT / StaR-Elec (DT-DICT), mapas base IGN/BAN/PCI cargados en segundo plano y exportación GeoPackage conforme al geoestándar **StaR-Eau V2024** (CNIG / ASTEE).
 
@@ -1278,6 +1475,8 @@ Del levantamiento de campo a la entrega, una sola herramienta cubre toda la cade
 - **Impresión multihoja** en PDF con plano de conjunto, y exportación DXF 2018.
 - **Exportación StaR-Eau V2024** a GeoPackage, con control de conformidad previo.
 - **Territorio Francia / Internacional:** fuera de Francia, direcciones y edificios de OpenStreetMap, ortofoto Esri World Imagery y zona UTM propuesta a partir de la dirección, con control de la deformación de las longitudes.
+- **Red de agua potable (AEP)**, nueva en la 2.2: nodos tipados (válvula, ventosa, desagüe, hidrante, reductor de presión, contador), **símbolos StaR-Eau**, llave de acometida en cada toma, cota de solera deducida del recubrimiento, y exportación StaR-Eau « EAU ».
+- **Magic Box:** acometidas automáticas sobre los tramos elegidos — por parcela, edificio o número de calle — con vista previa.
 
 ### 🚀 Instalación
 
@@ -1296,7 +1495,7 @@ Requisitos: QGIS **>= 3.40**, hasta **4.x** (Qt 5 y Qt 6 con el mismo paquete); 
 
 ### 📝 Descrição
 
-**CanaPlan** é uma ferramenta de desenho de projeto que permite traçar redes de saneamento de **águas residuais (EU)** e **águas pluviais (EP)** diretamente no QGIS, sobre um mapa base que o próprio módulo carrega (endereços BAN, cadastro PCI, ortofoto IGN, OSM ou uma planta DXF/DWG existente), com continuidade geométrica nativa: cada conduta liga duas estruturas e cada ramal reajusta-se automaticamente à sua conduta principal quando esta se desloca.
+**CanaPlan** é uma ferramenta de desenho de projeto que permite traçar redes de saneamento de **águas residuais (EU)** e **águas pluviais (EP)**, e desde a 2.2 redes de **água potável (AEP)**, diretamente no QGIS, sobre um mapa base que o próprio módulo carrega (endereços BAN, cadastro PCI, ortofoto IGN, OSM ou uma planta DXF/DWG existente), com continuidade geométrica nativa: cada conduta liga duas estruturas e cada ramal reajusta-se automaticamente à sua conduta principal quando esta se desloca.
 
 Do levantamento de campo à entrega, uma só ferramenta cobre toda a cadeia: importação Star-DT / StaR-Elec (DT-DICT), mapas base IGN/BAN/PCI carregados em segundo plano e exportação GeoPackage conforme ao geopadrão **StaR-Eau V2024** (CNIG / ASTEE).
 
@@ -1313,6 +1512,8 @@ Do levantamento de campo à entrega, uma só ferramenta cobre toda a cadeia: imp
 - **Impressão multifolha** em PDF com planta de conjunto, e exportação DXF 2018.
 - **Exportação StaR-Eau V2024** para GeoPackage, com controlo de conformidade prévio.
 - **Território França / Internacional:** fora de França, moradas e edifícios do OpenStreetMap, ortofoto Esri World Imagery e zona UTM proposta a partir da morada, com controlo da deformação dos comprimentos.
+- **Rede de água potável (AEP)**, nova na 2.2: nós tipados (válvula, ventosa, descarga, marco de incêndio, redutor de pressão, contador), **símbolos StaR-Eau**, válvula de ramal em cada ligação, soleira deduzida do recobrimento, e exportação StaR-Eau « EAU ».
+- **Magic Box:** ramais automáticos nos troços escolhidos — por parcela, edifício ou número de porta — com pré-visualização.
 
 ### 🚀 Instalação
 
@@ -1331,7 +1532,7 @@ Requisitos: QGIS **>= 3.40**, até **4.x** (Qt 5 e Qt 6 com o mesmo pacote); *ma
 
 ### 📝 Beschreibung
 
-**CanaPlan** ist ein Entwurfswerkzeug zum Zeichnen von **Schmutzwasser- (EU)** und **Regenwasserkanalnetzen (EP)** direkt in QGIS, über einer Hintergrundkarte, die die Erweiterung selbst lädt (BAN-Adressen, PCI-Kataster, IGN-Orthofoto, OSM oder eine vorhandene DXF/DWG-Zeichnung), mit nativer geometrischer Kontinuität: Jede Leitung verbindet zwei Bauwerke, und jeder Hausanschluss richtet sich automatisch neu an seiner Hauptleitung aus, wenn diese verschoben wird.
+**CanaPlan** ist ein Entwurfswerkzeug zum Zeichnen von **Schmutzwasser- (EU)** und **Regenwasserkanalnetzen (EP)**, seit 2.2 auch von **Trinkwassernetzen (AEP)**, direkt in QGIS, über einer Hintergrundkarte, die die Erweiterung selbst lädt (BAN-Adressen, PCI-Kataster, IGN-Orthofoto, OSM oder eine vorhandene DXF/DWG-Zeichnung), mit nativer geometrischer Kontinuität: Jede Leitung verbindet zwei Bauwerke, und jeder Hausanschluss richtet sich automatisch neu an seiner Hauptleitung aus, wenn diese verschoben wird.
 
 Von der Feldaufnahme bis zur Übergabe deckt ein einziges Werkzeug die gesamte Kette ab: Star-DT- / StaR-Elec-Import (DT-DICT), im Hintergrund geladene IGN/BAN/PCI-Hintergrundkarten und GeoPackage-Export konform zum Geostandard **StaR-Eau V2024** (CNIG / ASTEE).
 
@@ -1348,6 +1549,8 @@ Von der Feldaufnahme bis zur Übergabe deckt ein einziges Werkzeug die gesamte K
 - **Mehrblattdruck** als PDF mit Übersichtsplan sowie DXF-2018-Export.
 - **StaR-Eau-V2024-Export** ins GeoPackage, mit vorheriger Konformitätsprüfung.
 - **Gebiet Frankreich / International:** außerhalb Frankreichs Adressen und Gebäude aus OpenStreetMap, Luftbild Esri World Imagery und eine aus der Adresse vorgeschlagene UTM-Zone, mit Prüfung der Längenverzerrung.
+- **Trinkwassernetz (AEP)**, neu in 2.2: typisierte Knoten (Schieber, Be-/Entlüfter, Entleerung, Hydrant, Druckminderer, Netzzähler), **StaR-Eau-Symbole**, Anschlussschieber an jedem Abzweig, Sohlhöhe aus der Überdeckung, und StaR-Eau-Export « EAU ».
+- **Magic Box:** automatische Hausanschlüsse an den gewählten Leitungsabschnitten — je Flurstück, Gebäude oder Hausnummer — mit Vorschau.
 
 ### 🚀 Installation
 
@@ -1395,6 +1598,7 @@ CanaPlan/
 │   ├── star_dt_dialog.py           # Dialogue d'import GML Star-DT / StaR-Elec (multi-fichiers + drag & drop)
 │   ├── stareau_export_dialog.py    # Dialogue d'export StaR-Eau (5 onglets + controle)
 │   ├── about_dialog.py             # Dialogue « A propos » (lit metadata.txt)
+│   ├── magic_box_dialog.py         # Magic Box : tuiles, selection des troncons, apercu, trace
 │   └── config_dialog.py            # Dialogue de configuration (reseaux, couches, cubature, remblai)
 ├── API.md                          # Reference du module de pilotage par script
 ├── tools/
@@ -1407,6 +1611,13 @@ CanaPlan/
 │   ├── osm_services.py             # Recherche d'adresse Photon / Nominatim, bati OSM (Overpass) en tache de fond
 │   ├── avertissement.py            # Avertissement d'usage : fenetre a la premiere utilisation, mentions des rapports
 │   ├── processing_provider.py      # Recettes publiees dans la boite a outils Processing (fournisseur canaplan)
+│   ├── reseaux.py                  # Registre des reseaux EU/EP/AEP : couleurs, types AEP, prefixes, couverture, vocabulaire
+│   ├── style_aep.py                # Symbologie AEP par type (SVG StaR-Eau), bouches a cle
+│   ├── aep_topo.py                 # Robinets de branchement recales, orientation des symboles AEP
+│   ├── appareil_aep_tool.py        # Outil « Poser un appareil AEP »
+│   ├── stareau_export_aep.py       # Export StaR-Eau des tables aep_* (fichier EAU)
+│   ├── magic_branchements.py       # Moteur des branchements automatiques (parcelle, bati, numero)
+│   ├── i18n_aep.py / i18n_magic.py # Traductions AEP et Magic Box
 │   ├── draw_conduite_tool.py       # Trace des conduites
 │   ├── draw_branchement_tool.py    # Trace des branchements
 │   ├── insert_regard_tool.py       # Insertion de regard sur conduite
@@ -1444,6 +1655,7 @@ CanaPlan/
 │       ├── alg_cad_to_gis_convert.py
 │       └── services/
 └── icon/                           # Icones SVG de la barre d'outils
+    └── stareau_aep/                # Symboles AEP du geostandard StaR-Eau (+ licence)
 ```
 
 ---
@@ -1452,6 +1664,7 @@ CanaPlan/
 
 | Version | Notes |
 |---------|-------|
+| **2.2** | **Réseau AEP (eau potable)** : troisième réseau complet, symboles StaR-Eau, nœuds typés, robinets de branchement, fil d'eau par la couverture, profils / cubature / coupes / plans / export StaR-Eau « EAU » — **Magic Box** : branchements automatiques par parcelle, bâti ou numéro, avec aperçu — correctifs : conduite de longueur nulle en fin de tracé, coupe d'une conduite dans un projet GeoPackage (clé `fid` dupliquée) |
 | **2.1.1** | Correctif de publication : `metadata.txt` refusé par plugins.qgis.org (signe `%` dans le changelog) — contenu identique à la 2.1 |
 | **2.1** | **Territoire International** : projets hors de France avec adresses et bâti OpenStreetMap, photo aérienne Esri et système UTM proposé, sous garde-fou de déformation des longueurs — **avertissement d'usage** — **recettes dans la boîte à outils Processing** — branchements automatiques centrés sur le front de rue et arrêtés en limite de parcelle — sens d'écoulement lu sur l'exutoire, plus sur le terrain |
 | **2.0** | **TN auto (MNT IGN)** : remplissage du terrain naturel des regards et tabourets depuis le LiDAR HD (repli RGE ALTI), avec aperçu avant écriture et rapport CSV de traçabilité — cinq nouvelles **recettes** de pilotage par script (`coter_mnt`, `habiller`, `projet_sur_voie`, `reseau_de_voie`, `tracer_reseau`) — correction d'un plantage à la création de couche sur un projet neuf en CRS géographique — la fenêtre de résultats Cubature ne s'accumule plus d'un calcul à l'autre — icône du plugin dans le menu Extensions |
@@ -1470,6 +1683,37 @@ CanaPlan/
 
 <details>
 <summary>Détail complet des versions</summary>
+
+### 2.2
+
+- **Réseau AEP (eau potable).** Troisième réseau, sur les quatre couches
+  d'EU et EP : conduite, branchement, nœud (champ `type`) et compteur. Un nœud
+  à chaque sommet, créé en vanne ; robinet de branchement posé au piquage sans
+  couper la conduite, recalé au déplacement et à la suppression ; outil
+  **Poser un appareil AEP** ; types dans Renseigner et le Tableau de saisie ;
+  renumérotation par type (`V`, `RB`, `VT`, `VD`, `PI`, `BI`, `RP`, `CPT`).
+- **Symboles StaR-Eau** (collection eau potable, ASTEE / CNIG) embarqués,
+  orientés sur la conduite ou le branchement ; bouches à clé en option ;
+  étiquettes « Vanne V01 », robinets masquables dans la gestion des
+  étiquettes.
+- **Altimétrie par la couverture** : bouton **Couverture → FE** et verbe
+  `couverture_aep` ; TN auto disponible sur l'AEP.
+- **Sorties** : profil en long AEP (repères d'appareils), profil groupé EU +
+  EP + AEP, coupe transversale, cubature et largeurs de tranchée AEP, coupe
+  type, PDF complet / ZIP / DXF, projet `.bet`, assistant de création.
+- **Export StaR-Eau « EAU »** : tables `aep_canalisation`, `aep_vanne`,
+  `aep_appareillage`, `aep_regulation`, `aep_point_mesure`,
+  `aep_point_livraison`, `aep_piece`, `aep_raccord`,
+  `aep_canalisation_branchement`, avec contrôle de conformité propre.
+- **Magic Box** (groupe Général) : branchements automatiques sur des
+  tronçons cliqués, par parcelle, bâtiment ou numéro BAN, deux côtés ou un
+  seul, aperçu avant tracé ; cibles déjà raccordées laissées telles quelles.
+- **Corrections** : un clic droit ou un double-clic de fin posé sur le
+  dernier regard créait une conduite de longueur nulle ; la coupe d'une
+  conduite (insérer un regard ou un appareil) recopiait la clé `fid` d'un GeoPackage et laissait la couche
+  bloquée en édition ; `api.controle_stareau` plantait ; deux messages
+  d'erreur (reportlab, rotation des sauvegardes `.bet`) levaient eux-mêmes
+  une erreur.
 
 ### 2.1.1
 

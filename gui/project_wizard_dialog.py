@@ -32,6 +32,7 @@ from .quick_config_widgets import (
 _CUBATURE_WIDTH_KEYS = {
     'larg_cond_eu': 'qc_conduite_eu', 'larg_cond_ep': 'qc_conduite_ep',
     'larg_branch_eu': 'qc_branch_court_eu', 'larg_branch_ep': 'qc_branch_court_ep',
+    'larg_cond_aep': 'qc_conduite_aep', 'larg_branch_aep': 'qc_branch_court_aep',
 }
 
 # La mini-carte est en Web Mercator, le système natif des tuiles OSM : elles
@@ -456,7 +457,10 @@ class _RecapPage(QWidget):
         self._network_eu.setMinimumHeight(95)
         self._network_ep = NetworkSchemaWidget()
         self._network_ep.setMinimumHeight(95)
-        for sub_title, widget in (("EU", self._network_eu), ("EP", self._network_ep)):
+        self._network_aep = NetworkSchemaWidget()
+        self._network_aep.setMinimumHeight(95)
+        for sub_title, widget in (("EU", self._network_eu), ("EP", self._network_ep),
+                                  ("AEP", self._network_aep)):
             sub_box = QGroupBox(sub_title)
             sub_box.setStyleSheet(network_group_stylesheet(sub_title))
             sub_layout = QVBoxLayout()
@@ -469,13 +473,14 @@ class _RecapPage(QWidget):
         cubature_group = QGroupBox(i18n.tr('wz_cubature_largeurs'))
         cubature_layout = QHBoxLayout()
         self._cubature_widgets = {}
-        for key in ('larg_cond_eu', 'larg_branch_eu', 'larg_cond_ep', 'larg_branch_ep'):
+        for key in ('larg_cond_eu', 'larg_branch_eu', 'larg_cond_ep', 'larg_branch_ep',
+                    'larg_cond_aep', 'larg_branch_aep'):
             w = CubatureSchemaWidget()
             w.setMinimumHeight(95)
             w.setMinimumWidth(110)
             self._cubature_widgets[key] = w
             sub_box = QGroupBox(i18n.tr(_CUBATURE_WIDTH_KEYS[key]))
-            sub_reseau = "EU" if key.endswith("_eu") else "EP"
+            sub_reseau = key.rsplit("_", 1)[1].upper()
             sub_box.setStyleSheet(network_group_stylesheet(sub_reseau))
             sub_layout = QVBoxLayout()
             sub_layout.addWidget(w)
@@ -531,6 +536,7 @@ class _RecapPage(QWidget):
 
         self._network_eu.update_schema(config_page.reseau_widget.get_network_data("EU"))
         self._network_ep.update_schema(config_page.reseau_widget.get_network_data("EP"))
+        self._network_aep.update_schema(config_page.reseau_widget.get_network_data("AEP"))
 
         for key, widget in self._cubature_widgets.items():
             width = config_page.cubature_widget.get_width(key)
@@ -679,11 +685,13 @@ class ProjectWizardDialog(QDialog):
         self._plugin.run_fond_projet(self._basemaps_page.options())
         self._config_page.save_settings()
 
-        # Les couches EU/EP doivent exister avant l'enregistrement : sans
+        # Les couches EU/EP/AEP doivent exister avant l'enregistrement : sans
         # elles, l'archive .bet écrite est vide (pas de data.gpkg) et
-        # l'extraction qui suit l'écriture échoue.
+        # l'extraction qui suit l'écriture échoue. L'AEP est créé ici car
+        # l'assistant le configure ; ailleurs il ne s'active que s'il existe.
         self._plugin._get_couches("EU")
         self._plugin._get_couches("EP")
+        self._plugin._get_couches("AEP")
 
         self._created = True
         _do_save(self._plugin, self._iface, gpkg_temp, bet_path)

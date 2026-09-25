@@ -186,9 +186,10 @@ class TnAutoDialog(QDialog):
             self._cases[cle] = case
             self.table.setCellWidget(row, COL_NOM, self._cellule_case(case, info['nom']))
 
-            self.table.setItem(row, COL_TYPE, self._item(
-                i18n.tr('qc_regards') if info['role'] == 'regard'
-                else i18n.tr('qc_tabourets')))
+            from ..tools.reseaux import cle_role
+            self.table.setItem(row, COL_TYPE, self._item(i18n.tr(cle_role(
+                'qc_regards' if info['role'] == 'regard' else 'qc_tabourets',
+                self.reseau))))
             it_tn = self._item(self._fmt(tn, 3), droite=True)
             if tn is None:
                 it_tn.setForeground(_COLOR_MISSING)

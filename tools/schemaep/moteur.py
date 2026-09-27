@@ -16,6 +16,7 @@ import unicodedata
 
 from .catalogue import (T, ENDN, MAT, PI, r1, num, n, egal, nearest, m_of, fdn,
                         fmt, nom_dn, conv_dn, ok_pair, sug, dn_list, opt_list)
+from .langue import traduire, unite
 
 
 # ---------------------------------------------------------------- paramètres
@@ -234,7 +235,9 @@ def bom(items):
                 m[k]['q'] += num(x['q'])
             else:
                 m[k] = {'d': x['d'], 'q': num(x['q']), 'u': x['u']}
-    return sorted(m.values(), key=lambda b: cle_tri(b['d']))
+    # affichage : désignations et unités dans la langue de l'interface
+    r = [dict(b, d=traduire(b['d']), u=unite(b['u'])) for b in m.values()]
+    return sorted(r, key=lambda b: cle_tri(b['d']))
 
 
 def fq(q):
@@ -247,7 +250,7 @@ def fq(q):
 
 
 def csv_nomenclature(items):
-    lignes = ['﻿Désignation;Quantité;Unité']
+    lignes = ['\ufeff' + traduire('Désignation;Quantité;Unité')]
     for b in bom(items):
         lignes.append('"%s";%s;%s' % (b['d'].replace('"', '""'), n(r1(b['q'])).replace('.', ','), b['u']))
     return '\n'.join(lignes)
@@ -328,7 +331,7 @@ def etiquettes(items, obs, largeur=None):
         t = T[it['t']]
         if not t.lbl:
             continue
-        txt = str(t.lbl(it['p']) or '')
+        txt = traduire(str(t.lbl(it['p']) or ''))
         if not txt:
             continue
         l = lbl_pos(it)
@@ -439,7 +442,7 @@ def normalize(s):
 def charger_json(texte):
     d = json.loads(texte)
     if not isinstance(d, dict):
-        raise ValueError('format inconnu')
+        raise ValueError(traduire('format inconnu'))
     return normalize(d if 'items' in d else d.get('S') or {})
 
 

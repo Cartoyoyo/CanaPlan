@@ -20,6 +20,7 @@ from qgis.PyQt.QtWidgets import (QAction, QFileDialog, QInputDialog, QLabel, QLi
                                  QVBoxLayout, QWidget, QHeaderView)
 
 from ..tools import i18n
+from ..tools.schemaep.langue import traduire
 from ..tools.qt_exec import exec_dialog
 from ..tools.schemaep import catalogue as C
 from ..tools.schemaep import moteur as M
@@ -295,14 +296,14 @@ class Fenetre(QMainWindow):
         fav.setForeground(0, QColor('#e65100'))
         for m in self.fav.montages():
             its = M.normalize({'items': m['items']})['items']
-            e = QTreeWidgetItem(fav, [m['nom'], '✕'])
+            e = QTreeWidgetItem(fav, [traduire(m['nom']), '✕'])
             e.setIcon(0, QIcon(apercu(its)))
             e.setData(0, ROLE, ('montage', m['id']))
-            e.setToolTip(0, m['nom'])
+            e.setToolTip(0, traduire(m['nom']))
             e.setToolTip(1, i18n.tr('se_retirer_favoris'))
             e.setForeground(1, QColor('#9aa0b0'))
         for tid in self.fav.p:
-            e = QTreeWidgetItem(fav, [C.T[tid].nom, '✕'])
+            e = QTreeWidgetItem(fav, [traduire(C.T[tid].nom), '✕'])
             e.setIcon(0, QIcon(apercu([piece_type(tid)])))
             e.setData(0, ROLE, ('piece', tid))
             e.setToolTip(1, i18n.tr('se_retirer_favoris'))
@@ -315,16 +316,16 @@ class Fenetre(QMainWindow):
             e.setForeground(0, QColor('#1565c0'))
             e.setData(0, ROLE, ('retablir', None))
         for fam in C.FAM:
-            g = QTreeWidgetItem(self.palette, [fam])
+            g = QTreeWidgetItem(self.palette, [traduire(fam)])
             g.setForeground(0, QColor('#0d47a1'))
             for tid, t in C.T.items():
                 if t.fam != fam:
                     continue
                 on = tid in self.fav.p
-                e = QTreeWidgetItem(g, [t.nom, '★' if on else '☆'])
+                e = QTreeWidgetItem(g, [traduire(t.nom), '★' if on else '☆'])
                 e.setIcon(0, QIcon(apercu([piece_type(tid)])))
                 e.setData(0, ROLE, ('piece', tid))
-                e.setToolTip(0, t.nom)
+                e.setToolTip(0, traduire(t.nom))
                 e.setToolTip(1, i18n.tr('se_retirer_favoris' if on else 'se_ajouter_favoris'))
                 e.setForeground(1, QColor('#f9a825' if on else '#9aa0b0'))
         for i in range(self.palette.topLevelItemCount()):
@@ -342,7 +343,7 @@ class Fenetre(QMainWindow):
                 d = e.data(0, ROLE)
                 if d and d[0] == 'piece':
                     t = C.T[d[1]]
-                    s = '%s %s %s' % (t.nom, t.kw, t.fam)
+                    s = '%s %s %s %s %s' % (t.nom, t.kw, t.fam, traduire(t.nom), traduire(t.fam))
                 elif d and d[0] == 'montage':
                     s = e.text(0) + ' montage'
                 else:
@@ -419,7 +420,7 @@ class Fenetre(QMainWindow):
         if tout:
             defaut = S.s.get('nom') or i18n.tr('se_defaut_nom_schema') % n_
         else:
-            defaut = C.T[it['t']].nom + (i18n.tr('se_plus_piece_n' if n_ > 2 else 'se_plus_piece_1', n=n_ - 1) if n_ > 1 else '')
+            defaut = traduire(C.T[it['t']].nom) + (i18n.tr('se_plus_piece_n' if n_ > 2 else 'se_plus_piece_1', n=n_ - 1) if n_ > 1 else '')
         nom, ok = QInputDialog.getText(self, TITRE, i18n.tr('se_nom_favori_schema') if tout else i18n.tr('se_nom_montage'),
                                        QLineEdit.EchoMode.Normal, defaut)
         if not ok or not nom.strip():

@@ -359,7 +359,7 @@ TR_SCHEMAEP = {
               '<li>Glissez une étiquette pour la déplacer ; double-clic dessus : retour au placement automatique.</li>'
               '<li>Ctrl+Z annule.</li></ol>',
         'en': '<ol style="margin-left:-20px;color:#666">'
-              '<li>Click a fitting in the palette (e.g. “Réseau existant” or “Tuyau”) to place it.</li>'
+              '<li>Click a fitting in the palette (e.g. “Existing network” or “Pipe”) to place it.</li>'
               '<li>Click an <b>orange point</b> (free end), then a fitting: it connects with the same '
               'diameter and material. The next point is selected automatically so you can carry on.</li>'
               '<li>To connect two fittings already placed, drag one: its free end snaps to the nearest '
@@ -370,7 +370,7 @@ TR_SCHEMAEP = {
               '<li>Drag a label to move it; double-click it to return to automatic placement.</li>'
               '<li>Ctrl+Z undoes.</li></ol>',
         'es': '<ol style="margin-left:-20px;color:#666">'
-              '<li>Haga clic en una pieza de la paleta (p. ej. «Réseau existant» o «Tuyau») para colocarla.</li>'
+              '<li>Haga clic en una pieza de la paleta (p. ej. «Red existente» o «Tubo») para colocarla.</li>'
               '<li>Haga clic en un <b>punto naranja</b> (extremo libre) y luego en una pieza: se conecta con el '
               'mismo diámetro y material. El punto siguiente se selecciona automáticamente para continuar.</li>'
               '<li>Para conectar dos piezas ya colocadas, arrastre una: su extremo libre se engancha al punto '
@@ -381,7 +381,7 @@ TR_SCHEMAEP = {
               '<li>Arrastre una etiqueta para moverla; doble clic en ella: vuelta a la colocación automática.</li>'
               '<li>Ctrl+Z deshace.</li></ol>',
         'pt': '<ol style="margin-left:-20px;color:#666">'
-              '<li>Clique numa peça da paleta (por ex. «Réseau existant» ou «Tuyau») para a colocar.</li>'
+              '<li>Clique numa peça da paleta (por ex. «Rede existente» ou «Tubo») para a colocar.</li>'
               '<li>Clique num <b>ponto laranja</b> (extremidade livre) e depois numa peça: liga-se com o mesmo '
               'diâmetro e material. O ponto seguinte é selecionado automaticamente para continuar.</li>'
               '<li>Para ligar duas peças já colocadas, arraste uma: a sua extremidade livre prende-se ao ponto '
@@ -392,7 +392,7 @@ TR_SCHEMAEP = {
               '<li>Arraste uma etiqueta para a mover; duplo clique nela: volta ao posicionamento automático.</li>'
               '<li>Ctrl+Z anula.</li></ol>',
         'de': '<ol style="margin-left:-20px;color:#666">'
-              '<li>Klicken Sie ein Formstück in der Palette an (z. B. „Réseau existant“ oder „Tuyau“), um es '
+              '<li>Klicken Sie ein Formstück in der Palette an (z. B. „Bestehendes Netz“ oder „Rohr“), um es '
               'zu setzen.</li>'
               '<li>Klicken Sie einen <b>orangen Punkt</b> (freies Ende) und dann ein Formstück an: es wird mit '
               'gleichem Durchmesser und Werkstoff angeschlossen. Der nächste Punkt wird automatisch gewählt, '

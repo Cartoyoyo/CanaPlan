@@ -19,6 +19,7 @@ from ..tools import i18n
 from ..tools.schemaep import catalogue as C
 from ..tools.schemaep import moteur as M
 from ..tools.schemaep import svg_qt
+from ..tools.schemaep.langue import traduire
 
 BLEU = '#0d47a1'
 
@@ -38,7 +39,10 @@ def pixmap_extremite(k, verrou, taille=QSize(44, 22)):
     return pm
 
 
-LEGENDE = [(k, False, txt) for k, txt in C.ENDN.items()] + [('E', True, 'emboîtement verrouillé')]
+def _legende():
+    """(type, verrouillé, libellé traduit) des extrémités."""
+    return ([(k, False, traduire(txt)) for k, txt in C.ENDN.items()]
+            + [('E', True, traduire('emboîtement verrouillé'))])
 
 
 class _LigneLegende(QFrame):
@@ -155,11 +159,11 @@ class Panneau(QScrollArea):
             if port < len(ps):
                 v.addWidget(self._encadre_point(it, ps[port]))
         self.msg_point = ''
-        v.addWidget(_titre('%s  <span style="color:#777;font-weight:normal">#%s</span>' % (C.esc(t.nom), it['id'])))
+        v.addWidget(_titre('%s  <span style="color:#777;font-weight:normal">#%s</span>' % (C.esc(traduire(t.nom)), it['id'])))
         grille = QGridLayout()
         grille.setColumnStretch(1, 1)
         for r, f in enumerate(t.fields):
-            grille.addWidget(QLabel(f['l']), r, 0)
+            grille.addWidget(QLabel(traduire(f['l'])), r, 0)
             grille.addWidget(self._champ(it, f), r, 1)
         v.addLayout(grille)
         v.addLayout(self._boutons(it))
@@ -172,16 +176,16 @@ class Panneau(QScrollArea):
         fr.setObjectName('pinfo')
         v = QVBoxLayout(fr)
         v.setContentsMargins(6, 6, 6, 6)
-        txt = i18n.tr('se_point_sel_html') % C.ENDN.get(q['k'], '')
+        txt = i18n.tr('se_point_sel_html') % traduire(C.ENDN.get(q['k'], ''))
         if q.get('dn') and not q.get('any'):
-            txt += ' – %s %s' % (C.fdn(q['mat'], q['dn']), C.MAT[q['mat']]['nom'])
+            txt += ' – %s %s' % (C.fdn(q['mat'], q['dn']), traduire(C.MAT[q['mat']]['nom']))
         lb = QLabel(txt)
         lb.setWordWrap(True)
         v.addWidget(lb)
         g = QGridLayout()
         g.setSpacing(1)
         vr = bool(it['p'].get('verr'))
-        for n_, (k, verrou, libelle) in enumerate(LEGENDE):
+        for n_, (k, verrou, libelle) in enumerate(_legende()):
             actif = q['k'] == k and (verrou == vr if k == 'E' else True)
             ligne = _LigneLegende(k, verrou, libelle, actif, True)
             ligne.clic.connect(self._imposer)
@@ -196,7 +200,7 @@ class Panneau(QScrollArea):
         aide.setWordWrap(True)
         v.addWidget(aide)
         if self.msg_point:
-            m = QLabel(self.msg_point)
+            m = QLabel(traduire(self.msg_point))
             m.setStyleSheet('color:#b71c1c')
             m.setWordWrap(True)
             v.addWidget(m)
@@ -224,7 +228,7 @@ class Panneau(QScrollArea):
             w = QComboBox()
             opts = C.opt_list(it['p'], f) or []
             for v_, lib in opts:
-                w.addItem(str(lib), v_)
+                w.addItem(traduire(str(lib)), v_)
             idx = next((i for i, (v_, _l) in enumerate(opts) if C.egal(v_, val)), -1)
             w.setCurrentIndex(idx)
             w.activated.connect(lambda i, w=w: fixer(w.itemData(i)))
@@ -288,7 +292,7 @@ class Panneau(QScrollArea):
         if msgs:
             for k, m, _x, _y in msgs:
                 h = QHBoxLayout()
-                lb = QLabel('⚠ ' + m)
+                lb = QLabel('⚠ ' + traduire(m))
                 lb.setWordWrap(True)
                 lb.setStyleSheet('color:#b71c1c')
                 b = QPushButton(i18n.tr('se_valider'))
@@ -321,7 +325,7 @@ class Panneau(QScrollArea):
             lv.setContentsMargins(12, 0, 0, 0)
             for k, m, _x, _y in okd:
                 h = QHBoxLayout()
-                lb = QLabel('✔ ' + m)
+                lb = QLabel('✔ ' + traduire(m))
                 lb.setWordWrap(True)
                 lb.setStyleSheet('color:#777')
                 b = QPushButton(i18n.tr('se_annuler_validation'))
@@ -379,7 +383,7 @@ class Panneau(QScrollArea):
         v = QVBoxLayout(box)
         v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(_titre(i18n.tr('se_legende')))
-        for k, verrou, txt in LEGENDE:
+        for k, verrou, txt in _legende():
             v.addWidget(_LigneLegende(k, verrou, txt))
         return box
 

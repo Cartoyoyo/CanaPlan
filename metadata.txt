@@ -42,8 +42,8 @@ changelog=
          nomenclature, copier / coller entre noeuds, bouton dans Renseigner.
          Schemas enregistres dans le .bet (table schema_aep) ; a l'export,
          pages PDF 6 schemas par A4 et fichiers SVG, nomenclature du
-         chantier. Interface SchemAEP traduite (EN, ES, PT, DE) ; catalogue
-         de pieces et nomenclature en francais. Tableau de saisie :
+         chantier. SchemAEP entierement traduit (EN, ES, PT, DE) :
+         interface, catalogue, nomenclature, controles. Tableau de saisie :
          compteurs AEP en depart ou arrivee de
          la chaine PENTE. Profils en long AEP : branchements nommes par leur
          robinet (RB01...). Renumeroter AEP : regards compteurs RC. Cadrage

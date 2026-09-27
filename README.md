@@ -1755,12 +1755,15 @@ CanaPlan/
 │   ├── stareau_export_aep.py       # Export StaR-Eau des tables aep_* (fichier EAU)
 │   ├── magic_branchements.py       # Moteur des branchements automatiques (parcelle, bati, numero)
 │   ├── i18n_aep.py / i18n_magic.py # Traductions AEP et Magic Box
+│   ├── i18n_schemaep.py            # Traductions de l'interface SchemAEP
 │   ├── schemaep/                   # SchemAEP, moteur en Python pur (sans Qt) :
 │   │   ├── catalogue.py            #   64 pieces, extremites et compatibilites, symbologie
 │   │   ├── moteur.py               #   raccordements, controles, nomenclature, etiquettes, format .json
 │   │   ├── montages.py             #   montages types des favoris
 │   │   ├── svg_qt.py               #   dessins → SVG autonomes pour QSvgRenderer
 │   │   ├── prefill.py              #   schema de depart d'un noeud (conduites + appareil)
+│   │   ├── langue.py               #   langue d'affichage du catalogue (moteur et .json en français)
+│   │   ├── traductions.py          #   catalogue traduit : pièces, champs, nomenclature, contrôles
 │   │   └── stockage.py             #   table schema_aep du .bet, rattachement aux noeuds
 │   ├── draw_conduite_tool.py       # Trace des conduites
 │   ├── draw_branchement_tool.py    # Trace des branchements
@@ -1808,7 +1811,7 @@ CanaPlan/
 
 | Version | Notes |
 |---------|-------|
-| **2.3** | **SchemAEP** : schéma de pièces de chaque nœud AEP, pré-rempli depuis les conduites et le type du nœud, contrôle des assemblages et nomenclature, rangé dans le `.bet` (table `schema_aep`), copier / coller entre nœuds, bouton dans Renseigner, pages PDF « 6 schémas par A4 » et SVG à l'export, nomenclature du chantier — **Tableau de saisie** : compteurs AEP en départ ou arrivée de la chaîne PENTE — interface SchemAEP en 5 langues — cadrage automatique : moins de planches à grande échelle — correctifs : branchements AEP absents des profils en long après la coupe de leur conduite, symboles AEP masqués dans le DXF, options d'étiquettes ignorées au PDF |
+| **2.3** | **SchemAEP** : schéma de pièces de chaque nœud AEP, pré-rempli depuis les conduites et le type du nœud, contrôle des assemblages et nomenclature, rangé dans le `.bet` (table `schema_aep`), copier / coller entre nœuds, bouton dans Renseigner, pages PDF « 6 schémas par A4 » et SVG à l'export, nomenclature du chantier — **Tableau de saisie** : compteurs AEP en départ ou arrivée de la chaîne PENTE — SchemAEP en 5 langues — cadrage automatique : moins de planches à grande échelle — correctifs : branchements AEP absents des profils en long après la coupe de leur conduite, symboles AEP masqués dans le DXF, options d'étiquettes ignorées au PDF |
 | **2.2** | **Réseau AEP (eau potable)** : troisième réseau complet, symboles StaR-Eau, nœuds typés, robinets de branchement, fil d'eau par la couverture, profils / cubature / coupes / plans / export StaR-Eau « EAU » — **Magic Box** : branchements automatiques par parcelle, bâti ou numéro, avec aperçu — correctifs : conduite de longueur nulle en fin de tracé, coupe d'une conduite dans un projet GeoPackage (clé `fid` dupliquée) |
 | **2.1.1** | Correctif de publication : `metadata.txt` refusé par plugins.qgis.org (signe `%` dans le changelog) — contenu identique à la 2.1 |
 | **2.1** | **Territoire International** : projets hors de France avec adresses et bâti OpenStreetMap, photo aérienne Esri et système UTM proposé, sous garde-fou de déformation des longueurs — **avertissement d'usage** — **recettes dans la boîte à outils Processing** — branchements automatiques centrés sur le front de rue et arrêtés en limite de parcelle — sens d'écoulement lu sur l'exutoire, plus sur le terrain |
@@ -1853,10 +1856,12 @@ CanaPlan/
 - **Tableau de saisie**, onglet *Chaîne regards PENTE* : les compteurs AEP
   peuvent être départ ou arrivée d'une chaîne ; la chaîne suit le branchement
   et coupe la conduite au droit du robinet de branchement.
-- **Traductions** : interface de SchemAEP (fenêtre, liste des nœuds, panneau,
-  PDF des schémas) et dernières chaînes AEP en anglais, espagnol, portugais et
-  allemand. Le catalogue de pièces et les désignations de nomenclature restent
-  en français (vocabulaire métier partagé avec le format `.json` de SchemAEP).
+- **Traductions** : SchemAEP entièrement en anglais, espagnol, portugais et
+  allemand — interface, catalogue de pièces (noms, familles, caractéristiques,
+  extrémités), étiquettes du dessin, nomenclature, messages de contrôle, PDF et
+  CSV — ainsi que les dernières chaînes AEP. Les fichiers `.json` restent
+  rédigés en français, identiques à ceux de la page SchemAEP : un schéma
+  s'ouvre dans n'importe quelle langue.
 - **Profils en long AEP** (simple, lot, groupé) : un branchement porte le nom
   de son robinet de branchement (RB01…) plutôt que celui du compteur.
 - **Renuméroter AEP** : un regard compteur prend le numéro du robinet de son

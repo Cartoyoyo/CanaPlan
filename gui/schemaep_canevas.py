@@ -27,6 +27,10 @@ from ..tools import i18n
 from ..tools.schemaep import catalogue as C
 from ..tools.schemaep import moteur as M
 from ..tools.schemaep import svg_qt
+from ..tools.schemaep.langue import definir_langue, traduire
+
+# catalogue affiché dans la langue de CanaPlan (moteur et fichiers en français)
+definir_langue(i18n.langue)
 
 ROLE = 0          # clé de data() : ('piece', id) / ('port', id, n°) / ('defaut', clé) / ('etiq', id)
 Z_REGARD, Z_PIECE, Z_ETIQ, Z_DEFAUT, Z_PORT = -10, 0, 10, 20, 30
@@ -179,7 +183,7 @@ def construire_scene(sc, S, rendus, police, edition=True, etiquettes=True):
                 e.setBrush(QColor('#ff9800' if on else '#ffffff'))
                 e.setZValue(Z_PORT)
                 e.setData(ROLE, ('port', it['id'], q['i']))
-                e.setToolTip(i18n.tr('se_ext_libre') % C.ENDN.get(q['k'], ''))
+                e.setToolTip(i18n.tr('se_ext_libre') % traduire(C.ENDN.get(q['k'], '')))
                 sc.addItem(e)
     if edition:
         for k, m, x, y in S.defauts(G)[0]:
@@ -188,7 +192,7 @@ def construire_scene(sc, S, rendus, police, edition=True, etiquettes=True):
             e.setBrush(QColor(0, 0, 0, 0))
             e.setZValue(Z_DEFAUT)
             e.setData(ROLE, ('defaut', k))
-            e.setToolTip(m + i18n.tr('se_cliquer_valider'))
+            e.setToolTip(traduire(m) + i18n.tr('se_cliquer_valider'))
             sc.addItem(e)
     pos = {}
     if etiquettes:

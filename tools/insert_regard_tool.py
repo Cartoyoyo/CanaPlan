@@ -115,7 +115,8 @@ class InsertRegardTool(QgsMapToolEmitPoint):
         regard_layer.commitChanges()
 
         # Couper la conduite en deux
-        self._split_conduite(conduite_layer, best_feat, best_proj)
+        self._split_conduite(conduite_layer, best_feat, best_proj,
+                             couches.get('branchement'))
 
         # Nettoyer l'indicateur
         self.snap_cross.reset(QgsWkbTypes.GeometryType.LineGeometry)
@@ -149,8 +150,9 @@ class InsertRegardTool(QgsMapToolEmitPoint):
 
         return (best_feat, best_proj, best_reseau)
 
-    def _split_conduite(self, layer, feat, split_point):
-        """Coupe une conduite en deux au point projeté."""
+    def _split_conduite(self, layer, feat, split_point, branchement_layer=None):
+        """Coupe une conduite en deux au point projeté ; les branchements
+        piqués dessus sont réaffectés au morceau qui porte leur départ."""
         geom = feat.geometry()
         line = geom.asPolyline()
 
@@ -206,3 +208,6 @@ class InsertRegardTool(QgsMapToolEmitPoint):
             layer.addFeature(new_feat)
 
         layer.commitChanges()
+
+        from .calc_pentes import rattacher_branchements
+        rattacher_branchements(layer, branchement_layer)

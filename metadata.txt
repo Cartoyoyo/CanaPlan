@@ -2,7 +2,7 @@
 name=CanaPlan – Réseau Assainissement
 description=Dessin topologique de réseaux EU (rouge), EP (bleu) et eau potable AEP (cyan, symboles StaR-Eau) : conduites, branchements, regards, tabourets, nœuds et compteurs. PILOTABLE PAR SCRIPT AUTANT QU'À LA SOURIS — point d'entrée : from CanaPlan.tools import api ; api.aide() — chaque outil est un verbe Python, et des recettes JSON jouent un chantier complet (projet, fonds, tracé sur axe OSM, un branchement par habitation, terrain naturel sur MNT IGN, cotes, plan PDF) en un seul appel, sans aucun clic. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE). En France comme à l'international : adresses et bâti OpenStreetMap, photo aérienne Esri, système UTM contrôlé hors de France. [EN] Topological drawing of foul (red) and storm (blue) sewer networks and drinking-water (AEP, cyan, StaR-Eau symbols) networks: pipes, service connections, manholes, inspection chambers, nodes and meters. FULLY SCRIPTABLE, NOT A MOUSE-ONLY TOOL — entry point: from CanaPlan.tools import api ; api.aide() — every tool is a Python verb, and JSON recipes run a complete job (project, basemaps, centreline from OSM, one connection per dwelling, ground level from the national DEM, levels, PDF plan) in a single call. Longitudinal profiles, trench volumes, cross sections, multi-sheet PDF printing, DXF export and StaR-Eau (CNIG/ASTEE) GeoPackage export.
 icon=icon/icon.png
-version=2.2
+version=2.3
 qgisMinimumVersion=3.40
 qgisMaximumVersion=4.99
 author=Yoan Laloux
@@ -35,6 +35,26 @@ about=CanaPlan s'utilise de deux façons, également complètes : à la souris, 
     procedures can be declared as JSON recipes and replayed in a single call.
 
 changelog=
+    2.3  SchemAEP (dossier AEP - Eau Potable) : schema de pieces de chaque
+         noeud AEP, portage Python/Qt de la page SchemAEP (meme catalogue,
+         memes controles, meme format .json). Schema de depart pre-rempli
+         depuis les conduites et le type du noeud, controle des assemblages,
+         nomenclature, copier / coller entre noeuds, bouton dans Renseigner.
+         Schemas enregistres dans le .bet (table schema_aep) ; a l'export,
+         pages PDF 6 schemas par A4 et fichiers SVG, nomenclature du
+         chantier. Interface SchemAEP traduite (EN, ES, PT, DE) ; catalogue
+         de pieces et nomenclature en francais. Tableau de saisie :
+         compteurs AEP en depart ou arrivee de
+         la chaine PENTE. Profils en long AEP : branchements nommes par leur
+         robinet (RB01...). Renumeroter AEP : regards compteurs RC. Cadrage
+         automatique des planches : marge plafonnee a 25 mm et recouvrement
+         ramene a 8 mm, moins de planches a grande echelle.
+         Corrections : un branchement pique sur une conduite ensuite coupee
+         (regard ou appareil AEP insere apres coup) disparaissait des profils
+         en long et du calcul des cotes de piquage ; il est rattache au bon
+         morceau et les projets existants se reparent a l'ouverture d'un
+         profil. DXF : symboles des noeuds et compteurs AEP visibles. PDF :
+         options d'affichage des etiquettes respectees.
     2.2  Reseau AEP (eau potable). Troisieme reseau complet, sur les quatre
          couches d'EU et EP : conduite, branchement, noeud (champ type) et
          compteur. Un noeud a chaque sommet, cree en vanne ; robinet de

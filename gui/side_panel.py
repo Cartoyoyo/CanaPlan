@@ -69,6 +69,7 @@ class SidePanel(QDockWidget):
         self._item(folder_aep, icon_dir, "profil.svg",          "profil_aep")
         self._item(folder_aep, icon_dir, "profil.svg",          "coupe_aep")
         self._item(folder_aep, icon_dir, "renommer.svg",        "renommer_aep")
+        self._item(folder_aep, icon_dir, "insert_regard.svg",   "schemaep")
 
         folder_etiquettes = self._folder("grp_etiquettes")
         self._item(folder_etiquettes, icon_dir, "etiquettes.svg",        "creer_etiquettes")

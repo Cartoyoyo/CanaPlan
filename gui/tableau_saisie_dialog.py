@@ -16,7 +16,7 @@ from qgis.PyQt.QtGui import QColor, QKeySequence
 
 from ..tools import i18n, layer_ok as _layer_ok
 from ..tools import reseaux as R
-from ..tools.spatial_utils import nearest_point_feature
+from ..tools.spatial_utils import nearest_point_feature, rect_request
 from ..tools.stareau_values import materiaux_labels as _materiaux_labels
 from .chain_profile_widget import ChainProfileWidget
 
@@ -136,6 +136,7 @@ class TableauSaisieDialog(QDialog):
         self._chain_nodes = None      # [(role, fid), ...] regard1 -> ... -> regard2
         self._chain_segments = []     # longueurs des tronçons entre noeuds consécutifs
         self._chain_conduites = []    # fid de la conduite de chaque tronçon
+        self._chain_branchements = []  # fid des branchements (compteurs AEP)
 
         self.setWindowTitle(i18n.tr('ts_titre'))
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
@@ -327,6 +328,7 @@ class TableauSaisieDialog(QDialog):
         self._chain_nodes = None
         self._chain_segments = []
         self._chain_conduites = []
+        self._chain_branchements = []
         if hasattr(self, 'chain_table'):
             self.chain_table.setRowCount(0)
         if hasattr(self, 'chain_profile'):
@@ -1968,17 +1970,30 @@ class TableauSaisieDialog(QDialog):
         self.combo_regard1.setCurrentIndex(i2)
         self.combo_regard2.setCurrentIndex(i1)
 
+    def _chain_ouvrages(self):
+        """[(libellé, (rôle, fid))] proposés en départ / arrivée de chaîne : les
+        regards (nœuds), et en AEP les compteurs, au bout des branchements."""
+        out = [(_sval(f['nom'], f"#{f.id()}"), ('regard', f.id()))
+               for f in self.couches[self.reseau]['regard'].getFeatures()]
+        if R.est_aep(self.reseau):
+            suffixe = i18n.tr(R.cle_role('col_tabouret', self.reseau))
+            for f in self.couches[self.reseau]['tabouret'].getFeatures():
+                out.append((f"{_sval(f['nom'], f'#{f.id()}')} ({suffixe})", ('tabouret', f.id())))
+        # tri naturel : #2 avant #10, V2 avant V10
+        return sorted(out, key=lambda e: [int(t) if t.isdigit() else t.lower()
+                                          for t in re.split(r'(\d+)', e[0])])
+
     def _populate_chain_combos(self):
         if not hasattr(self, 'combo_regard1'):
             return
-        layer = self.couches[self.reseau]['regard']
-        noms = sorted(_sval(f['nom'], f"#{f.id()}") for f in layer.getFeatures())
+        ouvrages = self._chain_ouvrages()
         for combo in (self.combo_regard1, self.combo_regard2):
-            cur = combo.currentText()
+            cur = combo.currentData()
             combo.blockSignals(True)
             combo.clear()
-            combo.addItems(noms)
-            idx = combo.findText(cur)
+            for libelle, cle in ouvrages:
+                combo.addItem(libelle, cle)
+            idx = next((i for i in range(combo.count()) if combo.itemData(i) == cur), -1)
             if idx >= 0:
                 combo.setCurrentIndex(idx)
             combo.blockSignals(False)
@@ -1991,12 +2006,21 @@ class TableauSaisieDialog(QDialog):
         return None
 
     def _build_graph(self):
-        """Graphe non orienté regards/tabourets <-> conduites du réseau actif :
-        {(role, fid): [((role, fid), conduite_fid, longueur), ...]}"""
+        """Graphe non orienté des ouvrages du réseau actif :
+        {(role, fid): [((role, fid), (couche, fid du tronçon), longueur), ...]}
+
+        Tronçons : les conduites, coupées au droit des regards posés dessus
+        sans les couper (robinet de branchement AEP), au prorata de leur
+        longueur ; en AEP, aussi les branchements, pour atteindre les compteurs."""
         regard_layer = self.couches[self.reseau]['regard']
         tabouret_layer = self.couches[self.reseau]['tabouret']
         conduite_layer = self.couches[self.reseau]['conduite']
         adj = {}
+
+        def lien(ka, kb, troncon, longueur):
+            adj.setdefault(ka, []).append((kb, troncon, longueur))
+            adj.setdefault(kb, []).append((ka, troncon, longueur))
+
         for feat in conduite_layer.getFeatures():
             geom = feat.geometry()
             if geom is None or geom.isEmpty():
@@ -2010,8 +2034,35 @@ class TableauSaisieDialog(QDialog):
                 continue
             longueur = _fnum(feat['longueur']) or geom.length()
             ka, kb = (a[0], a[1]), (b[0], b[1])
-            adj.setdefault(ka, []).append((kb, feat.id(), longueur))
-            adj.setdefault(kb, []).append((ka, feat.id(), longueur))
+            arrets = []
+            for r in regard_layer.getFeatures(rect_request(geom.boundingBox().center(),
+                                                           geom.boundingBox().width() / 2
+                                                           + geom.boundingBox().height() / 2 + _SNAP_TOL)):
+                if r.id() in (ka[1] if ka[0] == 'regard' else None, kb[1] if kb[0] == 'regard' else None):
+                    continue
+                rg = r.geometry()
+                if rg is None or rg.isEmpty() or geom.distance(rg) > _SNAP_TOL:
+                    continue
+                arrets.append((geom.lineLocatePoint(rg), ('regard', r.id())))
+            lg = geom.length() or 1.0
+            points = [(0.0, ka)] + sorted(arrets) + [(lg, kb)]
+            for (p0, k0), (p1, k1) in zip(points, points[1:]):
+                lien(k0, k1, ('conduite', feat.id()), longueur * (p1 - p0) / lg)
+
+        if R.est_aep(self.reseau):
+            for feat in self.couches[self.reseau]['branchement'].getFeatures():
+                geom = feat.geometry()
+                if geom is None or geom.isEmpty():
+                    continue
+                line = geom.asPolyline()
+                if len(line) < 2:
+                    continue
+                a = self._find_ouvrage(regard_layer, tabouret_layer, QgsPointXY(line[0]))
+                b = self._find_ouvrage(regard_layer, tabouret_layer, QgsPointXY(line[-1]))
+                if a is None or b is None:
+                    continue
+                lien((a[0], a[1]), (b[0], b[1]), ('branchement', feat.id()),
+                     _fnum(feat['longueur']) or geom.length())
         return adj
 
     def _find_chain(self, key1, key2):
@@ -2042,21 +2093,21 @@ class TableauSaisieDialog(QDialog):
     def _detect_chain(self):
         nom1 = self.combo_regard1.currentText()
         nom2 = self.combo_regard2.currentText()
-        if not nom1 or not nom2 or nom1 == nom2:
+        key1, key2 = self.combo_regard1.currentData(), self.combo_regard2.currentData()
+        if not key1 or not key2 or key1 == key2:
             self._chain_set_status(i18n.tr('ts_err_deux_regards'), 'error')
             self._chain_set_actions_enabled(False)
             return
-        feat1 = self._find_regard_by_nom(nom1)
-        feat2 = self._find_regard_by_nom(nom2)
-        if feat1 is None or feat2 is None:
+        key1, key2 = tuple(key1), tuple(key2)
+        if not all(self.couches[self.reseau][k[0]].getFeature(k[1]).isValid() for k in (key1, key2)):
             self._chain_set_status(i18n.tr('ts_err_regard_introuvable'), 'error')
             self._chain_set_actions_enabled(False)
             return
-        key1, key2 = ('regard', feat1.id()), ('regard', feat2.id())
         path = self._find_chain(key1, key2)
         if path is None:
             self._chain_nodes = None
             self._chain_conduites = []
+            self._chain_branchements = []
             self.chain_table.setRowCount(0)
             self.chain_profile.set_data([])
             self._chain_set_status(
@@ -2065,7 +2116,10 @@ class TableauSaisieDialog(QDialog):
             return
         self._chain_nodes = [key1] + [step[1] for step in path]
         self._chain_segments = [step[3] for step in path]
-        self._chain_conduites = [step[2] for step in path]
+        # tronçon = ('conduite', fid) ou ('branchement', fid) ; une conduite coupée
+        # au droit d'un robinet de branchement apparaît deux fois
+        self._chain_conduites = list(dict.fromkeys(t[1] for _a, _b, t, _l in path if t[0] == 'conduite'))
+        self._chain_branchements = list(dict.fromkeys(t[1] for _a, _b, t, _l in path if t[0] == 'branchement'))
         self._chain_force_fe_mode()
         self._chain_set_status(
             i18n.tr('ts_chaine_trouvee', nb=len(self._chain_nodes),
@@ -2097,8 +2151,11 @@ class TableauSaisieDialog(QDialog):
                 ext.combineExtentWith(bbox)
 
         conduite_layer = self.couches[self.reseau]['conduite']
-        for cfid in self._chain_conduites:
-            feat = conduite_layer.getFeature(cfid)
+        branchement_layer = self.couches[self.reseau]['branchement']
+        troncons = ([(conduite_layer, f) for f in self._chain_conduites]
+                    + [(branchement_layer, f) for f in getattr(self, '_chain_branchements', [])])
+        for layer_t, tfid in troncons:
+            feat = layer_t.getFeature(tfid)
             if not feat.isValid():
                 continue
             geom = feat.geometry()
@@ -2129,10 +2186,11 @@ class TableauSaisieDialog(QDialog):
         regard_layer.removeSelection()
         tabouret_layer.removeSelection()
         conduite_layer.removeSelection()
+        branchement_layer.removeSelection()
         for role, fid in self._chain_nodes:
             self.couches[self.reseau][role].select(fid)
-        for cfid in self._chain_conduites:
-            conduite_layer.select(cfid)
+        for layer_t, tfid in troncons:
+            layer_t.select(tfid)
 
     def _chain_force_fe_mode(self):
         """Force le mode 'FE amont + aval' (dérive la pente) sur les conduites de la
@@ -2143,6 +2201,11 @@ class TableauSaisieDialog(QDialog):
             if st and st['mode'] != 'fe':
                 st['mode'] = 'fe'
                 self._apply_cond_mode_style(cfid)
+        for bfid in getattr(self, '_chain_branchements', []):
+            st = self._branch_state.get(bfid)
+            if st and st['mode'] != 'fe':
+                st['mode'] = 'fe'
+                self._apply_branch_mode_style(bfid)
 
     def _refresh_chain_table(self):
         if not self._chain_nodes:
@@ -2173,7 +2236,8 @@ class TableauSaisieDialog(QDialog):
             it0.setData(Qt.ItemDataRole.UserRole, fid)
             table.setItem(i, 0, it0)
 
-            it1 = QTableWidgetItem('Regard' if role == 'regard' else 'Tabouret')
+            it1 = QTableWidgetItem(i18n.tr(R.cle_role(
+                'col_regard' if role == 'regard' else 'col_tabouret', self.reseau)))
             it1.setFlags(it1.flags() & ~Qt.ItemFlag.ItemIsEditable)
             it1.setData(Qt.ItemDataRole.UserRole, fid)
             table.setItem(i, 1, it1)

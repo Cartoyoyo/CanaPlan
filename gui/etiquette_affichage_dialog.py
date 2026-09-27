@@ -78,11 +78,14 @@ def prefs_from_dict(d):
         'visibility': {r: {role: True for role in _ROLES} for r in _RESEAUX},
         'fields':     _copy_default_fields(),
         'robinets':   True,
+        'regards_compteur': True,
     }
     if not d:
         return prefs
     if 'robinets' in d:
         prefs['robinets'] = bool(d['robinets'])
+    if 'regards_compteur' in d:
+        prefs['regards_compteur'] = bool(d['regards_compteur'])
 
     vis = d.get('visibility', {})
     for reseau in _RESEAUX:
@@ -120,6 +123,7 @@ class EtiquetteAffichageDialog(QDialog):
         self._vis_checks  = {}   # (reseau, role) → QCheckBox
         self._field_checks = {}  # (role, field)  → QCheckBox
         self._robinets_check = None   # colonne AEP « Robinets »
+        self._regards_check = None    # colonne AEP « Regards » (regards de comptage)
         self._build_ui()
 
     # ------------------------------------------------------------------ UI
@@ -139,41 +143,53 @@ class EtiquetteAffichageDialog(QDialog):
         grid = QGridLayout(grp_vis)
         grid.setSpacing(6)
 
-        # En-têtes colonnes
-        for col, role in enumerate(_ROLES):
-            lbl = QLabel(i18n.tr(_ROLE_LABELS[role]))
-            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            f2 = QFont(); f2.setBold(True)
-            lbl.setFont(f2)
-            grid.addWidget(lbl, 0, col + 1)
-
-        # Lignes EU / EP
-        from ..tools.reseaux import hex_fonce
-        for row, reseau in enumerate(self._reseaux):
-            color = hex_fonce(reseau)
-            lbl = QLabel(f"<b><font color='{color}'>■ {reseau}</font></b>")
-            grid.addWidget(lbl, row + 1, 0)
+        # En-têtes colonnes (EU / EP)
+        if any(r != 'AEP' for r in self._reseaux):
             for col, role in enumerate(_ROLES):
-                cb = QCheckBox()
-                cb.setChecked(self._prefs['visibility'][reseau][role])
-                cb.setToolTip(i18n.tr('ea_etiquettes_role', role=i18n.tr(_ROLE_LABELS[role]),
-                                       reseau=reseau))
-                self._vis_checks[(reseau, role)] = cb
-                grid.addWidget(cb, row + 1, col + 1, alignment=Qt.AlignmentFlag.AlignCenter)
+                lbl = QLabel(i18n.tr(_ROLE_LABELS[role]))
+                lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                f2 = QFont(); f2.setBold(True)
+                lbl.setFont(f2)
+                grid.addWidget(lbl, 0, col + 1)
+
+        # Lignes EU / EP ; l'AEP a sa propre ligne d'en-têtes, à son vocabulaire :
+        # Nœuds, Compteurs, Regards (de comptage), Conduites, Branchements, Robinets.
+        from ..tools.reseaux import hex_fonce
+        f2 = QFont(); f2.setBold(True)
+        row = 0
+        for reseau in self._reseaux:
+            row += 1
+            color = hex_fonce(reseau)
             if reseau == 'AEP':
-                # Robinets de branchement : portés par la couche des nœuds,
-                # mais souvent trop nombreux pour être étiquetés.
-                col_rob = len(_ROLES) + 1
-                lbl_rob = QLabel(i18n.tr('ea_robinets'))
-                lbl_rob.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                f3 = QFont(); f3.setBold(True)
-                lbl_rob.setFont(f3)
-                grid.addWidget(lbl_rob, 0, col_rob)
+                cols = [('regard', 'aep_qc_noeuds'), ('tabouret', 'aep_qc_compteurs'),
+                        ('__regards', 'ea_regards_cpt'), ('conduite', 'qc_conduites'),
+                        ('branchement', 'qc_branchements'), ('__robinets', 'ea_robinets')]
+                for col, (_r, cle) in enumerate(cols):
+                    lbl = QLabel(i18n.tr(cle))
+                    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    lbl.setFont(f2)
+                    lbl.setStyleSheet(f'color: {color}')
+                    grid.addWidget(lbl, row, col + 1)
+                row += 1
+            else:
+                cols = [(r, _ROLE_LABELS[r]) for r in _ROLES]
+            lbl = QLabel(f"<b><font color='{color}'>■ {reseau}</font></b>")
+            grid.addWidget(lbl, row, 0)
+            for col, (role, cle) in enumerate(cols):
                 cb = QCheckBox()
-                cb.setChecked(self._prefs.get('robinets', True))
-                cb.setToolTip(i18n.tr('ea_robinets_tip'))
-                self._robinets_check = cb
-                grid.addWidget(cb, row + 1, col_rob, alignment=Qt.AlignmentFlag.AlignCenter)
+                if role == '__robinets':
+                    cb.setChecked(self._prefs.get('robinets', True))
+                    cb.setToolTip(i18n.tr('ea_robinets_tip'))
+                    self._robinets_check = cb
+                elif role == '__regards':
+                    cb.setChecked(self._prefs.get('regards_compteur', True))
+                    cb.setToolTip(i18n.tr('ea_regards_cpt_tip'))
+                    self._regards_check = cb
+                else:
+                    cb.setChecked(self._prefs['visibility'][reseau][role])
+                    cb.setToolTip(i18n.tr('ea_etiquettes_role', role=i18n.tr(cle), reseau=reseau))
+                    self._vis_checks[(reseau, role)] = cb
+                grid.addWidget(cb, row, col + 1, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Boutons rapides visibilité
         btn_row = QHBoxLayout()
@@ -215,7 +231,12 @@ class EtiquetteAffichageDialog(QDialog):
             row2.addStretch()
             vbox.addLayout(row2)
 
-            tabs.addTab(tab, i18n.tr(_ROLE_LABELS[role]))
+            titre = i18n.tr(_ROLE_LABELS[role])
+            if 'AEP' in self._reseaux and role in ('regard', 'tabouret'):
+                # le même onglet règle les nœuds et les compteurs AEP
+                aep = i18n.tr('aep_qc_noeuds' if role == 'regard' else 'aep_qc_compteurs')
+                titre = aep if self._reseaux == ('AEP',) else f'{titre} / {aep}'
+            tabs.addTab(tab, titre)
 
         tab_layout.addWidget(tabs)
         layout.addWidget(grp_fields)
@@ -233,6 +254,8 @@ class EtiquetteAffichageDialog(QDialog):
             cb.setChecked(state)
         if self._robinets_check is not None:
             self._robinets_check.setChecked(state)
+        if self._regards_check is not None:
+            self._regards_check.setChecked(state)
 
     def _set_role_fields(self, role, state):
         for (r, f), cb in self._field_checks.items():
@@ -262,4 +285,7 @@ class EtiquetteAffichageDialog(QDialog):
             'robinets': (self._robinets_check.isChecked()
                          if self._robinets_check is not None
                          else self._prefs.get('robinets', True)),
+            'regards_compteur': (self._regards_check.isChecked()
+                                 if self._regards_check is not None
+                                 else self._prefs.get('regards_compteur', True)),
         }

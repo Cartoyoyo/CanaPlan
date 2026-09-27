@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!-- Dérivé de AEP_PURGE.svg (StaR-Eau, ASTEE/CNIG, Licence Ouverte Etalab 2.0) :
-     recadré pour que le centre du rond soit au centre du dessin (CanaPlan). -->
+     recadré pour que le centre du rond soit au centre du dessin (CanaPlan).
+     Tige en polygone plein et non en trait : l'export DXF de QGIS ignore
+     les traits déclarés en style=. -->
 <svg
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
@@ -98,13 +100,11 @@
        d="M61.486 12.696c.03 6.501-5.39 11.797-12.106 11.828-6.717.03-12.186-5.215-12.216-11.716-.03-6.504 5.39-11.799 12.107-11.83 6.716-.032 12.185 5.215 12.215 11.718z"
        id="path2" />
     <path
-       stroke-miterlimit="8"
-       d="m 49.323843,24.393508 0.167314,23.494967"
-       id="path4"
-       stroke="param(fill)"
-       stroke-opacity="param(fill-opacity) 1"
-       style="fill:none;stroke-width:2.42404032;stroke-miterlimit:8;stroke-opacity:1"
-       inkscape:connector-curvature="0" />
+       stroke="none"
+       fill="param(fill)"
+       fill-opacity="param(fill-opacity) 1"
+       d="M48.112 24.402L50.536 24.385 50.703 47.880 48.279 47.897z"
+       id="path4" />
     <path
        stroke="none"
        fill="param(fill)"

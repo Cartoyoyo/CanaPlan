@@ -322,6 +322,15 @@ def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
             step(i18n.tr('bet_copie', couche=f"{role}_{reseau}"))
             to_save.append((reseau, role, layer_id, _copy_to_memory(layer)))
 
+    # Schémas SchemAEP : instantané tant que les fid des nœuds sont valides
+    # (les couches sont retirées puis rechargées plus bas, avec d'autres fid).
+    from ..gui import schemaep_choix_dialog as schemaep
+    try:
+        etat_schemas = schemaep.avant_enregistrement(plugin)
+    except Exception as _err:
+        errlog.ignored(_err, "projet_bet._do_save:schemaep")
+        etat_schemas = None
+
     # Capture des préférences d'affichage
     label_size = _read_label_size(project, s)
     if label_size is None:
@@ -383,6 +392,12 @@ def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
             errors.append(f"{layer_name} : {msg}")
         else:
             layers_meta[reseau][role] = layer_name
+
+    # Table schema_aep (schémas de nœuds), à côté des couches
+    if etat_schemas and etat_schemas['entrees']:
+        err_schemas = schemaep.ecrire_table(etat_schemas, gpkg_temp, ctx)
+        if err_schemas:
+            errors.append(err_schemas)
 
     # Capture visibilité des groupes EU/EP
     groups_visibility = {}
@@ -513,7 +528,7 @@ def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
                              label_size.get('min_scale'))
     if full_prefs:
         apply_label_display_prefs(plugin, full_prefs['visibility'],
-                                  full_prefs.get('robinets'))
+                                  full_prefs.get('robinets'), full_prefs.get('regards_compteur'))
         if full_prefs.get('fields'):
             apply_label_fields(plugin, full_prefs['fields'])
 
@@ -526,6 +541,11 @@ def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
     if dlg is not None and not sip.isdeleted(dlg):
         dlg.set_couches(plugin._get_couches("EU"), plugin._get_couches("EP"),
                         couches_aep=couches_aep)
+    # Schémas SchemAEP rattachés aux nœuds rechargés (nouveaux fid)
+    try:
+        schemaep.apres_rechargement(plugin, extracted_gpkg, etat_schemas or {'entrees': [], 'fen': None})
+    except Exception as _err:
+        errlog.ignored(_err, "projet_bet._do_save:schemaep_recharge")
 
     progress.setValue(total_steps)
     progress.close()
@@ -696,6 +716,13 @@ def load_projet(plugin, iface, bet_path=None):
     # Variables de style AEP (identifiants des couches chargées).
     plugin._couches_si_presentes("AEP")
 
+    # Schémas SchemAEP du projet (table schema_aep), rattachés aux nœuds chargés
+    try:
+        from ..gui import schemaep_choix_dialog as schemaep
+        schemaep.apres_rechargement(plugin, gpkg_path)
+    except Exception as _err:
+        errlog.ignored(_err, "projet_bet.load:schemaep")
+
     # Restaurer la visibilité des groupes EU/EP/AEP
     for reseau in _RESEAUX:
         grp = project.layerTreeRoot().findGroup(reseau)
@@ -718,7 +745,7 @@ def load_projet(plugin, iface, bet_path=None):
             full = prefs_from_dict(label_display_prefs)
             plugin._label_display_prefs = full
             apply_label_display_prefs(plugin, full['visibility'],
-                                      full.get('robinets'))
+                                      full.get('robinets'), full.get('regards_compteur'))
             if full.get('fields'):
                 apply_label_fields(plugin, full['fields'])
         action_force = plugin.action_dict.get('forcer_etiquettes')

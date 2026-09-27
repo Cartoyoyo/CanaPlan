@@ -1,4 +1,4 @@
-from qgis.core import Qgis, QgsPointXY, QgsWkbTypes
+from qgis.core import NULL, Qgis, QgsPointXY, QgsWkbTypes
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
@@ -318,18 +318,23 @@ class RenommerTool(QgsMapTool):
         if r_ids:
             abscisse.setdefault(r_ids[-1], cumul)
 
-        # Robinets : abscisse du piquage de leur branchement.
+        # Robinets : abscisse du piquage de leur branchement. On garde aussi
+        # l'arrivée de chaque branchement, pour nommer son regard compteur.
         from .spatial_utils import nearest_point_feature
+        arrivees = []       # [(fid du robinet, extrémité du branchement)]
         for br in self.couches['branchement'].getFeatures():
             repere = reperes.get(br['id_conduite'])
             if repere is None or br.geometry().isEmpty():
                 continue
             origine, sens, length = repere
             pk = _to_float(br['pk_debut']) or 0.0
-            depart_br = QgsPointXY(br.geometry().asPolyline()[0])
+            line = br.geometry().asPolyline()
+            depart_br = QgsPointXY(line[0])
             rob, _ = nearest_point_feature(noeuds, depart_br, self._SNAP_TOL_M)
             if rob is not None and rob.id() not in abscisse:
                 abscisse[rob.id()] = origine + (pk if sens > 0 else length - pk)
+            if rob is not None and rob['type'] == R.AEP_NOEUD_BRANCHEMENT:
+                arrivees.append((rob.id(), QgsPointXY(line[-1])))
 
         par_type = {}
         for f in noeuds.getFeatures():
@@ -342,6 +347,7 @@ class RenommerTool(QgsMapTool):
         idx_nom = noeuds.fields().indexOf('nom')
         noeuds.startEditing()
         lignes = []
+        numeros = {}        # {fid: numéro « 05 »} des robinets renommés
         for code in R.aep_numerotes():
             items = sorted(par_type.get(code, []))
             if not items:
@@ -349,11 +355,18 @@ class RenommerTool(QgsMapTool):
             prefixe = R.aep_prefixe(code)
             for n, (_s, fid) in enumerate(items):
                 noeuds.changeAttributeValue(fid, idx_nom, f"{prefixe}{depart + n:02d}")
+                if code == R.AEP_NOEUD_BRANCHEMENT:
+                    numeros[fid] = f"{depart + n:02d}"
             lignes.append(i18n.tr(
                 'ot_renum_aep_ligne', type=R.libelle_type(code), nb=len(items),
                 debut=f"{prefixe}{depart:02d}",
                 fin=f"{prefixe}{depart + len(items) - 1:02d}"))
         noeuds.commitChanges()
+
+        nb_rc = self._nommer_regards_compteurs(arrivees, numeros)
+        if nb_rc:
+            lignes.append(i18n.tr('ot_renum_aep_rc',
+                                  type=R.libelle_type('regard_compteur'), nb=nb_rc))
 
         from ..gui.etiquettes import sync_labels_after_rename
         sync_labels_after_rename(noeuds, 'regard', self.reseau)
@@ -361,6 +374,40 @@ class RenommerTool(QgsMapTool):
         QMessageBox.information(
             None, i18n.tr('ot_renumerotation'),
             "\n".join(lignes) if lignes else i18n.tr('ot_renum_aep_aucun'))
+
+    def _nommer_regards_compteurs(self, arrivees, numeros):
+        """Donne à chaque regard compteur le numéro du robinet de son
+        branchement (RB05 → RC05). Extrémités libres non nommées. Rend le
+        nombre de regards compteurs renommés."""
+        terminaux = self.couches.get('tabouret')
+        if terminaux is None or not _ok(terminaux):
+            return 0
+        idx_nom = terminaux.fields().indexOf('nom')
+        a_type = terminaux.fields().indexOf('type') >= 0
+        from .spatial_utils import nearest_point_feature
+        changes = {}
+        for fid_rob, fin in arrivees:
+            num = numeros.get(fid_rob)
+            if num is None:
+                continue
+            t, _ = nearest_point_feature(terminaux, fin, self._SNAP_TOL_M)
+            if t is None:
+                continue
+            code = (t['type'] if a_type else None) or R.AEP_TERMINAL_TYPE_DEFAUT
+            if code == NULL:
+                code = R.AEP_TERMINAL_TYPE_DEFAUT
+            if code != 'regard_compteur':
+                continue
+            changes[t.id()] = f"{R.AEP_PREFIXE_REGARD_COMPTEUR}{num}"
+        if not changes:
+            return 0
+        terminaux.startEditing()
+        for fid, nom in changes.items():
+            terminaux.changeAttributeValue(fid, idx_nom, nom)
+        terminaux.commitChanges()
+        from ..gui.etiquettes import sync_labels_after_rename
+        sync_labels_after_rename(terminaux, 'tabouret', self.reseau)
+        return len(changes)
 
     def _demander_depart(self):
         dlg = QDialog(self.iface.mainWindow())

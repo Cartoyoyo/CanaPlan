@@ -44,6 +44,37 @@ def _extremites_conduites(conduite_layer):
     return pts
 
 
+def noms_robinets(noeud_layer):
+    """Fonction pt -> nom du robinet de branchement posé en pt ('' sinon).
+
+    Sert aux profils en long AEP : un branchement y est désigné par son
+    robinet (RB01…), pas par son compteur. Rend None si la couche n'est pas
+    une couche de nœuds AEP (pas de champ type).
+    """
+    if noeud_layer is None or noeud_layer.fields().indexOf('type') < 0:
+        return None
+    index = QgsSpatialIndex()
+    robinets = {}
+    for f in noeud_layer.getFeatures():
+        if f['type'] != R.AEP_NOEUD_BRANCHEMENT:
+            continue
+        g = f.geometry()
+        if g is None or g.isEmpty():
+            continue
+        index.addFeature(f)
+        nom = f['nom']
+        robinets[f.id()] = (QgsPointXY(g.asPoint()),
+                            '' if nom is None or nom == NULL else str(nom))
+
+    def nom_en(pt):
+        for fid in index.nearestNeighbor(pt, 1, _TOL):
+            p, nom = robinets[fid]
+            if p.distance(pt) <= _TOL:
+                return nom
+        return ''
+    return nom_en
+
+
 def synchroniser_robinets(couches):
     """Recale les robinets de branchement AEP sur les départs de branchement.
 

@@ -10,6 +10,7 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtGui import QFont, QRegularExpressionValidator, QKeyEvent
 from qgis.PyQt.QtCore import Qt, QTimer, QEvent, QLocale, QRegularExpression, pyqtSignal
 
+from ..tools import errlog
 from ..tools import i18n
 from ..tools import reseaux as R
 from .quick_config_widgets import NETWORK_COLORS
@@ -296,6 +297,10 @@ class RenseignementDialog(QDialog):
                 extras.append(self._make_action_button(
                     i18n.tr('rens_calculer'), i18n.tr('rens_calcul_pente'),
                     self._calculate_pente, largeur=76))
+            elif name == 'tn' and self.role in ('regard', 'tabouret') and self._tn_auto_possible():
+                self._btn_tn_auto = self._make_action_button(
+                    'MNT', i18n.tr('rens_tn_auto_tip'), self._tn_auto, largeur=54)
+                extras.append(self._btn_tn_auto)
 
             form.addRow(label_text, self._make_field_row(widget, unite, extras))
             lignes += 1
@@ -386,8 +391,105 @@ class RenseignementDialog(QDialog):
 
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
+        if R.est_aep(self.reseau) and (self.role == 'regard' or (
+                self.role == 'tabouret' and self._est_regard_compteur())):
+            lay.addWidget(self._bouton_schemaep())
+            lay.addStretch(1)
         lay.addWidget(buttons)
         return pied
+
+    # ----------------------------------------------------------------- TN auto (MNT IGN)
+
+    @staticmethod
+    def _tn_auto_possible():
+        """MNT LiDAR HD / RGE ALTI : France seulement (voir le Tableau de saisie)."""
+        try:
+            from ..tools import territoire
+            return territoire.est_france()
+        except Exception as err:
+            errlog.ignored(err, "renseignement_dialog._tn_auto_possible")
+            return False
+
+    def _tn_auto(self):
+        """Relève le TN de l'ouvrage sur le MNT IGN (LiDAR HD, repli RGE ALTI)
+        et recalcule la profondeur (fil d'eau connu) ou le fil d'eau
+        (profondeur connue). Rien n'est écrit avant OK / Appliquer."""
+        from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject
+        from qgis.PyQt.QtWidgets import QApplication
+        from ..tools import altimetrie
+        from ..tools import altimetrie_qgis as aq
+        geom = self.feat.geometry()
+        tn_w = self.widgets.get('tn')
+        if geom is None or geom.isEmpty() or tn_w is None:
+            return
+        pt = geom.asPoint()
+        l93 = QgsCoordinateReferenceSystem(aq.L93)
+        if self.layer.crs().isValid() and self.layer.crs() != l93:
+            pt = QgsCoordinateTransform(self.layer.crs(), l93, QgsProject.instance()).transform(pt)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            res = altimetrie.echantillonner([(0, pt.x(), pt.y())], to_wgs84=aq.transformateur(l93))[0]
+        except Exception as err:
+            errlog.ignored(err, "renseignement_dialog._tn_auto")
+            res = {'z': None, 'source': altimetrie.SRC_AUCUNE}
+        finally:
+            QApplication.restoreOverrideCursor()
+        if res['z'] is None:
+            QMessageBox.warning(self, i18n.tr('tn_bouton'), i18n.tr('rens_tn_auto_echec'))
+            return
+        source = altimetrie.SOURCE_LABELS.get(res['source'], res['source'])
+        self._set(tn_w, round(res['z'], 3))
+        p_w, fe_w = self.widgets.get('profondeur'), self.widgets.get(self._fe_field)
+        tn = tn_w.value()
+        if fe_w is not None and fe_w.value() is not None and p_w is not None:
+            self._set(p_w, round(tn - fe_w.value(), 2))
+        elif p_w is not None and p_w.value() is not None and fe_w is not None:
+            self._set(fe_w, round(tn - p_w.value(), 3))
+        tn_w.setToolTip(i18n.tr('rens_tn_auto_source', source=source))
+        self._btn_tn_auto.setText('MNT ✔')
+        self._btn_tn_auto.setToolTip(i18n.tr('rens_tn_auto_source', source=source))
+
+    # ----------------------------------------------------------------- SchemAEP
+
+    def _plugin(self):
+        from qgis.utils import plugins
+        return plugins.get(__package__.split('.')[0])
+
+    def _est_regard_compteur(self):
+        from ..tools.schemaep.stockage import porte_schema
+        return porte_schema('tabouret', self.feat)
+
+    def _bouton_schemaep(self):
+        """Nœud AEP : ouvre son schéma de pièces dans SchemAEP."""
+        plugin = self._plugin()
+        existe = False
+        if plugin is not None:
+            try:
+                from .schemaep_choix_dialog import entree_schema
+                couches = plugin._couches_si_presentes('AEP')
+                existe = bool(couches) and entree_schema(plugin, couches, (self.role, self.feat.id())) is not None
+            except Exception as err:
+                errlog.ignored(err, "renseignement_dialog._bouton_schemaep")
+        btn = QPushButton('SchemAEP ✔' if existe else 'SchemAEP')
+        btn.setToolTip(i18n.tr('rens_schemaep_tip_existe' if existe else 'rens_schemaep_tip'))
+        btn.setAutoDefault(False)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setEnabled(plugin is not None)
+        btn.clicked.connect(self._ouvrir_schemaep)
+        return btn
+
+    def _ouvrir_schemaep(self):
+        """Enregistre le formulaire (comme OK) puis ouvre SchemAEP sur ce
+        nœud : le formulaire est modal, il doit être fermé d'abord."""
+        plugin, fid = self._plugin(), (self.role, self.feat.id())
+        self._save()
+
+        def ouvrir():
+            from .schemaep_choix_dialog import ouvrir_fenetre
+            couches = plugin._couches_si_presentes('AEP') if plugin else None
+            if couches:
+                ouvrir_fenetre(plugin, couches, fid)
+        QTimer.singleShot(0, ouvrir)
 
     def _make_type_combo(self, raw_val):
         """Classe AEP : liste fermée des codes du registre, libellés traduits.

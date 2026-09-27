@@ -15,6 +15,7 @@ from qgis.core import (
     Qgis,
     QgsWkbTypes, QgsGeometry, QgsRectangle, QgsPointXY,
     QgsProject, QgsMapSettings, QgsMapRendererParallelJob,
+    QgsExpressionContext, QgsExpressionContextUtils,
 )
 from . import errlog
 from .qt_exec import exec_dialog
@@ -836,6 +837,13 @@ class PrintTool(QgsMapTool):
             ms.setDestinationCrs(proj.crs())
             ms.setTransformContext(proj.transformContext())
             ms.setEllipsoid(proj.ellipsoid())
+            # Variables de projet : les filtres d'étiquettes (robinets,
+            # compteurs AEP) et la symbologie (bouches à clé) les lisent. Sans
+            # ce contexte, coalesce(@var, 1) vaut 1 et tout s'imprime.
+            ctx = QgsExpressionContext()
+            ctx.appendScope(QgsExpressionContextUtils.globalScope())
+            ctx.appendScope(QgsExpressionContextUtils.projectScope(proj))
+            ms.setExpressionContext(ctx)
             # QgsMapRendererParallelJob composite les couches selon la
             # convention QgsMapSettings : index 0 = premier plan. _print_layers
             # est déjà en ordre [haut→bas] de l'arbre : pas d'inversion

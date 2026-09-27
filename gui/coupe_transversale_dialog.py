@@ -346,7 +346,8 @@ class CoupeTransversaleDialog(QDialog):
         import os
         import tempfile
         from qgis.core import (QgsMapSettings, QgsMapRendererSequentialJob,
-                               QgsRectangle, QgsProject)
+                               QgsRectangle, QgsProject, QgsExpressionContext,
+                               QgsExpressionContextUtils)
         from qgis.PyQt.QtCore import QSize
         from qgis.PyQt.QtGui import QColor, QImage
         from matplotlib.image import imread
@@ -398,6 +399,10 @@ class CoupeTransversaleDialog(QDialog):
         settings.setOutputSize(QSize(width_px, height_px))
         settings.setBackgroundColor(QColor(255, 255, 255))
         settings.setDestinationCrs(project.crs())
+        ctx = QgsExpressionContext()
+        ctx.appendScope(QgsExpressionContextUtils.globalScope())
+        ctx.appendScope(QgsExpressionContextUtils.projectScope(project))
+        settings.setExpressionContext(ctx)
 
         job = QgsMapRendererSequentialJob(settings)
         job.start()

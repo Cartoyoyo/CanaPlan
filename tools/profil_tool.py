@@ -130,12 +130,16 @@ class ProfilTool(QgsMapTool):
         cid_to_idx = {c.id(): i for i, c in enumerate(c_feats)}
         piquages   = {}
         br_layer = self._layer('branchement')
+        robinet_en = None
+        if self.reseau == 'AEP':
+            from .aep_topo import noms_robinets
+            robinet_en = noms_robinets(regard_layer)
         for br in (br_layer.getFeatures() if br_layer else []):
             idx = cid_to_idx.get(br['id_conduite'])
             if idx is None:
                 continue
             pk  = _to_float(br['pk_debut']) or 0.0
-            nom = self._tabouret_nom(br)
+            nom = self._tabouret_nom(br, robinet_en)
             piquages.setdefault(idx, []).append({
                 'abscisse': abscisses[idx] + pk,
                 'nom':      nom,
@@ -169,14 +173,18 @@ class ProfilTool(QgsMapTool):
         best, _ = nearest_point_feature(layer, point, tol)
         return best
 
-    def _tabouret_nom(self, br_feat):
-        """Retourne le nom du tabouret à l'extrémité finale du branchement."""
+    def _tabouret_nom(self, br_feat, robinet_en=None):
+        """Retourne le nom du tabouret à l'extrémité finale du branchement ;
+        en AEP (robinet_en fourni), celui du robinet de branchement à son
+        départ."""
         geom = br_feat.geometry()
         if geom.isEmpty():
             return ''
         line = geom.asPolyline()
         if not line:
             return ''
+        if robinet_en is not None:
+            return robinet_en(QgsPointXY(line[0]))
         end_pt = QgsPointXY(line[-1])
         tab_layer = self._layer('tabouret')
         if tab_layer is None:

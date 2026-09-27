@@ -104,6 +104,9 @@ def aep_numerotes():
 
 AEP_TERMINAL_TYPES = ('regard_compteur', 'extremite_libre')
 AEP_TERMINAL_TYPE_DEFAUT = 'regard_compteur'
+# Renumérotation : un regard compteur prend le numéro du robinet de son
+# branchement (RB05 → RC05) ; les extrémités libres ne sont pas nommées.
+AEP_PREFIXE_REGARD_COMPTEUR = 'RC'
 
 
 def libelle_type(code):

@@ -115,6 +115,16 @@ def _trunk_axis_points(regards):
 #  Piquages le long du tronçon principal
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _robinets(couches):
+    """AEP : fonction pt -> nom du robinet de branchement ; None en EU/EP,
+    où le branchement prend le nom de son tabouret."""
+    rl = couches.get('regard')
+    if rl is None or sip.isdeleted(rl):
+        return None
+    from .aep_topo import noms_robinets
+    return noms_robinets(rl)
+
+
 def _compute_piquages(conduites, abscisses, couches):
     """
     Pour chaque conduite du tronçon, retrouve les branchements raccordés et
@@ -126,6 +136,11 @@ def _compute_piquages(conduites, abscisses, couches):
     tab_layer = couches.get('tabouret')
     if br_layer is None or sip.isdeleted(br_layer):
         return piquages
+
+    cl = couches.get('conduite')
+    if cl is not None and not sip.isdeleted(cl):
+        from .calc_pentes import rattacher_branchements
+        rattacher_branchements(cl, br_layer)
 
     # Index tabourets par position pour retrouver le nom
     tab_by_pt = {}
@@ -140,6 +155,7 @@ def _compute_piquages(conduites, abscisses, couches):
                 str(v) if v and (QGIS_NULL is None or v != QGIS_NULL) else '')
 
     cid_to_idx = {c.id(): i for i, c in enumerate(conduites)}
+    robinet_en = _robinets(couches)
 
     for br in br_layer.getFeatures():
         idx = cid_to_idx.get(br['id_conduite'])
@@ -152,8 +168,11 @@ def _compute_piquages(conduites, abscisses, couches):
         if not g.isEmpty():
             line = g.asPolyline()
             if len(line) >= 2:
-                end_pt = QgsPointXY(line[-1])
-                nom = tab_by_pt.get((round(end_pt.x(), 3), round(end_pt.y(), 3)), '')
+                if robinet_en is not None:
+                    nom = robinet_en(QgsPointXY(line[0]))
+                else:
+                    end_pt = QgsPointXY(line[-1])
+                    nom = tab_by_pt.get((round(end_pt.x(), 3), round(end_pt.y(), 3)), '')
 
         piquages.setdefault(idx, []).append({
             'abscisse': abscisses[idx] + pk,
@@ -402,6 +421,10 @@ def calculer_donnees_groupe(jeux, pts, buffer_dist=_BUFFER_DIST):
         tab_layer = couches.get('tabouret')
         if br_layer is None or sip.isdeleted(br_layer):
             continue
+        cl = couches.get('conduite')
+        if cl is not None and not sip.isdeleted(cl):
+            from .calc_pentes import rattacher_branchements
+            rattacher_branchements(cl, br_layer)
         tab_by_pt = {}
         if tab_layer and not sip.isdeleted(tab_layer):
             for tf in tab_layer.getFeatures():
@@ -412,6 +435,7 @@ def calculer_donnees_groupe(jeux, pts, buffer_dist=_BUFFER_DIST):
                 v = _nom(tf['nom'])
                 tab_by_pt[(round(tp.x(), 3), round(tp.y(), 3))] = '' if v == '—' else v
 
+        robinet_en = _robinets(couches)
         for br in br_layer.getFeatures():
             g = br.geometry()
             if g.isEmpty():
@@ -448,7 +472,8 @@ def calculer_donnees_groupe(jeux, pts, buffer_dist=_BUFFER_DIST):
             piquages.append({
                 'x':      x_piq,
                 'fe':     fe_piq,
-                'nom':    tab_by_pt.get((round(end_pt.x(), 3), round(end_pt.y(), 3)), ''),
+                'nom':    (robinet_en(start_pt) if robinet_en is not None
+                           else tab_by_pt.get((round(end_pt.x(), 3), round(end_pt.y(), 3)), '')),
                 'reseau': reseau,
             })
 

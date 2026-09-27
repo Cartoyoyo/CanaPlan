@@ -13,7 +13,7 @@
 **Plugin QGIS de dessin topologique de réseaux d'assainissement et d'eau potable — EU / EP / AEP, du tracé terrain à la livraison StaR-Eau**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.40%2B%20%7C%204.x-green?logo=qgis&logoColor=white)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-2.2-blue)](#-changelog)
+[![Version](https://img.shields.io/badge/version-2.3-blue)](#-changelog)
 [![Qt](https://img.shields.io/badge/Qt-5%20%7C%206-brightgreen?logo=qt&logoColor=white)](https://qgis.org)
 [![StaR-Eau](https://img.shields.io/badge/StaR--Eau-V2024%20CNIG%2FASTEE-orange)](#-export-star-eau-cnig--astee-v2024)
 [![Langues](https://img.shields.io/badge/langues-FR%20%7C%20EN%20%7C%20ES%20%7C%20PT%20%7C%20DE-purple)](#-langues--languages)
@@ -49,6 +49,10 @@
 >
 > Depuis la **2.2**, l'AEP est un troisième réseau à part entière : conduites, branchements, nœuds et compteurs, avec les **symboles du géostandard StaR-Eau**. Un nœud à chaque sommet, un robinet de branchement posé au piquage, des appareils (vanne, ventouse, vidange, poteau et bouche incendie, réducteur de pression, compteur de réseau) choisis d'un clic, un fil d'eau déduit de la couverture. Profils, cubature, coupes, renumérotation, plans PDF / DXF et export StaR-Eau le traitent comme EU et EP. Voir [💧 Réseau AEP — eau potable](#-réseau-aep--eau-potable).
 
+> ### 📐 SchemAEP : le schéma de pièces de chaque nœud
+>
+> Choisi dans la liste des nœuds ou cliqué sur la carte, un nœud AEP s'ouvre dans **SchemAEP**, un éditeur de schémas de montage (tés, vannes, brides, emboîtements, poteaux…) déjà pré-rempli avec les conduites qui arrivent au nœud et l'appareil de son type. Contrôle des assemblages, nomenclature, schéma rangé sur le nœud dans le `.bet`, et à l'export : **6 schémas par page A4** et fichiers SVG. Voir [📐 SchemAEP](#-schemaep--schémas-de-nœuds-aep).
+
 La pente du réseau peut être définie ou rectifiée directement avec les outils de dessin et de saisie (assistant de création de projet en 4 étapes, tableau de saisie groupée). L'outil produit les profils en long (EU/EP/groupé), calcule les volumes de cubature (déblai et matériaux de remblai rapportés), génère des coupes de tranchée transversales, imprime les plans au format PDF multi-feuilles orientables avec plan d'ensemble et permet d'exporter en DXF 2018 fidèle.
 
 Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne : import Star-DT / StaR-Elec (DT-DICT), fonds de plan IGN/BAN/PCI chargés en tâche de fond, et export GeoPackage conforme au géostandard **StaR-Eau V2024** (CNIG / ASTEE).
@@ -58,6 +62,7 @@ Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne 
 - [⚙️ Fonctionnalités](#-fonctionnalites)
 - [🖼️ Captures d'écran](#-captures-décran)
 - [💧 Réseau AEP — eau potable](#-réseau-aep--eau-potable)
+- [📐 SchemAEP — schémas de nœuds AEP](#-schemaep--schémas-de-nœuds-aep)
 - [🪄 Magic Box](#-magic-box)
 - [🖥️ Interface](#-interface)
 - [🗃️ Couches et attributs](#-couches-et-attributs)
@@ -98,7 +103,7 @@ Du relevé terrain jusqu'à la livraison, un seul outil couvre toute la chaîne 
 | **Effacer** | Supprime un element et ses etiquettes associees. Lasso possible pour une selection multiple. |
 | **Magic Box** | Branchements automatiques sur des troncons choisis a la souris : un par parcelle, par batiment ou par numero de rue, des deux cotes ou d'un seul, avec apercu avant trace. Voir [🪄 Magic Box](#-magic-box). |
 | **Copier les attributs** | Copie les attributs (diametre, materiau...) d'un element vers un ou plusieurs autres du meme type. |
-| **Tableau de saisie - pente** | Saisie groupee en tableau, par onglets **Regards / Tabourets / Conduites / Branchements**, avec calcul automatique de la pente ou de la cote fil d'eau selon le sens choisi. Apercu carte miniature de l'element selectionne, copier/coller depuis Excel, saisie multi-cellules, historique d'annulation (Ctrl+Z). Un onglet **Chaine** trace le profil simplifie entre deux regards choisis. Sur l'onglet Branchements, la **cote de piquage est interpolee sur la conduite mere** au PK du piquage : modifier un fil d'eau de la conduite met a jour en cascade tous les branchements qui y sont piques (cellule affichee en couleur « valeur derivee »). |
+| **Tableau de saisie - pente** | Saisie groupee en tableau, par onglets **Regards / Tabourets / Conduites / Branchements**, avec calcul automatique de la pente ou de la cote fil d'eau selon le sens choisi. Apercu carte miniature de l'element selectionne, copier/coller depuis Excel, saisie multi-cellules, historique d'annulation (Ctrl+Z). Un onglet **Chaine** trace le profil simplifie entre deux regards choisis ; en AEP, un **compteur** peut en etre le depart ou l'arrivee (la chaine passe par son branchement et par le robinet de branchement pose sur la conduite). Sur l'onglet Branchements, la **cote de piquage est interpolee sur la conduite mere** au PK du piquage : modifier un fil d'eau de la conduite met a jour en cascade tous les branchements qui y sont piques (cellule affichee en couleur « valeur derivee »). |
 | **TN auto (MNT IGN)** | Bouton du Tableau de saisie qui releve le terrain naturel des regards et tabourets du reseau affiche sur le **MNT LiDAR HD (0,50 m)**, avec repli sur le **RGE ALTI (1 m)** la ou le LiDAR HD ne couvre pas. Un dialogue d'apercu affiche, ouvrage par ouvrage, le TN actuel, le TN propose, l'ecart et la source retenue avant toute ecriture : seules les lignes cochees sont appliquees (par defaut, uniquement les TN manquants — case **« Ecraser les TN deja renseignes »** pour forcer). Un ecart superieur a 0,50 m est signale, le MNT decrivant le terrain nu a la date du vol et non le terrain du projet. Le TN ecrit recalcule automatiquement le fil d'eau ou la profondeur selon le choix fait dans le dialogue. L'ensemble du lot s'ecrit en une seule operation (Ctrl+Z annule tout). Le schema des couches ne portant pas de champ de provenance, la tracabilite passe par un **rapport CSV horodate** ecrit dans le dossier du projet (`altimetrie_<reseau>_<horodatage>.csv`), qui liste aussi les ouvrages non appliques. |
 
 #### Modes de calcul du Tableau de saisie
@@ -425,6 +430,16 @@ L'onglet **Chaîne regards PENTE** trace le profil simplifié entre deux
 regards choisis et permet d'appliquer une pente constante, une pente
 calculée ou une profondeur fixe sur toute la chaîne d'un coup.
 
+En AEP, les **compteurs** figurent aussi dans les listes de départ et
+d'arrivée (marqués « (Compteur) ») : la chaîne rejoint le compteur par son
+branchement, et coupe la conduite au droit du robinet de branchement, posé
+dessus sans la couper, au prorata de sa longueur. TN, profondeur et fil
+d'eau du compteur se règlent alors comme ceux d'un nœud.
+
+<div align="center">
+  <img src="images/tsp_chaine_compteur.png" alt="Chaîne regards PENTE : du nœud V01 au compteur #1 par le robinet de branchement RB01">
+</div>
+
 <div align="center">
   <img src="images/TSP_Pente.png" alt="Onglet Chaîne regards PENTE">
 </div>
@@ -488,8 +503,9 @@ s'imprime : plus aucune boîte de dialogue intermédiaire entre la validation et
 le PDF.
 
 **Ce qu'on exporte** — plan PDF, plan DXF, profils en long EU / EP / groupé,
-cubature (périmètre, contenu, PDF / XLSX / CSV) et coupes types EU / EP, le
-tout dans un dossier choisi.
+cubature (périmètre, contenu, PDF / XLSX / CSV), coupes types EU / EP et, si
+le projet en a, les **schémas de nœuds AEP** ([SchemAEP](#-schemaep--schémas-de-nœuds-aep)),
+le tout dans un dossier choisi.
 
 **Comment le plan s'imprime** — titre, format, orientation, échelle et
 résolution, en listes déroulantes à la suite de la case *Plan PDF*. La
@@ -526,7 +542,7 @@ son cadre délimite exactement la zone que montrera la planche.
 >
 > **PDF complet** — le bouton violet, à sa gauche, prend le même contenu et
 > l'assemble en **un seul document** : plan, puis profils EU/EP, puis coupes
-> types, puis cubature. Le DXF et le classeur XLSX ne sont pas produits, ils ne
+> types, puis schémas de nœuds AEP, puis cubature. Le DXF et le classeur XLSX ne sont pas produits, ils ne
 > s'assemblent pas dans un PDF. À choisir selon l'usage : l'archive garde les
 > pièces séparées et rééditables, le PDF se fait circuler tel quel.
 > L'assemblage repose sur *pypdf*, vérifié **avant** de produire quoi que ce
@@ -713,6 +729,117 @@ api.controle_stareau(type_fichier="EAU")
 ```
 
 Voir [API.md](API.md).
+
+---
+
+## 📐 SchemAEP — schémas de nœuds AEP
+
+**SchemAEP** dessine le schéma de pièces d'un nœud du réseau d'eau potable :
+tés, vannes, brides, emboîtements, cônes, prises en charge, poteaux… avec la
+symbologie AEP (emboîtement en demi-cercle, bride en trait, Express,
+électrosoudable, filetages, joint verrouillé). C'est le portage dans QGIS de
+la page autonome [SchemAEP](https://github.com/Cartoyoyo/SchemAEP) : même
+catalogue, mêmes contrôles, même fichier `.json` — un schéma s'ouvre dans
+l'une ou l'autre.
+
+**Lancement** — entrée **SchemAEP** du dossier *AEP – Eau Potable* (panneau
+latéral et menu). Une liste des nœuds AEP (nom, type, ✔ et date si le nœud a
+déjà son schéma) permet de choisir le nœud, avec une recherche, ou de le
+**cliquer sur la carte**. Un **schéma libre**, non rattaché à un nœud, reste
+possible. Le formulaire **Renseigner** d'un nœud AEP a aussi son bouton
+**SchemAEP** (« SchemAEP ✔ » si le nœud a déjà son schéma) : il enregistre le
+formulaire et ouvre le schéma du nœud.
+
+**Copier / coller** — un schéma se copie depuis la liste (*Copier le schéma*)
+ou depuis l'éditeur (*Copier*), et se colle sur un ou plusieurs nœuds
+sélectionnés dans la liste (Ctrl+clic, Maj+clic : *Coller sur la sélection*),
+ou dans l'éditeur ouvert (*Coller*, annulable par Ctrl+Z). Chaque copie prend
+le nom de son nœud ; un nœud qui a déjà un schéma n'est remplacé qu'après
+confirmation. Pratique pour les branchements, souvent identiques d'un nœud à
+l'autre.
+
+<div align="center">
+  <img src="images/schemaep_choix.png" alt="SchemAEP : choix du nœud AEP">
+</div>
+
+**Schéma de départ** — un nœud sans schéma n'ouvre pas une page blanche :
+
+- chaque conduite ou branchement qui touche le nœud devient une pièce
+  *Réseau existant*, avec son diamètre, son matériau et **sa direction sur la
+  carte**, repérée par le nœud voisin (« vers V02 », « vers Coude #5 ») ;
+  une conduite qui passe sous un robinet de branchement sans être coupée
+  compte pour deux directions ;
+- l'appareil du type du nœud est posé au centre, orienté et raccordé :
+  robinet-vanne, té, coude (angle le plus proche de celui des conduites),
+  cône, bouchon, prise en charge, compteur, ou le montage type de la
+  ventouse, de la vidange, du poteau ou de la bouche d'incendie et du
+  réducteur de pression. En bout de branche, le té de piquage du montage
+  est retiré.
+
+<div align="center">
+  <img src="images/schemaep_carte_schema.png" alt="Nœud RB01 sur la carte et son schéma de départ dans SchemAEP">
+  <br><sub>Le robinet de branchement RB01 : la conduite Ø 110 fonte qui le traverse devient deux pièces existantes (vers VD01, vers V01), le branchement PE Ø 32 part à l'ouest comme sur la carte, la prise en charge est posée au centre.</sub>
+</div>
+
+**L'éditeur** — fenêtre indépendante, QGIS reste utilisable à côté :
+
+- **palette** de 64 pièces en 9 familles, recherche sans accents, aperçus ;
+- **raccordement** : clic sur un point orange (extrémité libre), puis sur une
+  pièce — elle arrive avec le même diamètre et matériau, et le point suivant
+  est sélectionné pour enchaîner ; glisser une pièce déplace l'ensemble
+  raccordé avec **aimantation** sur l'extrémité libre la plus proche (Alt :
+  pièce seule, Maj : sans grille) ;
+- **extrémités au choix** point par point (bride, emboîtement, Express, bout
+  uni, électrosoudable, compression, filetages, verrouillé) : la variante du
+  catalogue si elle existe, sinon le type imposé sur ce seul point ;
+- **contrôle des assemblages** : un rond rouge sur chaque liaison impossible,
+  avec la pièce d'adaptation à prévoir (bride-emboîtement, bride-bout uni,
+  cône, raccord universel…) ; un défaut accepté se **valide** ;
+- **nomenclature** automatique (butées béton, bouches à clé, regards compris) ;
+- **étiquettes** sans chevauchement, déplaçables (double-clic : retour au
+  placement automatique) ;
+- **favoris** : les montages types (poteau et bouche d'incendie, branchements,
+  purge, réducteur, ventouse, vidange) et vos propres montages ou schémas ;
+- rotation de tout le schéma, **Effacer tout**, annulation (Ctrl+Z) ;
+- sorties : **SVG**, nomenclature **CSV**, **impression** (schéma + nomenclature).
+
+<div align="center">
+  <img src="images/schemaep_editeur.png" alt="Éditeur SchemAEP : montage de poteau d'incendie, propriétés du robinet-vanne, contrôle et nomenclature">
+  <br><sub>Montage type « Poteau d'incendie » : té à brides, robinet-vanne sélectionné, coude à patin, poteau — contrôle des assemblages et nomenclature à droite.</sub>
+</div>
+
+<div align="center">
+  <img src="images/schemaep_controle.png" width="49%" alt="Contrôle des assemblages : vanne à brides entre deux bouts unis">
+  <img src="images/schemaep_extremites.png" width="49%" alt="Point sélectionné : choix du type d'extrémité">
+  <br><sub>À gauche, une vanne à brides montée entre deux bouts unis : ronds rouges, pièce d'adaptation proposée, validation. À droite, un point sélectionné et les onze types d'extrémité au choix.</sub>
+</div>
+
+**Rangé sur le nœud** — *Enregistrer dans le projet* range le schéma (source
+JSON éditable + rendu SVG) sur son nœud ; SchemAEP le propose aussi quand on
+change de nœud ou qu'on ferme la fenêtre après une modification. Les schémas
+partent dans le `.bet` (table `schema_aep` de `data.gpkg`) et se rattachent à
+leur nœud à l'ouverture par son nom et sa position — les identifiants internes
+changent à chaque enregistrement. Un nœud renommé ou légèrement déplacé
+(moins d'1 m) garde son schéma ; au-delà, le schéma est gardé de côté et
+réécrit, jamais perdu.
+
+**À l'export** — la fenêtre d'export propose, dès que le projet a des schémas
+de nœuds :
+
+- **Pages PDF** : 6 schémas par page A4, puis la nomenclature de chaque nœud
+  (`schemas_aep.pdf`, placé après les coupes types dans le PDF complet) ;
+- **Fichiers SVG** : un par nœud, dans le sous-dossier `schemas_aep`.
+
+<div align="center">
+  <img src="images/schemaep_export.png" alt="Fenêtre d'export : bloc Schémas de nœuds AEP">
+  &nbsp;&nbsp;
+  <img src="images/schemaep_pdf.png" width="420" alt="Page PDF : 6 schémas par A4">
+  <br><sub>Les options d'export, et une page A4 de six schémas (ici les montages types des favoris).</sub>
+</div>
+
+**Nomenclature du chantier** — le bouton *Nomenclature de tous les schémas…*
+de la liste des nœuds additionne les pièces de tous les schémas, avec pour
+chaque ligne les nœuds concernés, et l'exporte en CSV.
 
 ---
 
@@ -1134,7 +1261,7 @@ destinataire exige un import PostGIS strict ou la colonne est `NOT NULL`.
 
 Le fichier `.bet` est une archive ZIP contenant :
 - `metadata.json` — version, territoire (France / International), CRS, etat des etiquettes, visibilite des couches
-- `data.gpkg` — toutes les couches EU/EP (et AEP s'il existe) au format GeoPackage ; les `.bet` d'avant la 2.2 s'ouvrent sans changement
+- `data.gpkg` — toutes les couches EU/EP (et AEP s'il existe) au format GeoPackage ; les `.bet` d'avant la 2.2 s'ouvrent sans changement. Les schémas de nœuds [SchemAEP](#-schemaep--schémas-de-nœuds-aep) y sont dans la table `schema_aep` (sans géométrie : nom et position du nœud, schéma JSON, rendu SVG, date)
 
 Une rotation de sauvegardes est effectuee automatiquement : `.bet` → `.bak1` → `.bak2`.
 
@@ -1406,6 +1533,8 @@ From field survey to delivery, one tool covers the whole chain: Star-DT / StaR-E
 - **Star-DT / StaR-Elec (DT-DICT) import** and DXF/DWG import into GeoPackage.
 - **Drinking-water network (AEP)**, new in 2.2: nodes typed as valve, air valve, drain, fire hydrant, pressure reducer or network meter, drawn with the **StaR-Eau symbols**; a service-connection valve placed at each tap-in; invert levels derived from the cover depth; profiles, trench volumes, cross sections, plans and StaR-Eau "EAU" export all handle AEP. See [💧 Réseau AEP](#-réseau-aep--eau-potable).
 - **Magic Box**: automatic service connections on the pipes you click — one per parcel, per building or per street number, on both sides or one — previewed before drawing.
+- **SchemAEP**: a fittings diagram for each water node (tees, valves, flanges, sockets, hydrants…), started from the pipes that reach the node and the fitting of its type, with joint checks and bill of materials; saved on the node in the `.bet`, exported as PDF pages (6 diagrams per A4 sheet) and SVG files. See [📐 SchemAEP](#-schemaep--schémas-de-nœuds-aep).
+- **Data-entry table, SLOPE chain**: water meters can start or end a chain (through their service connection).
 
 ### 📋 Requirements
 
@@ -1446,7 +1575,7 @@ From field survey to delivery, one tool covers the whole chain: Star-DT / StaR-E
 
 ### 📦 The .bet project format
 
-A CanaPlan project is a single `.bet` file — a ZIP archive holding a `metadata.json` manifest, a `data.gpkg` GeoPackage with the eight working layers, and a `fonds/` folder with the basemaps. Two rotating backups (`.bak1`, `.bak2`) are kept beside it.
+A CanaPlan project is a single `.bet` file — a ZIP archive holding a `metadata.json` manifest, a `data.gpkg` GeoPackage with the working layers (plus the `schema_aep` table of SchemAEP node diagrams), and a `fonds/` folder with the basemaps. Two rotating backups (`.bak1`, `.bak2`) are kept beside it.
 
 Basemaps are saved with the project: WMS streams by reference (URI, opacity, scale thresholds), while vector layers — BAN addresses, street names, PCI, DXF and Star-DT imports — are copied into the archive with their style, so they survive the temporary-folder purge and travel with the project.
 
@@ -1477,6 +1606,7 @@ Del levantamiento de campo a la entrega, una sola herramienta cubre toda la cade
 - **Territorio Francia / Internacional:** fuera de Francia, direcciones y edificios de OpenStreetMap, ortofoto Esri World Imagery y zona UTM propuesta a partir de la dirección, con control de la deformación de las longitudes.
 - **Red de agua potable (AEP)**, nueva en la 2.2: nodos tipados (válvula, ventosa, desagüe, hidrante, reductor de presión, contador), **símbolos StaR-Eau**, llave de acometida en cada toma, cota de solera deducida del recubrimiento, y exportación StaR-Eau « EAU ».
 - **Magic Box:** acometidas automáticas sobre los tramos elegidos — por parcela, edificio o número de calle — con vista previa.
+- **SchemAEP:** esquema de piezas de cada nodo de agua potable (tes, válvulas, bridas, enchufes, hidrantes…), iniciado a partir de las tuberías que llegan al nodo, con control de uniones y lista de materiales; guardado en el `.bet` y exportado en PDF (6 esquemas por hoja A4) y SVG.
 
 ### 🚀 Instalación
 
@@ -1514,6 +1644,7 @@ Do levantamento de campo à entrega, uma só ferramenta cobre toda a cadeia: imp
 - **Território França / Internacional:** fora de França, moradas e edifícios do OpenStreetMap, ortofoto Esri World Imagery e zona UTM proposta a partir da morada, com controlo da deformação dos comprimentos.
 - **Rede de água potável (AEP)**, nova na 2.2: nós tipados (válvula, ventosa, descarga, marco de incêndio, redutor de pressão, contador), **símbolos StaR-Eau**, válvula de ramal em cada ligação, soleira deduzida do recobrimento, e exportação StaR-Eau « EAU ».
 - **Magic Box:** ramais automáticos nos troços escolhidos — por parcela, edifício ou número de porta — com pré-visualização.
+- **SchemAEP:** esquema de peças de cada nó de água potável (tês, válvulas, flanges, bocas, marcos de incêndio…), iniciado a partir das condutas que chegam ao nó, com controlo das ligações e lista de materiais; guardado no `.bet` e exportado em PDF (6 esquemas por folha A4) e SVG.
 
 ### 🚀 Instalação
 
@@ -1551,6 +1682,7 @@ Von der Feldaufnahme bis zur Übergabe deckt ein einziges Werkzeug die gesamte K
 - **Gebiet Frankreich / International:** außerhalb Frankreichs Adressen und Gebäude aus OpenStreetMap, Luftbild Esri World Imagery und eine aus der Adresse vorgeschlagene UTM-Zone, mit Prüfung der Längenverzerrung.
 - **Trinkwassernetz (AEP)**, neu in 2.2: typisierte Knoten (Schieber, Be-/Entlüfter, Entleerung, Hydrant, Druckminderer, Netzzähler), **StaR-Eau-Symbole**, Anschlussschieber an jedem Abzweig, Sohlhöhe aus der Überdeckung, und StaR-Eau-Export « EAU ».
 - **Magic Box:** automatische Hausanschlüsse an den gewählten Leitungsabschnitten — je Flurstück, Gebäude oder Hausnummer — mit Vorschau.
+- **SchemAEP:** Formstückschema für jeden Trinkwasserknoten (T-Stücke, Schieber, Flansche, Muffen, Hydranten…), ausgehend von den am Knoten ankommenden Leitungen, mit Verbindungsprüfung und Stückliste; im `.bet` gespeichert, Export als PDF (6 Schemata je A4-Blatt) und SVG.
 
 ### 🚀 Installation
 
@@ -1599,6 +1731,11 @@ CanaPlan/
 │   ├── stareau_export_dialog.py    # Dialogue d'export StaR-Eau (5 onglets + controle)
 │   ├── about_dialog.py             # Dialogue « A propos » (lit metadata.txt)
 │   ├── magic_box_dialog.py         # Magic Box : tuiles, selection des troncons, apercu, trace
+│   ├── schemaep_choix_dialog.py    # SchemAEP : choix du noeud (liste / carte), liaison au .bet, nomenclature chantier
+│   ├── schemaep_fenetre.py         # SchemAEP : fenetre (palette, favoris, barre d'outils, sorties)
+│   ├── schemaep_canevas.py         # SchemAEP : zone de dessin (scene Qt, souris, aimantation)
+│   ├── schemaep_panneau.py         # SchemAEP : proprietes, extremites, controle, nomenclature, legende
+│   ├── schemaep_sorties.py         # SchemAEP : SVG autonome, impression, PDF 6 schemas par A4
 │   └── config_dialog.py            # Dialogue de configuration (reseaux, couches, cubature, remblai)
 ├── API.md                          # Reference du module de pilotage par script
 ├── tools/
@@ -1618,6 +1755,13 @@ CanaPlan/
 │   ├── stareau_export_aep.py       # Export StaR-Eau des tables aep_* (fichier EAU)
 │   ├── magic_branchements.py       # Moteur des branchements automatiques (parcelle, bati, numero)
 │   ├── i18n_aep.py / i18n_magic.py # Traductions AEP et Magic Box
+│   ├── schemaep/                   # SchemAEP, moteur en Python pur (sans Qt) :
+│   │   ├── catalogue.py            #   64 pieces, extremites et compatibilites, symbologie
+│   │   ├── moteur.py               #   raccordements, controles, nomenclature, etiquettes, format .json
+│   │   ├── montages.py             #   montages types des favoris
+│   │   ├── svg_qt.py               #   dessins → SVG autonomes pour QSvgRenderer
+│   │   ├── prefill.py              #   schema de depart d'un noeud (conduites + appareil)
+│   │   └── stockage.py             #   table schema_aep du .bet, rattachement aux noeuds
 │   ├── draw_conduite_tool.py       # Trace des conduites
 │   ├── draw_branchement_tool.py    # Trace des branchements
 │   ├── insert_regard_tool.py       # Insertion de regard sur conduite
@@ -1664,6 +1808,7 @@ CanaPlan/
 
 | Version | Notes |
 |---------|-------|
+| **2.3** | **SchemAEP** : schéma de pièces de chaque nœud AEP, pré-rempli depuis les conduites et le type du nœud, contrôle des assemblages et nomenclature, rangé dans le `.bet` (table `schema_aep`), copier / coller entre nœuds, bouton dans Renseigner, pages PDF « 6 schémas par A4 » et SVG à l'export, nomenclature du chantier — **Tableau de saisie** : compteurs AEP en départ ou arrivée de la chaîne PENTE — interface SchemAEP en 5 langues — cadrage automatique : moins de planches à grande échelle — correctifs : branchements AEP absents des profils en long après la coupe de leur conduite, symboles AEP masqués dans le DXF, options d'étiquettes ignorées au PDF |
 | **2.2** | **Réseau AEP (eau potable)** : troisième réseau complet, symboles StaR-Eau, nœuds typés, robinets de branchement, fil d'eau par la couverture, profils / cubature / coupes / plans / export StaR-Eau « EAU » — **Magic Box** : branchements automatiques par parcelle, bâti ou numéro, avec aperçu — correctifs : conduite de longueur nulle en fin de tracé, coupe d'une conduite dans un projet GeoPackage (clé `fid` dupliquée) |
 | **2.1.1** | Correctif de publication : `metadata.txt` refusé par plugins.qgis.org (signe `%` dans le changelog) — contenu identique à la 2.1 |
 | **2.1** | **Territoire International** : projets hors de France avec adresses et bâti OpenStreetMap, photo aérienne Esri et système UTM proposé, sous garde-fou de déformation des longueurs — **avertissement d'usage** — **recettes dans la boîte à outils Processing** — branchements automatiques centrés sur le front de rue et arrêtés en limite de parcelle — sens d'écoulement lu sur l'exutoire, plus sur le terrain |
@@ -1683,6 +1828,51 @@ CanaPlan/
 
 <details>
 <summary>Détail complet des versions</summary>
+
+### 2.3
+
+- **SchemAEP** (dossier *AEP – Eau Potable*) : éditeur de schémas de pièces
+  des nœuds AEP, portage Python/Qt de la page autonome SchemAEP (même
+  catalogue de 64 pièces, mêmes contrôles, même format `.json`). Fenêtre non
+  bloquante : palette et favoris, raccordement assisté et aimantation,
+  extrémités au choix point par point, contrôle des assemblages avec
+  validation des défauts, nomenclature, étiquettes sans chevauchement,
+  Effacer tout, export SVG / CSV, impression.
+- Bouton **SchemAEP** dans le formulaire Renseigner des nœuds AEP ; **copier /
+  coller** un schéma d'un nœud sur un ou plusieurs autres.
+- Choix du nœud dans une liste (recherche, clic sur la carte) ; un nœud sans
+  schéma part de ses conduites et branchements (diamètre, matériau, direction
+  sur la carte, nœud voisin) et de l'appareil de son type, raccordé.
+- Schémas rangés sur les nœuds et enregistrés dans le `.bet` (table
+  `schema_aep` : JSON + SVG), rattachés à l'ouverture par nom et position ;
+  un schéma dont le nœud a disparu est conservé et réécrit.
+- Export : pages PDF « 6 schémas par A4 » suivies de la nomenclature de chaque
+  nœud, et fichiers SVG par nœud ; les deux raccourcis *PDF complet* et
+  *Toutes les pièces (ZIP)* les incluent. Nomenclature de tous les schémas
+  (total du chantier) avec export CSV.
+- **Tableau de saisie**, onglet *Chaîne regards PENTE* : les compteurs AEP
+  peuvent être départ ou arrivée d'une chaîne ; la chaîne suit le branchement
+  et coupe la conduite au droit du robinet de branchement.
+- **Traductions** : interface de SchemAEP (fenêtre, liste des nœuds, panneau,
+  PDF des schémas) et dernières chaînes AEP en anglais, espagnol, portugais et
+  allemand. Le catalogue de pièces et les désignations de nomenclature restent
+  en français (vocabulaire métier partagé avec le format `.json` de SchemAEP).
+- **Profils en long AEP** (simple, lot, groupé) : un branchement porte le nom
+  de son robinet de branchement (RB01…) plutôt que celui du compteur.
+- **Renuméroter AEP** : un regard compteur prend le numéro du robinet de son
+  branchement (RB05 → RC05) ; les extrémités libres ne sont pas numérotées.
+- **Cadrage automatique des planches** : marge à étiquettes plafonnée à
+  25 mm et recouvrement entre planches ramené à 8 mm — moins de planches à
+  grande échelle (réseau test en A4 paysage au 1/200 : 5 → 4).
+- **Corrections** : un branchement piqué sur une conduite ensuite coupée
+  (regard ou appareil AEP inséré après coup) gardait l'identifiant de
+  l'ancienne conduite et disparaissait des profils en long et du calcul des
+  cotes de piquage — il est désormais rattaché au bon morceau, et les projets
+  existants se réparent à l'ouverture d'un profil ; DXF : les blocs de nœuds
+  et compteurs AEP ne masquent plus leur symbole, tige de la vidange
+  exportée ; PDF : les options d'affichage des étiquettes (robinets,
+  compteurs, regards de comptage) et les bouches à clé sont respectées ;
+  `schemas_aep.pdf` se termine par le listing total des pièces.
 
 ### 2.2
 

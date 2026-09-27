@@ -338,6 +338,13 @@ class ReseauAssainissementPlugin(QObject):
             checkable=False
         )
 
+        self.action_dict['schemaep'] = self._add_action(
+            "insert_regard.svg",
+            "SchemAEP",
+            self.run_schemaep,
+            checkable=False
+        )
+
         # Ajouter aussi dans le menu, organisé par catégories (même
         # regroupement que le panneau latéral)
         self.menu = self.iface.pluginMenu().addMenu("CanaPlan")
@@ -356,7 +363,7 @@ class ReseauAssainissementPlugin(QObject):
             ('grp_general', ['renseignement', 'tableau_saisie', 'insert_regard', 'move', 'copy_attributes', 'delete', 'magic_box', 'config']),
             ('grp_eu', ['conduite_eu', 'branchement_eu', 'profil_eu', 'coupe_eu', 'renommer_eu']),
             ('grp_ep', ['conduite_ep', 'branchement_ep', 'profil_ep', 'coupe_ep', 'renommer_ep']),
-            ('grp_aep', ['conduite_aep', 'branchement_aep', 'appareil_aep', 'profil_aep', 'coupe_aep', 'renommer_aep']),
+            ('grp_aep', ['conduite_aep', 'branchement_aep', 'appareil_aep', 'profil_aep', 'coupe_aep', 'renommer_aep', 'schemaep']),
             ('grp_etiquettes', ['creer_etiquettes', 'afficher_etiquettes', 'taille_etiquettes', 'forcer_etiquettes', 'affichage_etiquettes', 'annotation']),
             ('grp_sorties', ['imprimer', 'profil_groupe', 'coupe_transversale', 'cubature', 'coupe_tranchee_composee', 'export_stareau']),
             ('grp_fond', ['fond_projet']),
@@ -431,6 +438,7 @@ class ReseauAssainissementPlugin(QObject):
         # chaque ouverture, fermeture ou création de projet.
         QgsProject.instance().readProject.connect(self.appliquer_territoire)
         QgsProject.instance().cleared.connect(self.appliquer_territoire)
+        QgsProject.instance().cleared.connect(self._schemaep_projet_ferme)
         self._retranslate()
 
     # --- Territoire (France / International) ---
@@ -531,6 +539,13 @@ class ReseauAssainissementPlugin(QObject):
             dlg.close()
             dlg.deleteLater()
         self._stareau_dlg = None
+        # SchemAEP : fenêtre et boîte de choix non modales, même raison
+        try:
+            QgsProject.instance().cleared.disconnect(self._schemaep_projet_ferme)
+        except (TypeError, RuntimeError) as _err:
+            errlog.ignored(_err, "main.unload:schemaep")
+        from .gui.schemaep_choix_dialog import fermer as fermer_schemaep
+        fermer_schemaep(self)
         try:
             i18n.signaux.langue_changee.disconnect(self._retranslate)
         except (TypeError, RuntimeError) as _err:
@@ -1118,7 +1133,7 @@ class ReseauAssainissementPlugin(QObject):
         if stored:
             full = prefs_from_dict(stored)
             apply_label_display_prefs(self, full['visibility'],
-                                      full.get('robinets'))
+                                      full.get('robinets'), full.get('regards_compteur'))
             if full.get('fields'):
                 apply_label_fields(self, full['fields'])
 
@@ -1132,12 +1147,13 @@ class ReseauAssainissementPlugin(QObject):
         from .gui.etiquette_affichage_dialog import EtiquetteAffichageDialog, prefs_from_dict
         from .gui.etiquettes import (apply_label_display_prefs,
                                       apply_label_fields, get_label_display_prefs,
-                                      get_etiquettes_robinets)
+                                      get_etiquettes_robinets, get_etiquettes_regards_compteur)
         current_vis = get_label_display_prefs(self)
         # Récupère les prefs stockées en mémoire (fields) si disponibles
         stored = getattr(self, '_label_display_prefs', None) or {}
         prefs = prefs_from_dict(stored) if stored else prefs_from_dict({'visibility': current_vis})
         prefs['robinets'] = get_etiquettes_robinets()
+        prefs['regards_compteur'] = get_etiquettes_regards_compteur()
         # Synchronise la visibilité courante réelle
         for reseau in self.reseaux_actifs():
             for role in ('regard', 'tabouret', 'conduite', 'branchement'):
@@ -1151,7 +1167,7 @@ class ReseauAssainissementPlugin(QObject):
         new_prefs = dlg.get_prefs()
         self._label_display_prefs = new_prefs
         apply_label_display_prefs(self, new_prefs['visibility'],
-                                  new_prefs['robinets'])
+                                  new_prefs['robinets'], new_prefs.get('regards_compteur'))
         apply_label_fields(self, new_prefs['fields'])
         self.iface.mapCanvas().refresh()
 
@@ -1828,7 +1844,8 @@ class ReseauAssainissementPlugin(QObject):
 
         dlg_export = ExportDialog(self.iface.mainWindow(),
                                   default_dir=project_dir(),
-                                  avec_aep='AEP' in self.reseaux_actifs())
+                                  avec_aep='AEP' in self.reseaux_actifs(),
+                                  nb_schemas_aep=self._nb_schemas_aep())
         if exec_dialog(dlg_export) != QDialog.DialogCode.Accepted:
             return
         choices = dlg_export.get_choices()
@@ -1853,9 +1870,12 @@ class ReseauAssainissementPlugin(QObject):
         do_cubature   = choices['cubature']
         do_coupes     = (choices['coupe_eu'] or choices['coupe_ep']
                          or choices.get('coupe_aep', False))
+        do_schemas    = (choices.get('schemas_aep_pdf', False)
+                         or choices.get('schemas_aep_svg', False))
 
         if not any([do_plan_pdf, do_plan_dxf, do_profil_eu, do_profil_ep,
-                    do_profil_aep, do_profil_grp, do_cubature, do_coupes]):
+                    do_profil_aep, do_profil_grp, do_cubature, do_coupes,
+                    do_schemas]):
             return
 
         # ── Profils en long (export immédiat, sans interaction carte) ──────
@@ -1870,6 +1890,8 @@ class ReseauAssainissementPlugin(QObject):
             msgs.extend(self._export_cubature_batch(choices))
         if do_coupes:
             msgs.extend(self._export_coupes_batch(choices))
+        if do_schemas:
+            msgs.extend(self._export_schemas_batch(choices))
         if msgs:
             from qgis.PyQt.QtWidgets import QMessageBox
             QMessageBox.information(
@@ -1990,12 +2012,17 @@ class ReseauAssainissementPlugin(QObject):
             'coupe_eu':              True,
             'coupe_ep':              True,
             'coupe_aep':             'AEP' in self.reseaux_actifs(),
+            # Schémas de nœuds (SchemAEP) : pages PDF partout, SVG dans
+            # l'archive seulement (un SVG ne s'assemble pas dans un PDF).
+            'schemas_aep_pdf':       self._nb_schemas_aep() > 0,
+            'schemas_aep_svg':       self._nb_schemas_aep() > 0 and mode != 'pdf',
         })
 
         msgs = []
         msgs.extend(self._export_profils_batch(sous_choix, silencieux=True))
         msgs.extend(self._export_cubature_batch(sous_choix))
         msgs.extend(self._export_coupes_batch(sous_choix))
+        msgs.extend(self._export_schemas_batch(sous_choix))
 
         # ── Plan PDF + DXF : cadrage posé par l'utilisateur ────────────────
         from .tools.print_tool import PrintTool, _aide_pose
@@ -2190,6 +2217,7 @@ class ReseauAssainissementPlugin(QObject):
         ('plan',     None),
         ('profil',   lambda n: n.upper().endswith('_PROFIL.PDF')),
         ('coupe',    lambda n: n.lower().startswith('coupe_type')),
+        ('schemas',  lambda n: n.lower().startswith('schemas_aep')),
         ('cubature', lambda n: n.lower().startswith('cubature')),
     )
 
@@ -2277,6 +2305,64 @@ class ReseauAssainissementPlugin(QObject):
             from qgis.PyQt.QtCore import QUrl
             from qgis.PyQt.QtGui import QDesktopServices
             QDesktopServices.openUrl(QUrl.fromLocalFile(out_dir))
+
+    def _nb_schemas_aep(self):
+        """Nombre de schémas de nœuds SchemAEP du projet."""
+        if not self._couches_si_presentes('AEP'):
+            return 0
+        from .gui.schemaep_choix_dialog import magasin
+        return len(magasin(self))
+
+    def _export_schemas_batch(self, choices):
+        """Schémas de nœuds SchemAEP : schemas_aep.pdf (6 par page A4, puis
+        nomenclature par nœud) et/ou un SVG par nœud dans schemas_aep/."""
+        import os
+        import re
+        if not (choices.get('schemas_aep_pdf') or choices.get('schemas_aep_svg')):
+            return []
+        couches = self._couches_si_presentes('AEP')
+        from .gui.schemaep_choix_dialog import magasin
+        mag = magasin(self) if couches else None
+        out_dir = choices.get('output_dir') or ''
+        if not couches or not mag or not os.path.isdir(out_dir):
+            return []
+        from .tools.projet_bet import current_bet_name
+        from .gui.schemaep_choix_dialog import libelle_noeud, type_noeud
+        entrees = []
+        from .tools.schemaep.stockage import entite
+        for cle, e, _infos in mag.tous(couches):
+            f = entite(couches, cle)
+            if f is None:
+                continue
+            entrees.append((libelle_noeud(f, cle[0]), R.libelle_type(type_noeud(f, cle[0])), e))
+        if not entrees:
+            return []
+        msgs = []
+        try:
+            if choices.get('schemas_aep_pdf'):
+                from .gui.schemaep_sorties import pdf_schemas
+                nb = pdf_schemas(os.path.join(out_dir, 'schemas_aep.pdf'),
+                                 [(t, s, e['schema']) for t, s, e in entrees],
+                                 current_bet_name() or '')
+                msgs.append(i18n.tr('msg_schemas_pdf', nb=len(entrees), pages=nb))
+            if choices.get('schemas_aep_svg'):
+                from .gui.schemaep_sorties import svg_schema
+                dossier = os.path.join(out_dir, 'schemas_aep')
+                os.makedirs(dossier, exist_ok=True)
+                pris = set()
+                for titre, _s, e in entrees:
+                    nom = re.sub(r'[^\w\-]+', '_', titre).strip('_') or 'noeud'
+                    base, k = nom, 2
+                    while nom.lower() in pris:
+                        nom, k = '%s_%d' % (base, k), k + 1
+                    pris.add(nom.lower())
+                    with open(os.path.join(dossier, nom + '.svg'), 'w', encoding='utf-8') as h:
+                        h.write(e.get('svg') or svg_schema(e['schema']))
+                msgs.append(i18n.tr('msg_schemas_svg', nb=len(entrees)))
+        except Exception as err:
+            errlog.ignored(err, "main._export_schemas_batch")
+            msgs.append(i18n.tr('msg_schemas_erreur', erreur=err))
+        return msgs
 
     def _export_cubature_batch(self, choices):
         """Cubature de l'export groupé : calcul sur le réseau, sans carte.
@@ -2615,6 +2701,19 @@ class ReseauAssainissementPlugin(QObject):
         self._ensure_project_loaded()
         from .gui.magic_box_dialog import ouvrir_magic_box
         ouvrir_magic_box(self)
+
+    def run_schemaep(self):
+        """SchemAEP : schéma de pièces d'un nœud AEP (fenêtre non modale)."""
+        self._ensure_project_loaded()
+        from .gui.schemaep_choix_dialog import ouvrir_schemaep
+        ouvrir_schemaep(self)
+
+    def _schemaep_projet_ferme(self):
+        """Projet fermé ou remplacé : ses schémas de nœuds s'en vont avec lui."""
+        from .gui.schemaep_choix_dialog import fermer
+        fermer(self)
+        # « non chargé » : relus à la demande dans le GeoPackage du projet suivant
+        self._schemas_aep = None
 
     def show_config_dialog(self):
         from .config_dialog import ConfigDialog

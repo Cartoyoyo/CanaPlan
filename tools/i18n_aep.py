@@ -43,6 +43,116 @@ TR_AEP = {
         'es': "Renumerar los accesorios AEP", 'pt': "Renumerar os acessórios AEP",
         'de': "Armaturen neu nummerieren",
     },
+    # Nom propre de l'outil : identique dans toutes les langues.
+    'schemaep': {
+        'fr': "SchemAEP", 'en': "SchemAEP", 'es': "SchemAEP", 'pt': "SchemAEP", 'de': "SchemAEP",
+    },
+    # Renseigner : TN auto d'un ouvrage
+    'rens_tn_auto_tip': {
+        'fr': "TN relevé sur le MNT IGN (LiDAR HD, sinon RGE ALTI) ; recalcule la profondeur ou le fil d'eau. "
+              "Écrit à OK / Appliquer.",
+        'en': "Ground level read from the IGN DEM (LiDAR HD, else RGE ALTI); recomputes depth or invert. "
+              "Written on OK / Apply.",
+        'es': 'TN medido en el MDT del IGN (LiDAR HD, si no RGE ALTI); recalcula la profundidad o la cota de solera. Se escribe con Aceptar / Aplicar.',
+        'pt': 'Terreno natural lido no MDT do IGN (LiDAR HD, senão RGE ALTI); recalcula a profundidade ou a soleira. Escrito com OK / Aplicar.',
+        'de': 'Geländehöhe aus dem IGN-DGM (LiDAR HD, sonst RGE ALTI); berechnet Tiefe oder Sohlhöhe neu. Wird mit OK / Anwenden geschrieben.',
+    },
+    'rens_tn_auto_source': {
+        'fr': "TN relevé sur : {source}", 'en': "Ground level from: {source}",
+        'es': 'TN medido en: {source}',
+        'pt': 'Terreno natural lido em: {source}',
+        'de': 'Geländehöhe aus: {source}',
+    },
+    'rens_tn_auto_echec': {
+        'fr': "Aucun MNT n'a répondu pour ce point (connexion, ou hors couverture IGN).",
+        'en': "No DEM answered for this point (connection, or outside IGN coverage).",
+        'es': 'Ningún MDT ha respondido para este punto (conexión, o fuera de la cobertura del IGN).',
+        'pt': 'Nenhum MDT respondeu para este ponto (ligação, ou fora da cobertura do IGN).',
+        'de': 'Kein DGM hat für diesen Punkt geantwortet (Verbindung, oder außerhalb der IGN-Abdeckung).',
+    },
+    # Gestion des étiquettes : regards de comptage AEP
+    'ea_regards_cpt': {
+        'fr': "Regards", 'en': "Meter pits",
+        'es': 'Arquetas',
+        'pt': 'Caixas',
+        'de': 'Schächte',
+    },
+    'ea_regards_cpt_tip': {
+        'fr': "Étiquettes des regards de comptage (compteurs de type « regard compteur »)",
+        'en': "Labels of meter pits (meters of type “meter pit”)",
+        'es': 'Etiquetas de las arquetas de contador (contadores de tipo «arqueta de contador»)',
+        'pt': 'Etiquetas das caixas de contador (contadores do tipo «caixa de contador»)',
+        'de': 'Beschriftungen der Zählerschächte (Zähler vom Typ „Zählerschacht“)',
+    },
+    # Renseigner un nœud AEP : bouton SchemAEP
+    'rens_schemaep_tip': {
+        'fr': "Enregistre ce formulaire et dessine le schéma de pièces de ce nœud (SchemAEP)",
+        'en': "Saves this form and draws the fittings diagram of this node (SchemAEP)",
+        'es': 'Guarda este formulario y dibuja el esquema de piezas de este nodo (SchemAEP)',
+        'pt': 'Guarda este formulário e desenha o esquema de peças deste nó (SchemAEP)',
+        'de': 'Speichert dieses Formular und zeichnet das Formstückschema dieses Knotens (SchemAEP)',
+    },
+    'rens_schemaep_tip_existe': {
+        'fr': "Enregistre ce formulaire et ouvre le schéma de pièces de ce nœud (SchemAEP)",
+        'en': "Saves this form and opens the fittings diagram of this node (SchemAEP)",
+        'es': 'Guarda este formulario y abre el esquema de piezas de este nodo (SchemAEP)',
+        'pt': 'Guarda este formulário e abre o esquema de peças deste nó (SchemAEP)',
+        'de': 'Speichert dieses Formular und öffnet das Formstückschema dieses Knotens (SchemAEP)',
+    },
+    # Export des schémas de nœuds
+    'exp_schemas_titre': {
+        'fr': "Schémas de nœuds AEP ({n})", 'en': "Water node diagrams ({n})",
+        'es': 'Esquemas de nodos AEP ({n})',
+        'pt': 'Esquemas de nós AEP ({n})',
+        'de': 'Trinkwasser-Knotenschemata ({n})',
+    },
+    'exp_schemas_pdf': {
+        'fr': "Pages PDF (6 schémas par page A4)", 'en': "PDF pages (6 diagrams per A4 page)",
+        'es': 'Páginas PDF (6 esquemas por página A4)',
+        'pt': 'Páginas PDF (6 esquemas por página A4)',
+        'de': 'PDF-Seiten (6 Schemata je A4-Seite)',
+    },
+    'exp_schemas_pdf_note': {
+        'fr': "Grille de 6 schémas par page A4, puis la nomenclature de chaque nœud.",
+        'en': "Grid of 6 diagrams per A4 page, then the bill of materials of each node.",
+        'es': 'Cuadrícula de 6 esquemas por página A4 y, a continuación, la lista de materiales de cada nodo.',
+        'pt': 'Grelha de 6 esquemas por página A4 e, a seguir, a lista de materiais de cada nó.',
+        'de': 'Raster mit 6 Schemata je A4-Seite, danach die Stückliste jedes Knotens.',
+    },
+    'exp_schemas_svg': {
+        'fr': "Fichiers SVG", 'en': "SVG files",
+        'es': 'Archivos SVG',
+        'pt': 'Ficheiros SVG',
+        'de': 'SVG-Dateien',
+    },
+    'msg_schemas_pdf': {
+        'fr': "Schémas de nœuds AEP : {nb} schéma(s) sur {pages} page(s) (schemas_aep.pdf)",
+        'en': "Water node diagrams: {nb} diagram(s) on {pages} page(s) (schemas_aep.pdf)",
+        'es': 'Esquemas de nodos AEP: {nb} esquema(s) en {pages} página(s) (schemas_aep.pdf)',
+        'pt': 'Esquemas de nós AEP: {nb} esquema(s) em {pages} página(s) (schemas_aep.pdf)',
+        'de': 'Trinkwasser-Knotenschemata: {nb} Schema(ta) auf {pages} Seite(n) (schemas_aep.pdf)',
+    },
+    'msg_schemas_svg': {
+        'fr': "Schémas de nœuds AEP : {nb} fichier(s) SVG (dossier schemas_aep)",
+        'en': "Water node diagrams: {nb} SVG file(s) (schemas_aep folder)",
+        'es': 'Esquemas de nodos AEP: {nb} archivo(s) SVG (carpeta schemas_aep)',
+        'pt': 'Esquemas de nós AEP: {nb} ficheiro(s) SVG (pasta schemas_aep)',
+        'de': 'Trinkwasser-Knotenschemata: {nb} SVG-Datei(en) (Ordner schemas_aep)',
+    },
+    'msg_schemas_erreur': {
+        'fr': "Schémas de nœuds AEP : échec de l’export ({erreur})",
+        'en': "Water node diagrams: export failed ({erreur})",
+        'es': 'Esquemas de nodos AEP: fallo de la exportación ({erreur})',
+        'pt': 'Esquemas de nós AEP: falha na exportação ({erreur})',
+        'de': 'Trinkwasser-Knotenschemata: Export fehlgeschlagen ({erreur})',
+    },
+    'exp_schemas_svg_note': {
+        'fr': "Un fichier SVG par nœud, dans le sous-dossier « schemas_aep ».",
+        'en': "One SVG file per node, in the “schemas_aep” sub-folder.",
+        'es': 'Un archivo SVG por nodo, en la subcarpeta «schemas_aep».',
+        'pt': 'Um ficheiro SVG por nó, na subpasta «schemas_aep».',
+        'de': 'Eine SVG-Datei je Knoten, im Unterordner „schemas_aep“.',
+    },
     'ot_aide_appareil_aep': {
         'fr': "Clic sur un nœud : choisir son type. Clic sur une conduite : "
               "insérer un appareil (la conduite est coupée). Échap : quitter.",
@@ -135,20 +245,32 @@ TR_AEP = {
     },
     'ot_renum_aep_note': {
         'fr': "Un compteur par type d'appareil, dans l'ordre du chemin : {prefixes}. "
-              "Coudes, tés, réductions, bouchons et raccordements ne sont pas numérotés.",
+              "Chaque regard compteur prend le numéro du robinet de son branchement (RB05 → RC05). "
+              "Coudes, tés, réductions, bouchons, raccordements et extrémités libres ne sont pas numérotés.",
         'en': "One counter per fitting type, in path order: {prefixes}. "
-              "Bends, tees, reducers, end caps and connections are not numbered.",
+              "Each meter chamber takes the number of its service valve (RB05 → RC05). "
+              "Bends, tees, reducers, end caps, connections and free ends are not numbered.",
         'es': "Un contador por tipo de accesorio, en el orden del recorrido: {prefixes}. "
-              "Codos, tes, reducciones, tapones y conexiones no se numeran.",
+              "Cada arqueta de contador toma el número de la llave de su acometida (RB05 → RC05). "
+              "Codos, tes, reducciones, tapones, conexiones y extremos libres no se numeran.",
         'pt': "Um contador por tipo de acessório, pela ordem do percurso: {prefixes}. "
-              "Curvas, tês, reduções, tampões e ligações não são numerados.",
+              "Cada caixa de contador recebe o número da torneira do seu ramal (RB05 → RC05). "
+              "Curvas, tês, reduções, tampões, ligações e extremidades livres não são numerados.",
         'de': "Ein Zähler je Armaturtyp, in Reihenfolge des Weges: {prefixes}. "
-              "Bögen, T-Stücke, Reduzierungen, Endkappen und Anschlüsse werden nicht nummeriert.",
+              "Jeder Zählerschacht erhält die Nummer des Ventils seines Anschlusses (RB05 → RC05). "
+              "Bögen, T-Stücke, Reduzierungen, Endkappen, Anschlüsse und freie Enden werden nicht nummeriert.",
     },
     'ot_renum_aep_ligne': {
         'fr': "{type} : {nb} ({debut} → {fin})", 'en': "{type}: {nb} ({debut} → {fin})",
         'es': "{type}: {nb} ({debut} → {fin})", 'pt': "{type}: {nb} ({debut} → {fin})",
         'de': "{type}: {nb} ({debut} → {fin})",
+    },
+    'ot_renum_aep_rc': {
+        'fr': "{type} : {nb} (numéro du robinet : RB05 → RC05)",
+        'en': "{type}: {nb} (valve number: RB05 → RC05)",
+        'es': "{type}: {nb} (número de la llave: RB05 → RC05)",
+        'pt': "{type}: {nb} (número da torneira: RB05 → RC05)",
+        'de': "{type}: {nb} (Nummer des Ventils: RB05 → RC05)",
     },
     'ot_renum_aep_aucun': {
         'fr': "Aucun appareil numérotable sur ce chemin.",

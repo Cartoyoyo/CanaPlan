@@ -246,7 +246,45 @@ def _filtre_affichage(reseau, role):
         return (f' AND "type" IS NOT NULL AND "type" NOT IN ({muets})'
                 f' AND ("type" <> \'{R.AEP_NOEUD_BRANCHEMENT}\''
                 f' OR coalesce(@{VAR_ETIQ_ROBINETS}, 1) = 1)')
+    if reseau == 'AEP' and role == 'tabouret':
+        # Couche des compteurs AEP : les regards de comptage et les autres
+        # compteurs ont chacun leur case dans la gestion des étiquettes.
+        t = "coalesce(\"type\", 'regard_compteur')"
+        return (f" AND (({t} = 'regard_compteur' AND coalesce(@{VAR_ETIQ_REGARDS_CPT}, 1) = 1)"
+                f" OR ({t} <> 'regard_compteur' AND coalesce(@{VAR_ETIQ_COMPTEURS}, 1) = 1))")
     return ''
+
+
+# Variables de projet (0 = masqué) des étiquettes de la couche des compteurs AEP :
+# regards de comptage d'un côté, autres compteurs (extrémités libres) de l'autre.
+VAR_ETIQ_REGARDS_CPT = 'canaplan_etiq_regards_compteur'
+VAR_ETIQ_COMPTEURS = 'canaplan_etiq_compteurs'
+
+
+def _variable_active(nom):
+    from qgis.core import QgsExpressionContextUtils, QgsProject
+    val = QgsExpressionContextUtils.projectScope(QgsProject.instance()).variable(nom)
+    return val is None or str(val) not in ('0', 'False', 'false')
+
+
+def get_etiquettes_regards_compteur():
+    """True si les étiquettes des regards de comptage AEP sont affichées."""
+    return _variable_active(VAR_ETIQ_REGARDS_CPT)
+
+
+def _maj_filtre(layer, reseau, role):
+    """Remet à jour le filtre d'affichage d'une couche étiquetée avant qu'il ne
+    lise les variables de projet (étiquetage simple seulement)."""
+    labeling = layer.labeling() if layer is not None else None
+    if labeling is None or isinstance(labeling, QgsRuleBasedLabeling):
+        return
+    pal = labeling.settings()
+    pc = pal.dataDefinedProperties()
+    pc.setProperty(QgsPalLayerSettings.Property.Show,
+                   QgsProperty.fromExpression(f'coalesce("{LBL_VISIBLE}", 1)'
+                                              + _filtre_affichage(reseau, role)))
+    pal.setDataDefinedProperties(pc)
+    layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
 
 
 def get_etiquettes_robinets():
@@ -708,18 +746,31 @@ def get_label_min_scale(plugin):
     return default_min_scale(*remembered_size())
 
 
-def apply_label_display_prefs(plugin, visibility, robinets=None):
+def apply_label_display_prefs(plugin, visibility, robinets=None, regards_compteur=None):
     """Applique la visibilité des étiquettes par réseau et par rôle.
 
-    visibility : {reseau: {role: bool}}  — True = étiquettes activées
+    visibility : {reseau: {role: bool}}  — True = étiquettes activées ;
+                 en AEP, 'tabouret' = compteurs hors regards de comptage
     robinets   : étiquettes des robinets de branchement AEP (None = inchangé)
+    regards_compteur : étiquettes des regards de comptage AEP (None = inchangé)
     """
+    from qgis.core import QgsExpressionContextUtils, QgsProject
     if robinets is not None:
         set_etiquettes_robinets(plugin, robinets)
-    for reseau in _reseaux(plugin):
+    reseaux = _reseaux(plugin)
+    reg = get_etiquettes_regards_compteur() if regards_compteur is None else bool(regards_compteur)
+    if 'AEP' in reseaux:
+        cpt = visibility.get('AEP', {}).get('tabouret', True)
+        projet = QgsProject.instance()
+        QgsExpressionContextUtils.setProjectVariable(projet, VAR_ETIQ_COMPTEURS, 1 if cpt else 0)
+        QgsExpressionContextUtils.setProjectVariable(projet, VAR_ETIQ_REGARDS_CPT, 1 if reg else 0)
+        _maj_filtre(plugin._get_couches('AEP').get('tabouret'), 'AEP', 'tabouret')
+    for reseau in reseaux:
         couches = plugin._get_couches(reseau)
         for role, layer in couches.items():
             enabled = visibility.get(reseau, {}).get(role, True)
+            if reseau == 'AEP' and role == 'tabouret':
+                enabled = enabled or reg      # même couche : compteurs et regards de comptage
             layer.setLabelsEnabled(enabled)
             layer.triggerRepaint()
 
@@ -731,6 +782,8 @@ def get_label_display_prefs(plugin):
         couches = plugin._get_couches(reseau)
         prefs[reseau] = {role: layer.labelsEnabled()
                          for role, layer in couches.items()}
+        if reseau == 'AEP' and 'tabouret' in prefs[reseau]:
+            prefs[reseau]['tabouret'] = prefs[reseau]['tabouret'] and _variable_active(VAR_ETIQ_COMPTEURS)
     return prefs
 
 

@@ -77,7 +77,7 @@ _FONDS_SVG = {'poteau_incendie': QColor(255, 255, 255)}
 # soit plus gros que le robinet de branchement (_TAILLE_ROBINET).
 _SVG_TERMINAL_COMPTEUR = ('AEP_COMPTEUR_BRANCHEMENT.svg', 1.05)
 # Azimut de la flèche dans le SVG du compteur (centre du rond → pointe),
-# en degrés depuis le nord : sert à la faire pivoter vers le branchement.
+# en degrés depuis le nord : sert à l'orienter à l'opposé du branchement.
 _AZIMUT_FLECHE_COMPTEUR = 47.7
 
 
@@ -132,7 +132,7 @@ def _symbole(*couches):
 #   sym_angle : nœud = azimut de la conduite − 90 (SVG dessinés à l'horizontale
 #               pour la vanne, à la verticale pour la vidange) ;
 #               compteur = azimut du dernier segment du branchement + 90
-#               (sa flèche est ensuite tournée vers le branchement).
+#               (sa flèche est ensuite tournée à l'opposé du branchement).
 #   sym_dir   : nœud = azimut du branchement qui en part (robinet), sinon NULL.
 
 def _expr_axe_conduite():
@@ -144,14 +144,16 @@ def _expr_angle_branchement():
 
 
 def _expr_angle_compteur():
-    """Rotation du compteur : flèche pointée vers le branchement.
+    """Rotation du compteur : flèche à l'opposé du branchement.
 
-    sym_angle = azimut du dernier segment du branchement + 90 ; la direction
-    compteur → branchement est cet azimut + 180, soit sym_angle + 90. Sans
-    branchement raccordé, le symbole garde son dessin d'origine.
+    sym_angle = azimut du dernier segment du branchement + 90. La flèche
+    prolonge le branchement, dans le sens de l'eau (conduite → compteur →
+    usager) : sa direction est l'azimut de ce dernier segment, soit
+    sym_angle − 90. Sans branchement raccordé, le symbole garde son dessin
+    d'origine.
     """
     return ('if("sym_angle" IS NULL, 0, '
-            f'"sym_angle" + 90 - {_AZIMUT_FLECHE_COMPTEUR})')
+            f'"sym_angle" - 90 - {_AZIMUT_FLECHE_COMPTEUR})')
 
 
 _TAILLE_ROBINET = 0.37        # m, plus petit que le rond du compteur

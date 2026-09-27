@@ -498,6 +498,10 @@ def _ensure_symbol_block(doc, role, reseau, rgb):
     Le bloc est toujours recréé pour inclure les ATTDEFs à jour.
     """
     block_name = f"BET_{'REGARD' if role == 'regard' else 'TABOURET'}_{reseau}"
+    # AEP : le symbole StaR-Eau exporté par QGIS (vanne, vidange, compteur…)
+    # reste le dessin ; le bloc BET ne porte que les attributs. Un disque ou
+    # un carré plein le masquerait.
+    dessin = reseau != 'AEP'
 
     # Supprime le bloc existant pour le recréer avec ATTDEFs à jour
     if block_name in doc.blocks:
@@ -511,7 +515,9 @@ def _ensure_symbol_block(doc, role, reseau, rgb):
     rgb_int = (r << 16) | (g << 8) | b
     blk = doc.blocks.new(block_name)
 
-    if role == 'regard':
+    if not dessin:
+        pass
+    elif role == 'regard':
         # Disque plein : HATCH arc + CIRCLE contour, centré sur (0,0)
         try:
             h = blk.add_hatch(color=1, dxfattribs={'true_color': rgb_int})
@@ -600,6 +606,9 @@ def add_point_symbols(dxf_path):
         return lay.lower() in target_lowers or any(
             lay.lower().startswith(p) for p in _TARGET_PREFIXES)
 
+    def _is_aep_layer(ent):
+        return getattr(ent.dxf, 'layer', '').upper().endswith('_AEP')
+
     def _is_bet_insert(ent):
         if ent.dxftype() != 'INSERT':
             return False
@@ -607,7 +616,8 @@ def add_point_symbols(dxf_path):
         return bname.startswith(_BET_BLOCK_PREFIX) and _is_target_layer(ent)
 
     to_del = [e for e in msp
-              if (e.dxftype() in ('POINT', 'CIRCLE', 'HATCH') and _is_target_layer(e))
+              if (e.dxftype() in ('POINT', 'CIRCLE', 'HATCH') and _is_target_layer(e)
+                  and not _is_aep_layer(e))
               or _is_bet_insert(e)]
     for e in to_del:
         msp.delete_entity(e)

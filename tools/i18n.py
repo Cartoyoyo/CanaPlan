@@ -6268,3 +6268,6 @@ TR.update(_TR_AEP)
 
 from .i18n_magic import TR_MAGIC as _TR_MAGIC  # noqa: E402
 TR.update(_TR_MAGIC)
+
+from .i18n_schemaep import TR_SCHEMAEP as _TR_SCHEMAEP  # noqa: E402
+TR.update(_TR_SCHEMAEP)

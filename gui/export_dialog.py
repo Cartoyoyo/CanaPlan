@@ -30,11 +30,13 @@ class ExportDialog(QDialog):
     pour que la fenêtre reste d'un seul tenant à l'écran.
     """
 
-    def __init__(self, parent=None, default_dir=None, avec_aep=False):
+    def __init__(self, parent=None, default_dir=None, avec_aep=False, nb_schemas_aep=0):
         super().__init__(parent)
         # Lignes AEP (profil, cubature, coupe type) seulement si le projet
         # porte un réseau AEP : les projets d'assainissement n'en voient rien.
         self._avec_aep = avec_aep
+        # Bloc « Schémas AEP » seulement s'il y a des schémas de nœuds (SchemAEP).
+        self._nb_schemas_aep = nb_schemas_aep if avec_aep else 0
         self.setWindowTitle(i18n.tr('exp_titre'))
         self.setMinimumWidth(500)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
@@ -57,6 +59,10 @@ class ExportDialog(QDialog):
         layout.addWidget(_hsep())
         self._bloc_coupes(layout)
         layout.addWidget(_hsep())
+        self.cb_schemas_pdf = self.cb_schemas_svg = None
+        if self._nb_schemas_aep:
+            self._bloc_schemas_aep(layout)
+            layout.addWidget(_hsep())
         self._bloc_dossier(layout, default_dir)
         layout.addWidget(_hsep())
 
@@ -185,6 +191,14 @@ class ExportDialog(QDialog):
         self.cb_coupe_ep.toggled.connect(self._sync_coupe_box)
         self.cb_coupe_aep.toggled.connect(self._sync_coupe_box)
         layout.addWidget(self._coupe_box)
+
+    def _bloc_schemas_aep(self, layout):
+        layout.addWidget(_titre(i18n.tr('exp_schemas_titre', n=self._nb_schemas_aep)))
+        self.cb_schemas_pdf = QCheckBox(i18n.tr('exp_schemas_pdf'))
+        self.cb_schemas_pdf.setToolTip(i18n.tr('exp_schemas_pdf_note'))
+        self.cb_schemas_svg = QCheckBox(i18n.tr('exp_schemas_svg'))
+        self.cb_schemas_svg.setToolTip(i18n.tr('exp_schemas_svg_note'))
+        layout.addWidget(_hrow(self.cb_schemas_pdf, self.cb_schemas_svg))
 
     _STYLE_RACCOURCI = (
         "QPushButton {{"
@@ -381,6 +395,8 @@ class ExportDialog(QDialog):
             'coupe_aep':             self.cb_coupe_aep.isChecked(),
             'coupe_papier':          self.coupe_papier.currentData(),
             'coupe_fichier':         self.coupe_fichier.currentText().lower(),
+            'schemas_aep_pdf':       bool(self.cb_schemas_pdf and self.cb_schemas_pdf.isChecked()),
+            'schemas_aep_svg':       bool(self.cb_schemas_svg and self.cb_schemas_svg.isChecked()),
             'tout_en_un':            self._tout_en_un,
             'pdf_complet':           self._pdf_complet,
             'output_dir':            self.dir_edit.text().strip(),

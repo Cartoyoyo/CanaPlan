@@ -1952,6 +1952,7 @@ def _choix_export(dossier, pdf_complet=True, plan_pdf=True, plan_dxf=False):
             "cubature_pdf": True, "cubature_xlsx": False, "cubature_csv": False,
             "coupe_eu": False, "coupe_ep": False, "coupe_papier": None,
             "coupe_fichier": "pdf", "tout_en_un": False,
+            "schemas_aep_pdf": False, "schemas_aep_svg": False,
             "pdf_complet": pdf_complet, "output_dir": dossier}
 
 
@@ -2379,7 +2380,7 @@ def inserer_regard(point, reseau=None):
         nf.setGeometry(QgsGeometry.fromPointXY(proj))
         rl.addFeature(nf)
         rl.commitChanges()
-        outil._split_conduite(jeu["conduite"], feat, proj)
+        outil._split_conduite(jeu["conduite"], feat, proj, jeu.get("branchement"))
     return {"reseau": res_reseau, "regards": jeu["regard"].featureCount(),
             "troncons": jeu["conduite"].featureCount(), "messages": sf.messages}
 
@@ -2494,7 +2495,7 @@ def appareil_aep(point, type_appareil):
     noeuds.startEditing()
     noeuds.addFeature(feat)
     noeuds.commitChanges()
-    outil._split_conduite(jeu["conduite"], cond, proj)
+    outil._split_conduite(jeu["conduite"], cond, proj, jeu.get("branchement"))
     return {"type": type_appareil, "insere": True, "x": proj.x(), "y": proj.y()}
 
 

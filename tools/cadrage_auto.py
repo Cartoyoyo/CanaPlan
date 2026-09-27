@@ -62,6 +62,18 @@ _MAX_ETIQUETTES_MESUREES = 3000
 # planche qui ne montre plus rien.
 _PLAFOND_MARGE = 0.20
 
+# Plafond absolu de la marge, en mm papier. Les étiquettes mesurées à grande
+# échelle (1/200) réclamaient jusqu'à 48 mm par côté : en A4 la moitié de la
+# feuille partait en marge et le nombre de planches explosait. Une étiquette
+# plus longue déborde un peu sur le bord de la feuille, c'est accepté.
+MARGE_MAX_MM = 25.0
+
+# Recouvrement entre planches voisines, en mm papier. Ce qui tombe dans la
+# marge visible d'une planche compte comme couvert, sauf cette bande de bord :
+# la planche suivante reprend donc le réseau RECOUVREMENT_MM avant la limite
+# de la précédente, au lieu de toute la largeur de la marge.
+RECOUVREMENT_MM = 8.0
+
 # Orientations essayées, en degrés autour de l'axe principal du voisinage.
 # Le balayage va jusqu'à 180° et non ±45° : une planche tournée de 90°
 # échange sa largeur et sa hauteur, donc couvre une emprise différente. Sans
@@ -450,8 +462,10 @@ def calculer_planches(couches, w_mm, h_mm, echelle, max_planches=200,
     carto_h_m = carto_mm * facteur
     if marge_mm is None:
         marge_mm = MARGE_MM
-    marge_mm = min(marge_mm,
+    marge_mm = min(marge_mm, MARGE_MAX_MM,
                    _PLAFOND_MARGE * min(w_mm, h_mm - carto_mm))
+    # Bande de marge considérée comme couverte (cf. RECOUVREMENT_MM).
+    debord_u = max(0.0, marge_mm - RECOUVREMENT_MM) * facteur
 
     # Zone utile : la feuille, moins le cartouche, moins la marge à
     # étiquettes de chaque côté.
@@ -584,7 +598,10 @@ def calculer_planches(couches, w_mm, h_mm, echelle, max_planches=200,
         planches.append((QgsPointXY(centre_x, centre_y), angle))
 
         # ── 5. Retirer ce qui vient d'être couvert ───────────────────────
-        a1, b1 = a0 + w_u, b0 + h_u
+        # La marge est imprimée elle aussi : ce qui y tombe est visible sur
+        # cette planche, à la bande de recouvrement près.
+        a1, b1 = a0 + w_u + debord_u, b0 + h_u + debord_u
+        a0, b0 = a0 - debord_u, b0 - debord_u
         avant = len(restants)
         reste = []
         for p in restants:

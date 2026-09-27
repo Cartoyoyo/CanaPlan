@@ -96,7 +96,8 @@ class AppareilAepTool(InsertRegardTool):
         feat.setAttribute('type', code)
         noeuds.addFeature(feat)
         noeuds.commitChanges()
-        self._split_conduite(self.couches['AEP']['conduite'], best_feat, best_proj)
+        self._split_conduite(self.couches['AEP']['conduite'], best_feat, best_proj,
+                             self.couches['AEP'].get('branchement'))
         self.snap_cross.reset(QgsWkbTypes.GeometryType.LineGeometry)
         self.snap_line.reset(QgsWkbTypes.GeometryType.LineGeometry)
         self.canvas.refresh()

@@ -1,4 +1,4 @@
-from qgis.core import QgsPointXY, QgsSpatialIndex
+from qgis.core import QgsGeometry, QgsPointXY, QgsSpatialIndex
 
 from .graph_utils import _to_float
 
@@ -28,6 +28,63 @@ def _fe_at(index, pts, pt, tol):
         if pt.distance(rpt) <= tol:
             return fe
     return None
+
+
+def rattacher_branchements(conduite_layer, branchement_layer, tol=0.05):
+    """Réaffecte `id_conduite` / `pk_debut` des branchements dont la conduite
+    n'existe plus ou ne passe plus par leur départ (point de piquage).
+
+    Cas type : conduite coupée par l'insertion d'un regard ou d'un appareil
+    AEP après le tracé des branchements — les deux morceaux ont de nouveaux
+    fid et les branchements disparaissaient des profils en long.
+    Idempotente ; rend le nombre de branchements corrigés.
+    """
+    if conduite_layer is None or branchement_layer is None:
+        return 0
+    fields = branchement_layer.fields()
+    ic_idx = fields.indexOf('id_conduite')
+    pk_idx = fields.indexOf('pk_debut')
+    if ic_idx < 0:
+        return 0
+
+    from .spatial_utils import nearest_line_feature
+
+    geoms = {}
+    amap = {}
+    for br in branchement_layer.getFeatures():
+        g = br.geometry()
+        if g.isEmpty():
+            continue
+        line = g.asPolyline()
+        if len(line) < 2:
+            continue
+        depart = QgsPointXY(line[0])
+        pt_geom = QgsGeometry.fromPointXY(depart)
+
+        try:
+            cid = int(br['id_conduite'])
+        except (TypeError, ValueError):
+            cid = None
+        if cid is not None:
+            if cid not in geoms:
+                cf = conduite_layer.getFeature(cid)
+                geoms[cid] = cf.geometry() if cf.isValid() else None
+            cg = geoms[cid]
+            if cg is not None and not cg.isEmpty() and cg.distance(pt_geom) <= tol:
+                continue
+
+        cond, _proj, _d = nearest_line_feature(conduite_layer, depart, tol)
+        if cond is None:
+            continue
+        changes = {ic_idx: cond.id()}
+        if pk_idx >= 0:
+            changes[pk_idx] = round(cond.geometry().lineLocatePoint(pt_geom), 3)
+        amap[br.id()] = changes
+
+    if amap:
+        branchement_layer.dataProvider().changeAttributeValues(amap)
+        branchement_layer.triggerRepaint()
+    return len(amap)
 
 
 def recalc_pentes(conduite_layer, regard_layer, tol=0.05,
@@ -75,6 +132,8 @@ def recalc_pentes(conduite_layer, regard_layer, tol=0.05,
     # ── 2. Cotes de piquage et pentes des branchements ──────────────
     if branchement_layer is None:
         return
+
+    rattacher_branchements(conduite_layer, branchement_layer, tol)
 
     cp_idx = branchement_layer.fields().indexOf('cote_piquage')
     bp_idx = branchement_layer.fields().indexOf('pente')

@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 import os
-from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QIcon, QFont
+from qgis.PyQt.QtCore import Qt, QEvent
+from qgis.PyQt.QtGui import QIcon, QFont, QBrush, QColor
 from qgis.PyQt.QtWidgets import (
     QDockWidget, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QTreeWidget, QTreeWidgetItem,
 )
 
 from ..tools import i18n
+from ..tools import panneau_prefs as PP
 
 
 class SidePanel(QDockWidget):
@@ -26,6 +27,11 @@ class SidePanel(QDockWidget):
         # (clé d'action -> clé i18n), voir main.appliquer_territoire.
         self._masquees = ()
         self._libelles_territoire = {}
+        # Entrées masquées par l'utilisateur (onglet Interface).
+        self._masques_utilisateur = set()
+        # Entrée survolée et sa police d'origine (mise en gras au survol).
+        self._survole = None
+        self._police_origine = None
         self._build_ui()
 
     def _build_ui(self):
@@ -34,93 +40,14 @@ class SidePanel(QDockWidget):
         self.tree.setHeaderHidden(True)
         self.tree.setIndentation(16)
         self.tree.itemClicked.connect(self._on_item_clicked)
+        # Survol : l'entrée passe en gras, un rien plus grande, et reprend sa police quand la
+        # souris la quitte ou sort du panneau.
+        self.tree.setMouseTracking(True)
+        self.tree.itemEntered.connect(self._survol)
+        self.tree.viewport().installEventFilter(self)
 
-        icon_dir = os.path.join(self.plugin.plugin_dir, "icon")
-
-        folder_general = self._folder("grp_general")
-        self._item(folder_general, icon_dir, "renseignement.svg", "renseignement")
-        self._item(folder_general, icon_dir, "config.svg",        "tableau_saisie")
-        self._item(folder_general, icon_dir, "insert_regard.svg", "insert_regard")
-        self._item(folder_general, icon_dir, "move.svg",          "move")
-        self._item(folder_general, icon_dir, "copy_attrib.svg",   "copy_attributes")
-        self._item(folder_general, icon_dir, "delete.svg",        "delete")
-        self._item(folder_general, icon_dir, "magic_box.svg",     "magic_box")
-        self._item(folder_general, icon_dir, "config.svg",        "config",
-                   tr_key="panel_config")
-
-        folder_eu = self._folder("grp_eu")
-        self._item(folder_eu, icon_dir, "conduite_eu.svg",    "conduite_eu")
-        self._item(folder_eu, icon_dir, "branchement_eu.svg", "branchement_eu")
-        self._item(folder_eu, icon_dir, "profil.svg",         "profil_eu")
-        self._item(folder_eu, icon_dir, "profil.svg",         "coupe_eu")
-        self._item(folder_eu, icon_dir, "renommer.svg",       "renommer_eu")
-
-        folder_ep = self._folder("grp_ep")
-        self._item(folder_ep, icon_dir, "conduite_ep.svg",    "conduite_ep")
-        self._item(folder_ep, icon_dir, "branchement_ep.svg", "branchement_ep")
-        self._item(folder_ep, icon_dir, "profil.svg",         "profil_ep")
-        self._item(folder_ep, icon_dir, "profil.svg",         "coupe_ep")
-        self._item(folder_ep, icon_dir, "renommer.svg",       "renommer_ep")
-
-        folder_aep = self._folder("grp_aep")
-        self._item(folder_aep, icon_dir, "conduite_aep.svg",    "conduite_aep")
-        self._item(folder_aep, icon_dir, "branchement_aep.svg", "branchement_aep")
-        self._item(folder_aep, icon_dir, "insert_regard.svg",   "appareil_aep")
-        self._item(folder_aep, icon_dir, "profil.svg",          "profil_aep")
-        self._item(folder_aep, icon_dir, "profil.svg",          "coupe_aep")
-        self._item(folder_aep, icon_dir, "renommer.svg",        "renommer_aep")
-        self._item(folder_aep, icon_dir, "insert_regard.svg",   "schemaep")
-
-        folder_etiquettes = self._folder("grp_etiquettes")
-        self._item(folder_etiquettes, icon_dir, "etiquettes.svg",        "creer_etiquettes")
-        self._item(folder_etiquettes, icon_dir, "etiquettes_toggle.svg", "afficher_etiquettes")
-        self._item(folder_etiquettes, icon_dir, "etiquettes.svg",        "taille_etiquettes")
-        self._item(folder_etiquettes, icon_dir, "etiquettes_toggle.svg", "forcer_etiquettes",
-                   tr_key="panel_forcer_etiquettes")
-        self._item(folder_etiquettes, icon_dir, "etiquettes.svg",        "affichage_etiquettes")
-        self._item(folder_etiquettes, icon_dir, "etiquettes.svg",        "annotation")
-
-        folder_projet = self._folder("grp_projet")
-        self._item(folder_projet, icon_dir, "config.svg", "nouveau_projet_assistant")
-        self._item(folder_projet, icon_dir, "config.svg", "projets_recents")
-        self._item(folder_projet, icon_dir, "config.svg", "enregistrer_projet",
-                   tr_key="panel_enregistrer_projet")
-        self._item(folder_projet, icon_dir, "config.svg", "enregistrer_projet_sous")
-        self._item(folder_projet, icon_dir, "config.svg", "charger_projet")
-        self._item(folder_projet, icon_dir, "config.svg", "import_dxf")
-        self._item(folder_projet, icon_dir, "config.svg", "import_star_dt")
-
-        folder_impression = self._folder("grp_sorties")
-        self._item(folder_impression, icon_dir, "config.svg", "imprimer")
-        self._item(folder_impression, icon_dir, "profil.svg", "profil_groupe")
-        self._item(folder_impression, icon_dir, "profil.svg", "coupe_transversale")
-        self._item(folder_impression, icon_dir, "config.svg", "cubature")
-        self._item(folder_impression, icon_dir, "profil.svg", "coupe_tranchee_composee",
-                   tr_key="panel_coupe_tranchee_composee")
-        self._item(folder_impression, icon_dir, "config.svg", "export_stareau",
-                   tr_key="panel_export_stareau")
-
-        folder_fdc = self._folder("grp_fond")
-        self._item(folder_fdc, icon_dir, "config.svg", "fond_projet",
-                   tr_key="panel_fond_projet")
-        fdc_france = self._folder("grp_fond_france", parent=folder_fdc)
-        self._item(fdc_france, icon_dir, "config.svg", "osm_desature")
-        self._item(fdc_france, icon_dir, "config.svg", "ortho_ign")
-        self._item(fdc_france, icon_dir, "config.svg", "pci_parcelles")
-        self._item(fdc_france, icon_dir, "config.svg", "pci_bati")
-        self._item(fdc_france, icon_dir, "config.svg", "ban_vecteur",
-                   tr_key="panel_ban_vecteur")
-        self._item(fdc_france, icon_dir, "config.svg", "nom_voie")
-        fdc_int = self._folder("grp_fond_international", parent=folder_fdc)
-        self._item(fdc_int, icon_dir, "config.svg", "monde_osm")
-        self._item(fdc_int, icon_dir, "config.svg", "monde_esri")
-        self._item(fdc_int, icon_dir, "config.svg", "monde_bati_osm")
-
-        for folder in (folder_projet, folder_general, folder_eu, folder_ep,
-                       folder_aep, folder_etiquettes, folder_impression,
-                       folder_fdc):
-            self.tree.addTopLevelItem(folder)
-        self.tree.expandAll()
+        self._icon_dir = os.path.join(self.plugin.plugin_dir, "icon")
+        self._peupler()
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -128,6 +55,95 @@ class SidePanel(QDockWidget):
         layout.addWidget(self.tree)
         layout.addLayout(self._build_language_row())
         self.setWidget(container)
+
+    # ── Contenu de l'arbre ──────────────────────────────────────────────
+
+    def _peupler(self):
+        """Construit l'arbre d'après STRUCTURE et les préférences Interface."""
+        prefs = PP.charger()
+        self._masques_utilisateur = set(prefs['masques'])
+        self._i18n_items = []
+        self._survole = None
+        self.tree.clear()
+        for noeud in PP.structure_ordonnee(prefs):
+            self.tree.addTopLevelItem(self._construire(noeud, None))
+        self.tree.expandAll()
+        self._appliquer_couleurs()
+
+    def _construire(self, noeud, parent):
+        if 'dossier' in noeud:
+            item = self._folder(noeud['dossier'], parent=parent)
+            for enfant in noeud['enfants']:
+                self._construire(enfant, item)
+        else:
+            item = self._item(parent, self._icon_dir, noeud['icone'],
+                              noeud['action'], tr_key=noeud['tr'])
+        return item
+
+    def reconstruire(self):
+        """Reconstruit l'arbre après un changement dans l'onglet Interface :
+        ordre, entrées masquées, couleurs."""
+        self._peupler()
+        self.appliquer_territoire(self._masquees, self._libelles_territoire)
+
+    def _appliquer_couleurs(self):
+        """Interface colorée : bandeau de couleur sur chaque dossier, teinte
+        légère sur ses entrées. Sinon, rendu standard de QGIS."""
+        coloree = PP.interface_coloree()
+        for i in range(self.tree.topLevelItemCount()):
+            dossier = self.tree.topLevelItem(i)
+            teinte = PP.COULEURS.get(self._cle_dossier(dossier))
+            if coloree and teinte:
+                fond = QColor(teinte)
+                clair = QColor(fond)
+                clair.setAlpha(28)
+                self._colorer(dossier, QBrush(fond), QBrush(QColor('white')),
+                              QBrush(clair))
+            else:
+                self._colorer(dossier, QBrush(), QBrush(), QBrush())
+
+    def _colorer(self, dossier, fond, texte, fond_enfants):
+        dossier.setBackground(0, fond)
+        dossier.setForeground(0, texte)
+        pile = [dossier.child(i) for i in range(dossier.childCount())]
+        while pile:
+            enfant = pile.pop()
+            enfant.setBackground(0, fond_enfants)
+            pile.extend(enfant.child(i) for i in range(enfant.childCount()))
+
+    def _cle_dossier(self, item):
+        for it, cle in self._i18n_items:
+            if it is item:
+                return cle
+        return None
+
+    # ── Mise en gras au survol, léger zoom ──────────────────────────────
+
+    FACTEUR_ZOOM = 1.02
+
+    def _survol(self, item, _colonne=0):
+        if item is self._survole:
+            return
+        if self._survole is not None and self._police_origine is not None:
+            self._survole.setFont(0, self._police_origine)
+        self._survole, self._police_origine = None, None
+        # Les titres de section sont déjà en gras : seules les entrées cliquables.
+        if item is None or item.data(0, Qt.ItemDataRole.UserRole) is None:
+            return
+        self._police_origine = QFont(item.font(0))
+        grasse = QFont(self._police_origine)
+        base = grasse.pointSizeF() if grasse.pointSizeF() > 0 else self.tree.font().pointSizeF()
+        grasse.setPointSizeF(base * self.FACTEUR_ZOOM)
+        grasse.setBold(True)
+        item.setFont(0, grasse)
+        self._survole = item
+
+    def eventFilter(self, objet, evenement):
+        if objet is self.tree.viewport() and evenement.type() == QEvent.Type.Leave:
+            self._survol(None)
+        return super().eventFilter(objet, evenement)
+
+    # ── Langue ──────────────────────────────────────────────────────────
 
     def _build_language_row(self):
         """Sélecteur de langue en pied de panneau, synchronisé avec le menu."""
@@ -164,23 +180,32 @@ class SidePanel(QDockWidget):
             self.combo_langue.setCurrentIndex(index)
         self.combo_langue.blockSignals(False)
 
+    # ── Territoire et masquage ──────────────────────────────────────────
+
     def appliquer_territoire(self, masquees, libelles):
         """Masque les entrées propres à la France et renomme celles qui
-        changent de source à l'international."""
+        changent de source à l'international. Les entrées masquées par
+        l'utilisateur (onglet Interface) restent masquées."""
         self._masquees = tuple(masquees)
         self._libelles_territoire = dict(libelles)
         for item, cle in self._i18n_items:
             action = item.data(0, Qt.ItemDataRole.UserRole)
             if action is None:
+                # Dossier masqué en entier par l'utilisateur.
+                item.setHidden(cle in self._masques_utilisateur)
                 continue
-            item.setHidden(action in self._masquees)
+            item.setHidden(action in self._masquees
+                           or action in self._masques_utilisateur)
             item.setText(0, i18n.tr(self._libelles_territoire.get(action, cle)))
-        # Une sous-section dont toutes les entrées sont masquées (Fond de plan
+        # Une section dont toutes les entrées sont masquées (Fond de plan
         # > France, à l'international) disparaît avec elles.
-        for item, _cle in self._i18n_items:
-            if item.data(0, Qt.ItemDataRole.UserRole) is None and item.parent() is not None:
+        for item, cle in self._i18n_items:
+            if item.data(0, Qt.ItemDataRole.UserRole) is None:
                 enfants = [item.child(i) for i in range(item.childCount())]
-                item.setHidden(bool(enfants) and all(e.isHidden() for e in enfants))
+                item.setHidden(cle in self._masques_utilisateur
+                               or (bool(enfants) and all(e.isHidden() for e in enfants)))
+
+    # ── Fabriques ───────────────────────────────────────────────────────
 
     def _folder(self, tr_key, parent=None):
         """Dossier du panneau ; `parent` en fait une sous-section."""

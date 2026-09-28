@@ -278,13 +278,18 @@ def _france_seulement(verbe):
             % (verbe, terr.courant()))
 
 
-def _get_json(url, data=None):
+def _get_json(url, data=None, delai_ms=None):
     """Requête JSON par la pile réseau de QGIS.
 
     Passer par `QgsBlockingNetworkRequest` plutôt que par `urllib` n'est pas
     qu'une affaire de scanner : le plugin hérite ainsi du proxy, des
     certificats et des délais configurés dans QGIS — ce qu'`urllib` ignore,
     alors que la plupart des collectivités sortent par un proxy.
+
+    `delai_ms` raccourcit le délai de QGIS (60 s par défaut) pour cette seule
+    requête. Une requête abandonnée au délai est rendue par
+    `QgsBlockingNetworkRequest` comme réussie, corps vide : l'erreur se lit
+    sur la réponse elle-même.
     """
     from qgis.core import QgsBlockingNetworkRequest
     from qgis.PyQt.QtCore import QByteArray, QUrl
@@ -294,6 +299,8 @@ def _get_json(url, data=None):
         raise RuntimeError("URL refusée (https attendu) : %s" % url)
     requete = QNetworkRequest(QUrl(url))
     requete.setRawHeader(b"User-Agent", _UA["User-Agent"].encode("utf-8"))
+    if delai_ms:
+        requete.setTransferTimeout(int(delai_ms))
     bloquante = QgsBlockingNetworkRequest()
     if data is None:
         code = bloquante.get(requete)
@@ -304,6 +311,11 @@ def _get_json(url, data=None):
     if code != QgsBlockingNetworkRequest.ErrorCode.NoError:
         raise RuntimeError("Requête réseau échouée : %s"
                            % (bloquante.errorMessage() or code))
+    from qgis.core import QgsNetworkAccessManager
+    from qgis.PyQt.QtNetwork import QNetworkReply
+    if bloquante.reply().error() == QNetworkReply.NetworkError.OperationCanceledError:
+        raise RuntimeError("pas de réponse en %d s"
+                           % ((delai_ms or QgsNetworkAccessManager.timeout()) // 1000))
     return json.loads(bytes(bloquante.reply().content()).decode("utf-8"))
 
 
@@ -579,6 +591,22 @@ _MIROIRS_OVERPASS = (
     "https://overpass.kumi.systems/api/interpreter",
 )
 
+#: Attente maximale par miroir. La requete demande `[timeout:25]` au serveur :
+#: au-dela de 35 s, il ne repondra plus. Le delai QGIS (60 s) faisait perdre
+#: une minute par tour sur un miroir muet — mesure le 27/09/2026 : kumi.systems
+#: ne repondait plus du tout, 3 tours = 3 minutes pour rien.
+DELAI_OVERPASS_MS = 35000
+
+#: Echecs consecutifs par miroir, pour la session : un miroir qui vient de
+#: flancher passe en fin de tour, celui qui repond revient en tete.
+_echecs_miroirs = {}
+
+
+def _miroirs_ordonnes():
+    """Miroirs du plus fiable au moins fiable ces derniers temps (tri stable :
+    a egalite, l'ordre de `_MIROIRS_OVERPASS` est garde)."""
+    return sorted(_MIROIRS_OVERPASS, key=lambda u: _echecs_miroirs.get(u, 0))
+
 
 def _overpass(requete, tours=2, pause=5.0):
     """Interroge Overpass, en refaisant le tour des miroirs s'ils flanchent tous.
@@ -614,14 +642,17 @@ def _overpass_tour(requete):
     passer au miroir suivant ; « introuvable » n'est prononce qu'apres les
     avoir tous vus vides.
     """
-    derniere, vide, brides = None, None, []
-    for url in _MIROIRS_OVERPASS:
+    erreurs, vide, brides = [], None, []
+    for url in _miroirs_ordonnes():
         hote = url.split("/")[2]
         try:
-            reponse = _get_json(url, urllib.parse.urlencode({"data": requete}).encode())
+            reponse = _get_json(url, urllib.parse.urlencode({"data": requete}).encode(),
+                                delai_ms=DELAI_OVERPASS_MS)
         except Exception as err:
-            derniere = "%s : %s" % (hote, err)
+            erreurs.append("%s : %s" % (hote, err))
+            _echecs_miroirs[url] = _echecs_miroirs.get(url, 0) + 1
             continue
+        _echecs_miroirs[url] = 0
         if reponse.get("elements"):
             return reponse
         # Overpass annonce un bridage dans `remark`, avec un corps par ailleurs
@@ -638,7 +669,7 @@ def _overpass_tour(requete):
     if vide is not None:
         return vide
     raise RuntimeError("Overpass injoignable sur %d miroirs : %s"
-                       % (len(_MIROIRS_OVERPASS), derniere))
+                       % (len(_MIROIRS_OVERPASS), " | ".join(erreurs)))
 
 
 def _ligne_fusionnee(lignes):
@@ -2263,6 +2294,7 @@ def etiquettes(reseau="EU", roles=None, taille=None, unite=None,
     forçage — et non l'écho des arguments reçus : un appelant qui n'a pas
     l'écran doit pouvoir rendre compte à partir du seul retour.
     """
+    from ..gui.etiquettes import etiquettes_visibles
     from ..gui.etiquettes import (apply_etiquettes, apply_label_size_all,
                                   apply_label_fields, apply_label_display_prefs,
                                   set_force_all_labels, get_force_all_labels,
@@ -2299,7 +2331,7 @@ def etiquettes(reseau="EU", roles=None, taille=None, unite=None,
         set_force_all_labels(bool(forcer_toutes), _iface().mapCanvas(), plugin)
     _iface().mapCanvas().refreshAllLayers()
     return {"reseau": reseau, "roles": list(roles),
-            "actives": {role: couche.labelsEnabled()
+            "actives": {role: etiquettes_visibles(couche)
                         for role, couche in sorted(jeu.items())},
             "visibilite": get_label_display_prefs(plugin).get(reseau, {}),
             "taille": taille, "unite": mode,

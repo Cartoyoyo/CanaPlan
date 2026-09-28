@@ -2,7 +2,8 @@
 from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QGroupBox, QFormLayout,
-    QComboBox, QDialogButtonBox, QTabWidget, QWidget,
+    QComboBox, QDialogButtonBox, QTabWidget, QWidget, QScrollArea, QFrame,
+    QApplication,
 )
 from qgis.core import QgsProject, QgsWkbTypes
 
@@ -40,25 +41,53 @@ LABELS = {
 }
 
 
+def _defilant(widget):
+    """Onglet dans une zone défilante : le dialogue peut être réduit à
+    volonté, les ascenseurs n'apparaissent que si la place manque."""
+    zone = QScrollArea()
+    zone.setWidgetResizable(True)
+    zone.setFrameShape(QFrame.Shape.NoFrame)
+    zone.setWidget(widget)
+    return zone
+
+
 class ConfigDialog(QDialog):
-    def __init__(self, iface, parent=None):
+    def __init__(self, iface, parent=None, plugin=None):
         super().__init__(parent or iface.mainWindow())
         self.iface = iface
+        self.plugin = plugin
         self.setWindowTitle(i18n.tr('panel_config'))
-        self.setMinimumWidth(450)
 
         self.combos = {}
         self._build_ui()
         self._load_settings()
+        self._taille_initiale()
+
+    def _taille_initiale(self):
+        """Ouvre à la taille du plus grand onglet, sans dépasser l'écran.
+
+        Les zones défilantes ne réclament presque rien : sans ce calcul, le
+        dialogue s'ouvrirait minuscule. On le dimensionne donc sur le contenu
+        réel des onglets, borné par la place disponible ; au-delà, ce sont les
+        ascenseurs qui prennent le relais, et l'utilisateur peut toujours le
+        redimensionner.
+        """
+        contenus = [self._tabs.widget(i).widget() for i in range(self._tabs.count())]
+        larg = max(w.sizeHint().width() for w in contenus) + 60
+        haut = max(w.sizeHint().height() for w in contenus) + 120
+        ecran = QApplication.primaryScreen().availableGeometry()
+        self.resize(min(max(larg, 480), ecran.width() - 80),
+                    min(haut, ecran.height() - 100))
 
     def _build_ui(self):
         main_layout = QVBoxLayout(self)
 
         tabs = QTabWidget()
+        self._tabs = tabs
 
         # ── Onglet 1 : Réseau par défaut ────────────────────────────────
         self._reseau_widget = ReseauDefautWidget()
-        tabs.addTab(self._reseau_widget, i18n.tr('wz_reseau_defaut'))
+        tabs.addTab(_defilant(self._reseau_widget), i18n.tr('wz_reseau_defaut'))
 
         # ── Onglet 2 : Couches ──────────────────────────────────────────
         tab_couches = QWidget()
@@ -79,21 +108,26 @@ class ConfigDialog(QDialog):
             couches_layout.addWidget(group)
 
         couches_layout.addStretch()
-        tabs.addTab(tab_couches, i18n.tr('qc_couches'))
+        tabs.addTab(_defilant(tab_couches), i18n.tr('qc_couches'))
 
         # ── Onglet 3 : Cubature ──────────────────────────────────────────
         self._cubature_widget = CubatureConfigWidget()
-        tabs.addTab(self._cubature_widget, i18n.tr('wz_cubature'))
+        tabs.addTab(_defilant(self._cubature_widget), i18n.tr('wz_cubature'))
 
         # ── Onglet 4 : Remblai ──────────────────────────────────────────
         self._remblai_widget = RemblaiConfigWidget()
-        tabs.addTab(self._remblai_widget, i18n.tr('wz_remblai'))
+        tabs.addTab(_defilant(self._remblai_widget), i18n.tr('wz_remblai'))
 
         # Épaisseur de lit de pose partagée entre l'onglet Cubature et le
         # schéma de l'onglet Remblai.
         ep_lit_spin = self._cubature_widget._cub_widgets['ep_lit_pose']
         ep_lit_spin.valueChanged.connect(self._remblai_widget.set_ep_lit_pose)
         self._remblai_widget.set_ep_lit_pose(ep_lit_spin.value())
+
+        # ── Onglet 5 : Interface ────────────────────────────────────────
+        from .interface_config_widget import InterfaceConfigWidget
+        self._interface_widget = InterfaceConfigWidget()
+        tabs.addTab(_defilant(self._interface_widget), i18n.tr('qc_interface'))
 
         main_layout.addWidget(tabs)
 
@@ -132,5 +166,6 @@ class ConfigDialog(QDialog):
         self._reseau_widget.save_settings()
         self._cubature_widget.save_settings()
         self._remblai_widget.save_settings()
+        self._interface_widget.save_settings(self.plugin)
 
         self.accept()

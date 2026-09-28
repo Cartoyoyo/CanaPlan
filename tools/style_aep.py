@@ -168,12 +168,19 @@ def _expr_decalage_robinet():
     (champ sym_dir), pour ne pas se confondre avec la conduite principale.
     En unités carte, l'axe y du décalage pointe vers le bas : d'où le signe
     de la composante nord. Sans direction connue, le symbole reste centré.
+
+    Le décalage s'applique dans le repère de la feuille, pas du terrain : sur
+    une carte tournée (planches du Plan de réseau, orientées sur la rue), la
+    direction à l'écran est l'azimut plus la rotation de la carte. Sans cette
+    correction, une planche tournée de 180° posait le robinet de l'autre côté
+    de la conduite (constaté le 27/09/2026).
     """
     d = _DECALAGE_ROBINET
+    angle = "radians(\"sym_dir\" + coalesce(@map_rotation, 0))"
     return (
         "if(\"sym_dir\" IS NULL, '0,0', "
-        f"concat(to_string(sin(radians(\"sym_dir\")) * {d}), ',', "
-        f"to_string(-cos(radians(\"sym_dir\")) * {d})))"
+        f"concat(to_string(sin({angle}) * {d}), ',', "
+        f"to_string(-cos({angle}) * {d})))"
     )
 
 

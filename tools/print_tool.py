@@ -72,6 +72,92 @@ class _Chrono:
 _TEINTES_PLANCHES = (210, 0, 135, 32, 280, 175, 55, 320)
 
 
+#: Attente maximale d'une image de fond pendant l'impression (ms). Le délai
+#: de QGIS (60 s) laissait le plan d'ensemble attendre une minute une requête
+#: de l'Ortho IGN restée sans réponse (28/09/2026 : 103 s de rendu).
+DELAI_FONDS_IMPRESSION_MS = 20000
+
+#: Attente proposée avant de redemander un fond indisponible (s).
+ATTENTE_REESSAI_S = 120
+
+
+class _SurveillanceReseau:
+    """Compte les requêtes réseau en échec pendant le rendu.
+
+    Le rendu ne signale pas les images de fond manquantes : un WMS qui ne
+    répond pas laisse un fond blanc, et job.errors() reste vide (vérifié sur
+    QGIS 3.44). Le gestionnaire réseau principal, lui, relaie la fin de
+    toutes les requêtes, y compris celles des fils de rendu.
+    """
+
+    def __init__(self):
+        from qgis.core import QgsNetworkAccessManager
+        self._nam = QgsNetworkAccessManager.instance()
+        self._delai = QgsNetworkAccessManager.timeout()
+        self.echecs = []
+        self.en_cours = {}      # identifiant de requête -> serveur
+        # requestCreated et non requestAboutToBeCreated : seul le premier
+        # est relayé depuis les fils de rendu (vérifié sur QGIS 3.44).
+        self._nam.requestCreated.connect(self._debut)
+        self._nam.finished.connect(self._fin)
+        QgsNetworkAccessManager.setTimeout(DELAI_FONDS_IMPRESSION_MS)
+
+    def _debut(self, params):
+        import time
+        self.en_cours[params.requestId()] = (params.request().url().host(),
+                                             time.monotonic())
+
+    def _fin(self, contenu):
+        self.en_cours.pop(contenu.requestId(), None)
+        if int(contenu.error()) != 0:
+            self.echecs.append(contenu.request().url())
+
+    def attente(self):
+        """{serveur: (images encore attendues, attente de la plus ancienne en s)}."""
+        import time
+        maintenant = time.monotonic()
+        compte = {}
+        for hote, debut in list(self.en_cours.values()):
+            n, age = compte.get(hote, (0, 0.0))
+            compte[hote] = (n + 1, max(age, maintenant - debut))
+        return compte
+
+    def planches_touchees(self, jobs):
+        """Index des rendus dont l'emprise croise une requête en échec.
+
+        Les requêtes WMS portent leur emprise (BBOX) : on la compare à celle
+        de chaque rendu. Une requête sans BBOX lisible (tuile, autre service)
+        est imputée à tous les rendus, faute de mieux.
+        """
+        from qgis.core import QgsGeometry, QgsRectangle
+        from qgis.PyQt.QtCore import QUrlQuery
+        touches = set()
+        for url in self.echecs:
+            requete = QUrlQuery(url)
+            bbox = next((requete.queryItemValue(k) for k in ('BBOX', 'bbox')
+                         if requete.hasQueryItem(k)), '')
+            try:
+                x0, y0, x1, y1 = (float(v) for v in bbox.replace('%2C', ',').split(','))
+                emprise = QgsGeometry.fromRect(QgsRectangle(x0, y0, x1, y1))
+            except ValueError:
+                touches.update(range(len(jobs)))
+                continue
+            for i, job in enumerate(jobs):
+                if QgsGeometry.fromQPolygonF(job.mapSettings().visiblePolygon()).intersects(emprise):
+                    touches.add(i)
+        return sorted(touches)
+
+    def arreter(self):
+        from qgis.core import QgsNetworkAccessManager
+        QgsNetworkAccessManager.setTimeout(self._delai)
+        for signal, slot in ((self._nam.finished, self._fin),
+                             (self._nam.requestCreated, self._debut)):
+            try:
+                signal.disconnect(slot)
+            except (TypeError, RuntimeError) as _err:
+                errlog.ignored(_err, "print_tool._SurveillanceReseau.arreter")
+
+
 def _couleur_planche(index, alpha=255):
     """Couleur d'une planche, cyclique au-delà de la palette."""
     from qgis.PyQt.QtGui import QColor
@@ -553,10 +639,27 @@ class PrintTool(QgsMapTool):
     def _ask_and_export(self):
         do_pdf = self.s.get('do_pdf', True)
         do_dxf = self.s.get('do_dxf', False)
+        # Fenêtre de suivi de l'export (gui/suivi_export.py), si l'appelant
+        # en a ouvert une : chaque plan y est chronométré.
+        suivi = self.s.get('_suivi')
         if do_pdf:
-            self._export_pdf()
+            if suivi:
+                suivi.demarrer('plan_pdf')
+            ok = self._export_pdf()
+            if suivi:
+                if ok:
+                    suivi.terminer('plan_pdf')
+                else:
+                    suivi.abandonner('plan_pdf')
         if do_dxf:
-            self._export_dxf()
+            if suivi:
+                suivi.demarrer('plan_dxf')
+            ok = self._export_dxf()
+            if suivi:
+                if ok:
+                    suivi.terminer('plan_dxf')
+                else:
+                    suivi.abandonner('plan_dxf')
         self.canvas().unsetMapTool(self)
 
     # ── Export DXF 2018 ────────────────────────────────────────────────────
@@ -600,12 +703,13 @@ class PrintTool(QgsMapTool):
                 i18n.tr('fic_dxf'),
             )
             if not dxf_path:
-                return
+                return False
 
-        run_export_dxf_with_ui(
+        return run_export_dxf_with_ui(
             self.iface, dxf_path, extent, float(self.s["echelle"]),
             with_label_decorations=True, force_2d=True,
-            open_after=self.s.get('open_after', True),
+            # Le DXF ne s'ouvre pas : le bandeau de fin propose le dossier.
+            open_after=False,
         )
 
     # ── Export PDF ─────────────────────────────────────────────────────────
@@ -646,6 +750,7 @@ class PrintTool(QgsMapTool):
                 return
 
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        self._pdf_genere = False
         try:
             self._generate_pdf(pdf_path, overview_settings)
         except Exception as exc:
@@ -654,9 +759,11 @@ class PrintTool(QgsMapTool):
                 self.iface.mainWindow(), i18n.tr('msg_impression'),
                 i18n.tr('pt_erreur_pdf', erreur=exc),
             )
-            return
+            return False
         finally:
             QApplication.restoreOverrideCursor()
+        # Faux si l'utilisateur a annulé en cours de rendu.
+        return self._pdf_genere
 
     def _overview_settings(self):
         """Réglages du plan d'ensemble, ou False s'il n'y a rien à cadrer.
@@ -731,6 +838,145 @@ class PrintTool(QgsMapTool):
             split = left if (mid - left) <= (right - mid) else right
         return text[:split] + '\n' + text[split + 1:]
 
+    # ── Fenêtre de progression explicative ──────────────────────────────
+
+    @staticmethod
+    def _etiquette_gauche():
+        """Texte de progression aligné à gauche : la liste des fonds attendus
+        se lit mal centrée."""
+        from qgis.PyQt.QtWidgets import QLabel
+        lbl = QLabel()
+        lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        return lbl
+
+    @staticmethod
+    def _serveurs_des_fonds(couches):
+        """{serveur: nom lisible} des fonds distants, pour dire lequel on attend."""
+        import re
+        from qgis.PyQt.QtCore import QUrl
+        from urllib.parse import unquote
+        noms = {}
+        for lyr in couches:
+            m = re.search(r'url=([^&]+)', lyr.source())
+            if m:
+                hote = QUrl(unquote(m.group(1))).host()
+                if hote:
+                    noms.setdefault(hote, lyr.name())
+        return noms
+
+    @staticmethod
+    def _texte_progression(titre, debut, surveillance, noms_serveurs,
+                           faits=None, total=None, cartes=None):
+        """Texte de la fenêtre de progression, un chrono par action.
+
+        cartes : [(libellé, secondes, terminée)] — une ligne par carte.
+        """
+        import time
+        lignes = [titre]
+        ecoule = int(time.monotonic() - debut)
+        if total:
+            lignes.append(i18n.tr('pt_progress_cartes', faits=faits, total=total, s=ecoule))
+        else:
+            lignes.append(i18n.tr('pt_progress_ecoule', s=ecoule))
+        for libelle, secondes, terminee in cartes or ():
+            cle = 'pt_progress_carte_prete' if terminee else 'pt_progress_carte_en_cours'
+            lignes.append("  %s %s" % ("✔" if terminee else "⏳",
+                                       i18n.tr(cle, carte=libelle, s=int(secondes))))
+        attente = surveillance.attente() if surveillance is not None else {}
+        if attente:
+            lignes.append(i18n.tr('pt_progress_fonds'))
+            for hote, (n, age) in sorted(attente.items()):
+                lignes.append("  • %s — %s" % (noms_serveurs.get(hote, hote),
+                                                i18n.tr('pt_progress_images', n=n, s=int(age))))
+        elif not total or faits < total:
+            lignes.append(i18n.tr('pt_progress_dessin'))
+        return "\n".join(lignes)
+
+    # ── Fonds lents ou indisponibles ────────────────────────────────────
+
+    def _demander_fond_indisponible(self, noms, planches, retirable):
+        """'sans', 'attendre', 'tel_quel' ou 'annuler'."""
+        boite = QMessageBox(self.iface.mainWindow())
+        boite.setIcon(QMessageBox.Icon.Warning)
+        boite.setWindowTitle(i18n.tr('msg_impression'))
+        boite.setText(i18n.tr('pt_fond_indisponible', fonds=noms, planches=planches))
+        boite.setInformativeText(i18n.tr('pt_fond_indisponible_aide',
+                                         minutes=ATTENTE_REESSAI_S // 60))
+        b_sans = (boite.addButton(i18n.tr('pt_btn_sans_fond', fonds=noms),
+                                  QMessageBox.ButtonRole.AcceptRole)
+                  if retirable else None)
+        b_attendre = boite.addButton(
+            i18n.tr('pt_btn_reessayer', minutes=ATTENTE_REESSAI_S // 60),
+            QMessageBox.ButtonRole.ActionRole)
+        b_tel_quel = boite.addButton(i18n.tr('pt_btn_tel_quel'),
+                                     QMessageBox.ButtonRole.ActionRole)
+        boite.addButton(QMessageBox.StandardButton.Cancel)
+        boite.setDefaultButton(b_sans or b_attendre)
+        exec_dialog(boite)
+        clic = boite.clickedButton()
+        if b_sans is not None and clic is b_sans:
+            return 'sans'
+        if clic is b_attendre:
+            return 'attendre'
+        if clic is b_tel_quel:
+            return 'tel_quel'
+        return 'annuler'
+
+    def _attendre(self, secondes):
+        """Compte à rebours annulable ; « Réessayer maintenant » l'abrège.
+        Rend False seulement si l'utilisateur ferme la fenêtre d'impression."""
+        import time
+        from qgis.PyQt.QtCore import QEventLoop
+        from qgis.PyQt.QtWidgets import QProgressDialog
+        fin = time.monotonic() + secondes
+        attente = QProgressDialog(self.iface.mainWindow())
+        attente.setWindowTitle(i18n.tr('msg_impression'))
+        attente.setCancelButtonText(i18n.tr('pt_reessayer_maintenant'))
+        attente.setRange(0, secondes)
+        attente.setWindowModality(Qt.WindowModality.WindowModal)
+        attente.setMinimumDuration(0)
+        try:
+            while True:
+                reste = fin - time.monotonic()
+                if reste <= 0 or attente.wasCanceled():
+                    return True
+                attente.setValue(int(secondes - reste))
+                attente.setLabelText(i18n.tr('pt_attente_reessai', s=int(reste) + 1))
+                QApplication.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 200)
+        finally:
+            attente.close()
+
+    def _rendre(self, ms, titre=None, surveillance=None, noms_serveurs=None):
+        """Rendu bloquant (fenêtre de progression annulable) ; None si annulé."""
+        import time
+        from qgis.PyQt.QtCore import QEventLoop
+        from qgis.PyQt.QtWidgets import QProgressDialog
+        titre = titre or i18n.tr('pt_rendu_cartes')
+        debut = time.monotonic()
+        job = QgsMapRendererParallelJob(ms)
+        job.start()
+        progres = QProgressDialog(titre, i18n.tr('annuler'),
+                                  0, 0, self.iface.mainWindow())
+        progres.setWindowTitle(i18n.tr('msg_impression'))
+        progres.setWindowModality(Qt.WindowModality.WindowModal)
+        progres.setMinimumDuration(400)
+        progres.setMinimumWidth(460)
+        progres.setLabel(self._etiquette_gauche())
+        try:
+            while job.isActive():
+                progres.setLabelText(self._texte_progression(
+                    titre, debut, surveillance, noms_serveurs or {}))
+                if progres.wasCanceled():
+                    job.cancel()
+                    self.iface.messageBar().pushMessage(
+                        i18n.tr('msg_impression'), i18n.tr('pt_export_annule'),
+                        level=Qgis.MessageLevel.Warning, duration=5)
+                    return None
+                QApplication.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 50)
+        finally:
+            progres.close()
+        return job
+
     def _generate_pdf(self, pdf_path, overview_settings=False):
         from qgis.PyQt.QtGui import QPainter, QPen, QPolygon, QTransform
         from qgis.PyQt.QtCore import QRect, QRectF, QPoint, QEventLoop
@@ -794,7 +1040,6 @@ class PrintTool(QgsMapTool):
                            % (fournisseur, lyr.name(), detail))
 
         pdf_title = os.path.splitext(os.path.basename(pdf_path))[0].replace("_", " ")
-        titre     = self._split_two_lines(pdf_title)
 
         # Conversions utilitaires
         def px(mm_val):
@@ -809,7 +1054,6 @@ class PrintTool(QgsMapTool):
         carto_y_px = px(carto_y_mm)
         carto_h_px = px(carto_h_mm)
 
-        fmt_ech = f"{self.s['format']}  —  1 : {echelle:,}".replace(",", " ")
 
         # ── Pré-vérification du verrou fichier ───────────────────────────
         # Détecte un PDF ouvert dans un autre programme AVANT de lancer les
@@ -859,6 +1103,11 @@ class PrintTool(QgsMapTool):
             # fois l'inclinaison — ce que montraient les planches.
             ms.setRotation(-math.degrees(rot_rad))
             ms.setOutputDpi(dpi)
+            # Variables de carte (@map_rotation, @map_scale…), une fois
+            # l'emprise, la rotation et la résolution fixées : le décalage des
+            # robinets AEP suit la rotation de la planche.
+            ctx.appendScope(QgsExpressionContextUtils.mapSettingsScope(ms))
+            ms.setExpressionContext(ctx)
             ms.setBackgroundColor(QColor(255, 255, 255))
             try:
                 ms.setFlag(Qgis.MapSettingsFlag.Antialiasing,       True)
@@ -890,69 +1139,6 @@ class PrintTool(QgsMapTool):
             job = QgsMapRendererParallelJob(ms)
             job.start()
             return job
-
-        def _draw_scalebar(ech=None):
-            """Barre d'échelle discrète, tracée à même la carte."""
-            ech = ech or echelle
-            n_seg = 4
-
-            # Largeur visée ~28 % de la page, arrondie à une valeur ronde.
-            sb_w_m  = w_mm * 0.28 / 1000.0 * ech
-            seg_m   = self._nice_scalebar_step(sb_w_m / n_seg)
-            seg_px  = seg_m * 1000.0 / ech * dpi / 25.4
-            total_px = int(seg_px * n_seg)
-
-            sb_h_px = max(3, px(1.8))     # barre fine : 1,8 mm
-
-            # La police d'abord : c'est elle qui impose la hauteur de la
-            # bande de libellés. Fixer cette hauteur en millimètres coupait
-            # le texte par le bas dès que la police dépassait — ce qui était
-            # le cas sur tous les formats à partir du A3.
-            drapeau = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom
-            f_sb = QFont("Arial")
-            f_sb.setPointSize(max(5, int(carto_h_mm / 25.4 * 72 * 0.16)))
-            painter.setFont(f_sb)
-            lbl_h = painter.boundingRect(
-                QRect(0, 0, w_px, px(30)), drapeau, "0000 m").height()
-            lbl_h += max(1, px(0.8))
-
-            sb_x = (w_px - total_px) // 2
-            sb_y = carto_y_px - px(3) - sb_h_px
-
-            encre = QColor(0x33, 0x33, 0x33)
-
-            # ── Segments alternés ────────────────────────────────────────
-            for k in range(n_seg):
-                r = QRect(sb_x + int(k * seg_px), sb_y, int(seg_px), sb_h_px)
-                painter.fillRect(r, encre if k % 2 == 0
-                                 else QColor(255, 255, 255))
-
-            # Un seul contour pour toute la barre, plus les séparations : les
-            # segments encadrés un par un doublaient chaque trait intérieur.
-            painter.setPen(QPen(encre, 1))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRect(QRect(sb_x, sb_y, total_px, sb_h_px))
-            for k in range(1, n_seg):
-                x = sb_x + int(k * seg_px)
-                painter.drawLine(x, sb_y, x, sb_y + sb_h_px)
-
-            # ── Graduations ──────────────────────────────────────────────
-            painter.setPen(encre)
-            for k in range(n_seg + 1):
-                valeur = seg_m * k
-                texte = ("%g" % valeur)
-                if k == n_seg:
-                    texte += " m"     # l'unité une seule fois, en bout
-                lx = sb_x + int(k * seg_px)
-                # Largeur mesurée et non calée sur une graduation : le dernier
-                # libellé porte l'unité, il est donc plus large qu'un pas de
-                # graduation et se faisait tronquer.
-                besoin = painter.boundingRect(
-                    QRect(0, 0, w_px, lbl_h), drapeau, texte)
-                demi = besoin.width() // 2 + max(1, px(0.6))
-                painter.drawText(
-                    QRect(lx - demi, sb_y - lbl_h, 2 * demi, lbl_h),
-                    drapeau, texte)
 
         # Mentions de source des fonds tiers (OpenStreetMap, Esri), en bas à
         # droite de la zone carte : leur licence les exige sur tout plan
@@ -988,100 +1174,242 @@ class PrintTool(QgsMapTool):
             _bloc(i18n.tr('pt_sources', sources=" — ".join(_sources)), True,
                   QColor(0x33, 0x33, 0x33))
 
-        def _draw_cartouche(titre_txt, fmt, page_num):
-            painter.fillRect(
-                QRect(0, carto_y_px, w_px, h_px - carto_y_px),
-                QColor(255, 255, 255))
-            painter.setPen(QPen(QColor(0, 0, 0), 1))
-            painter.drawLine(0, carto_y_px, w_px, carto_y_px)
-            pt = max(7, int(carto_h_mm / 25.4 * 72 * 0.30))
+        # ── Cartouche ────────────────────────────────────────────────────
+        # Tout ce qui n'est pas la carte y est rangé : échelle graduée, nord,
+        # réseaux, références, date et indice, planche et mini-plan de
+        # situation. La carte n'est plus masquée par la barre ni la flèche.
+        from ..gui.quick_config_widgets import NETWORK_COLORS as _COULEURS_RESEAUX
+        _reseaux_presents = []
+        _lignes_reseau = []     # géométries des conduites, pour le mini-plan
+        for _lyr in _print_layers:
+            for _code in ('EU', 'EP', 'AEP'):
+                if (_lyr.name() == 'conduite_%s' % _code
+                        and hasattr(_lyr, 'featureCount') and _lyr.featureCount()):
+                    _reseaux_presents.append(_code)
+                    _lignes_reseau.extend(
+                        f.geometry() for f in _lyr.getFeatures()
+                        if f.hasGeometry())
+        _reseaux_presents = [c for c in ('EU', 'EP', 'AEP') if c in _reseaux_presents]
+        _crs = QgsProject.instance().crs()
+        _ref_crs = ("RGF93 / Lambert-93" if _crs.authid() == "EPSG:2154"
+                    else (_crs.description() or _crs.authid()))
+        _ref_alti = i18n.tr('pt_cart_alti') if _terr.est_france() else ""
+        _titre_plan = (self.s.get('titre') or "").strip() or pdf_title
+        _indice = (self.s.get('indice') or "").strip()
 
-            def _police_ajustee(text, max_w, max_h, bold):
-                """Plus grande taille <= pt qui fait tenir `text` dans la case.
-
-                La taille de base ne se déduit que de la hauteur du bandeau.
-                En portrait, celle-ci est plafonnée à 30 mm sur une page
-                étroite : la case de date, qui ne fait que 12 % de la largeur,
-                est alors bien trop petite. Le retour à la ligne ne sauve rien,
-                une date n'ayant aucune espace où se couper.
-                """
-                f = QFont("Arial")
-                f.setBold(bold)
-                flags = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap
-                for taille in range(int(pt), 4, -1):
-                    f.setPointSize(taille)
-                    # boundingRect du painter : métriques du périphérique de
-                    # sortie, pas celles de l'écran.
+        def _texte_case(rect, lignes, taille_max, gras_premiere=True,
+                        alignement=Qt.AlignmentFlag.AlignHCenter):
+            """Lignes de texte centrées verticalement dans `rect`, à la plus
+            grande taille (<= taille_max) qui fait tout tenir."""
+            lignes = [l for l in lignes if l]
+            if not lignes:
+                return
+            for taille in range(int(taille_max), 4, -1):
+                polices = []
+                hauteur = 0
+                largeur_ok = True
+                for k, ligne in enumerate(lignes):
+                    f = QFont("Arial")
+                    f.setBold(gras_premiere and k == 0)
+                    f.setPointSize(taille if k == 0 else max(5, int(taille * 0.78)))
                     painter.setFont(f)
-                    besoin = painter.boundingRect(
-                        QRect(0, 0, max_w, max_h), flags, text)
-                    if besoin.width() <= max_w and besoin.height() <= max_h:
-                        break
-                return f
+                    b = painter.boundingRect(QRect(0, 0, 10 * rect.width(), rect.height()),
+                                             Qt.AlignmentFlag.AlignLeft, ligne)
+                    largeur_ok &= b.width() <= rect.width()
+                    hauteur += b.height()
+                    polices.append((f, b.height()))
+                if largeur_ok and hauteur <= rect.height():
+                    break
+            y = rect.y() + (rect.height() - hauteur) // 2
+            painter.setPen(QColor(0, 0, 0))
+            for ligne, (f, h) in zip(lignes, polices):
+                painter.setFont(f)
+                painter.drawText(QRect(rect.x(), y, rect.width(), h),
+                                 alignement | Qt.AlignmentFlag.AlignVCenter, ligne)
+                y += h
 
-            # La date est incompressible (10 caractères sans espace) alors
-            # que le titre a toujours de la marge : les 4 % transférés ne
-            # coûtent rien au titre et évitent une date en corps 6.
-            sections = [
-                (titre_txt, 0.00, 0.41, True),
-                (fmt,       0.41, 0.32, False),
-                (QDate.currentDate().toString("dd/MM/yyyy"), 0.73, 0.16, False),
-                (page_num,  0.89, 0.11, False),
-            ]
-            for text, xf, wf, bold in sections:
-                xp = int(xf * w_px)
-                wp = int(wf * w_px)
-                if xf > 0:
-                    painter.drawLine(xp, carto_y_px, xp, h_px)
-                painter.setFont(
-                    _police_ajustee(text, wp - 8, carto_h_px, bold))
-                painter.setPen(QColor(0, 0, 0))
-                painter.drawText(
-                    QRect(xp + 4, carto_y_px, wp - 8, carto_h_px),
-                    Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap,
-                    text)
-            painter.setPen(QPen(QColor(0, 0, 0), 1))
-            painter.drawRect(QRect(0, carto_y_px, w_px - 1,
-                                   h_px - carto_y_px - 1))
+        def _barre_echelle(rect, ech):
+            """Barre graduée (4 segments) tenant dans `rect`, libellés dessus."""
+            n_seg = 4
+            sol_m = rect.width() * 25.4 / dpi / 1000.0 * ech * 0.92
+            # Pas rond arrondi PAR DÉFAUT (1, 2, 2,5, 5 × 10^k) : arrondi par
+            # excès, la barre débordait de sa case.
+            cible = sol_m / n_seg
+            puissance = 10 ** math.floor(math.log10(cible))
+            seg_m = max(m * puissance for m in (1, 2, 2.5, 5, 10)
+                        if m * puissance <= cible)
+            seg_px = seg_m * 1000.0 / ech * dpi / 25.4
+            total = int(seg_px * n_seg)
+            barre_h = max(3, px(1.4))
+            x0 = rect.x() + (rect.width() - total) // 2
+            y0 = rect.bottom() - barre_h
+            encre = QColor(0x33, 0x33, 0x33)
+            for k in range(n_seg):
+                painter.fillRect(QRect(x0 + int(k * seg_px), y0, int(seg_px), barre_h),
+                                 encre if k % 2 == 0 else QColor(255, 255, 255))
+            painter.setPen(QPen(encre, 1))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(QRect(x0, y0, total, barre_h))
+            f = QFont("Arial")
+            f.setPixelSize(max(7, px(2.4)))
+            painter.setFont(f)
+            painter.setPen(encre)
+            h_lbl = y0 - rect.y() - px(0.4)
+            for k in (0, 2, 4):
+                texte = "%g" % (seg_m * k) + (" m" if k == n_seg else "")
+                x = x0 + int(k * seg_px)
+                painter.drawText(QRect(x - px(10), rect.y(), px(20), h_lbl),
+                                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom,
+                                 texte)
 
-        def _draw_north_arrow(rot_rad):
-            """Flèche du nord en haut à droite de la zone carte.
-
-            La carte est rendue avec setRotation(-rot) : le contenu tourne de
-            -rot, donc le nord s'écarte du haut de page de rot dans le sens
-            anti-horaire. La flèche était déjà dessinée ainsi — c'est le
-            rendu qui suivait la mauvaise convention.
-            """
-            size   = px(14)          # diamètre du médaillon (~14 mm)
-            margin = px(5)
-            cx_a   = w_px - margin - size // 2
-            cy_a   = margin + size // 2
+        def _fleche_nord(rect, rot_rad):
+            """Flèche du nord centrée dans `rect`, tournée comme la planche."""
+            taille = int(min(rect.width(), rect.height()) * 0.86)
+            cx_a, cy_a = rect.center().x(), rect.center().y()
             painter.save()
-            # Médaillon opaque (pas d'alpha : transparency group Qt5)
-            painter.setBrush(QColor(255, 255, 255))
-            painter.setPen(QPen(QColor(0, 0, 0), max(1, int(px(0.3)))))
-            painter.drawEllipse(QPoint(cx_a, cy_a), size // 2, size // 2)
             painter.translate(cx_a, cy_a)
             painter.rotate(-math.degrees(rot_rad))
-            r = size * 0.30
-            arrow = QPolygon([
-                QPoint(0, int(-r * 1.15)),
-                QPoint(int(-r * 0.55), int(r * 0.45)),
-                QPoint(0, int(r * 0.10)),
-                QPoint(int(r * 0.55), int(r * 0.45)),
-            ])
+            r = taille * 0.36
+            # Flèche dans la moitié basse, « N » noir au-dessus de la pointe :
+            # tous deux tournent avec la planche.
             painter.setBrush(QColor(0, 0, 0))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawPolygon(arrow)
+            painter.drawPolygon(QPolygon([
+                QPoint(0, int(-r * 0.55)), QPoint(int(-r * 0.45), int(r * 1.1)),
+                QPoint(0, int(r * 0.7)), QPoint(int(r * 0.45), int(r * 1.1))]))
             f_n = QFont("Arial")
             f_n.setBold(True)
-            f_n.setPixelSize(max(8, int(size * 0.26)))
+            f_n.setPixelSize(max(8, int(taille * 0.34)))
             painter.setFont(f_n)
             painter.setPen(QColor(0, 0, 0))
-            painter.drawText(
-                QRect(int(-r), int(r * 0.30), int(2 * r), int(size * 0.32)),
-                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "N")
+            painter.drawText(QRect(int(-r), int(-r * 1.45), int(2 * r), int(r * 0.9)),
+                             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "N")
             painter.restore()
+
+        def _legende_reseaux(rect):
+            """Un trait de la couleur de chaque réseau présent, et son code."""
+            if not _reseaux_presents:
+                return
+            h_ligne = rect.height() // max(3, len(_reseaux_presents))
+            f = QFont("Arial")
+            f.setBold(True)
+            f.setPixelSize(max(7, min(px(3.4), int(h_ligne * 0.8))))
+            painter.setFont(f)
+            y = rect.y() + (rect.height() - h_ligne * len(_reseaux_presents)) // 2
+            for code in _reseaux_presents:
+                couleur = QColor(_COULEURS_RESEAUX.get(code, '#000000'))
+                ym = y + h_ligne // 2
+                painter.setPen(QPen(couleur, max(2, px(0.9))))
+                painter.drawLine(rect.x(), ym, rect.x() + rect.width() // 2 - px(1), ym)
+                painter.setPen(couleur)
+                painter.drawText(QRect(rect.x() + rect.width() // 2 + px(1), y,
+                                       rect.width() // 2, h_ligne),
+                                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, code)
+                y += h_ligne
+
+        def _mini_plan(rect, index):
+            """Situation de la planche : réseau en gris, toutes les planches en
+            contour, la planche courante pleine, dans sa couleur."""
+            zones = [self._corners_zone_carte(sh['center'].x(), sh['center'].y(),
+                                              sh['rotation_rad']) for sh in self._sheets]
+            xs = [c.x() for z in zones for c in z]
+            ys = [c.y() for z in zones for c in z]
+            if not xs:
+                return
+            larg, haut = max(xs) - min(xs), max(ys) - min(ys)
+            ech = min(rect.width() / max(larg, 1e-6), rect.height() / max(haut, 1e-6))
+            ox = rect.x() + (rect.width() - larg * ech) / 2
+            oy = rect.y() + (rect.height() - haut * ech) / 2
+
+            def vers_px(x, y):
+                return QPoint(int(ox + (x - min(xs)) * ech), int(oy + (max(ys) - y) * ech))
+
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            painter.setClipRect(rect)
+            painter.setPen(QPen(QColor(150, 150, 150), 1))
+            for g in _lignes_reseau:
+                for partie in (g.asMultiPolyline() if g.isMultipart() else [g.asPolyline()]):
+                    points = [vers_px(p.x(), p.y()) for p in partie]
+                    for a, b in zip(points, points[1:]):
+                        painter.drawLine(a, b)
+            for k, z in enumerate(zones):
+                poly = QPolygon([vers_px(c.x(), c.y()) for c in z])
+                if k == index:
+                    painter.setBrush(_couleur_planche(k, 150))
+                    painter.setPen(QPen(_couleur_planche(k, 255), max(1, px(0.35))))
+                else:
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.setPen(QPen(QColor(120, 120, 120), 1))
+                painter.drawPolygon(poly)
+            painter.restore()
+
+        def _draw_cartouche(ech, rot_rad, index=None, ensemble=False):
+            y0, h = carto_y_px, carto_h_px
+            painter.fillRect(QRect(0, y0, w_px, h_px - y0), QColor(255, 255, 255))
+            marge = px(1.2)
+            base_pt = max(7, int(carto_h_mm / 25.4 * 72 * 0.26))
+
+            # Largeurs relatives des cases ; le nord est carré.
+            carre = h
+            reste = w_px - carre
+            parts = [('titre', 0.31), ('echelle', 0.17), ('nord', None),
+                     ('reseaux', 0.10), ('refs', 0.15), ('date', 0.11), ('planche', 0.16)]
+            cases = {}
+            x = 0
+            for nom, frac in parts:
+                larg = carre if frac is None else int(reste * frac)
+                if nom == 'planche':
+                    larg = w_px - x
+                cases[nom] = QRect(x, y0, larg, h)
+                x += larg
+
+            painter.setPen(QPen(QColor(0, 0, 0), 1))
+            for nom, r in cases.items():
+                if r.x() > 0:
+                    painter.drawLine(r.x(), y0, r.x(), h_px)
+
+            def interieur(r):
+                return r.adjusted(marge, marge, -marge, -marge)
+
+            objet = i18n.tr('pt_cart_objet', reseaux=" · ".join(_reseaux_presents)
+                            ) if _reseaux_presents else i18n.tr('pt_cart_objet_seul')
+            _texte_case(interieur(cases['titre']),
+                        [_titre_plan, (i18n.tr('pt_plan_ensemble_court').capitalize()
+                                       + " — " + objet) if ensemble else objet],
+                        base_pt + 2)
+
+            r_ech = interieur(cases['echelle'])
+            haut_txt = r_ech.height() * 0.42
+            _texte_case(QRect(r_ech.x(), r_ech.y(), r_ech.width(), int(haut_txt)),
+                        ["%s  —  1 : %s" % (self.s['format'],
+                                            f"{int(ech):,}".replace(",", " "))], base_pt)
+            _barre_echelle(QRect(r_ech.x() + px(2), r_ech.y() + int(haut_txt),
+                                 r_ech.width() - px(4), r_ech.height() - int(haut_txt)), ech)
+
+            _fleche_nord(interieur(cases['nord']), rot_rad)
+            _legende_reseaux(interieur(cases['reseaux']).adjusted(px(1), 0, -px(1), 0))
+            _texte_case(interieur(cases['refs']), [_ref_crs, _ref_alti],
+                        base_pt - 1, gras_premiere=False)
+            _texte_case(interieur(cases['date']),
+                        [QDate.currentDate().toString("dd/MM/yyyy"),
+                         i18n.tr('pt_cart_indice', indice=_indice) if _indice else ""],
+                        base_pt, gras_premiere=False)
+
+            r_pl = interieur(cases['planche'])
+            if ensemble:
+                _texte_case(r_pl, [i18n.tr('pt_nb_planches_cart', n=n)], base_pt)
+            else:
+                larg_txt = int(r_pl.width() * 0.40)
+                _texte_case(QRect(r_pl.x(), r_pl.y(), larg_txt, r_pl.height()),
+                            [i18n.tr('pt_cart_planche'), "%d / %d" % (index + 1, n)],
+                            base_pt, gras_premiere=False)
+                _mini_plan(QRect(r_pl.x() + larg_txt + px(1), r_pl.y(),
+                                 r_pl.width() - larg_txt - px(1), r_pl.height()), index)
+
+            painter.setPen(QPen(QColor(0, 0, 0), 1))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(QRect(0, y0, w_px - 1, h_px - y0 - 1))
 
         # ── Rendu de toutes les pages en parallèle ────────────────────────
         # Tous les jobs sont démarrés en même temps (threads QGIS) : les
@@ -1096,6 +1424,11 @@ class PrintTool(QgsMapTool):
 
         ov_ctx = {}   # contexte overview pour le dessin des emprises
         jobs   = []
+        # Fonds distants : délai court et relance des planches incomplètes.
+        surveillance = _SurveillanceReseau()
+        incompletes = []
+        hotes_echec = set()
+        sans_fond = []      # (noms des fonds retirés, planches concernées)
         if overview_settings:
             ov       = overview_settings
             ov_ech   = ov["echelle"]
@@ -1133,7 +1466,18 @@ class PrintTool(QgsMapTool):
         progress.setWindowTitle(i18n.tr('msg_impression'))
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(400)
-        deja_fini = [False] * len(jobs)
+        progress.setMinimumWidth(460)
+        progress.setLabel(self._etiquette_gauche())
+        import time as _time
+        debut_rendu = _time.monotonic()
+        noms_serveurs = self._serveurs_des_fonds(_print_layers)
+        titre_rendu = (i18n.tr('pt_progress_titre_ensemble', n=len(self._sheets))
+                       if overview_settings else
+                       i18n.tr('pt_progress_titre', n=len(self._sheets)))
+        texte_affiche = None
+        deja_fini = [False] * len(jobs)     # False, puis durée de rendu (s)
+        libelles_jobs = ([i18n.tr('pt_plan_ensemble_court').capitalize()] if overview_settings else [])
+        libelles_jobs += [i18n.tr('pt_progress_planche', n=k + 1) for k in range(len(self._sheets))]
         try:
             while True:
                 done = 0
@@ -1142,11 +1486,21 @@ class PrintTool(QgsMapTool):
                         continue
                     done += 1
                     # Premier passage à l'état terminé : on horodate ce job.
-                    if not deja_fini[i]:
-                        deja_fini[i] = True
+                    if deja_fini[i] is False:
+                        deja_fini[i] = _time.monotonic() - debut_rendu
                         chrono.log("  job %d/%d rendu           %7.2f s"
                                    % (i + 1, len(jobs), chrono.depuis_debut()))
                 progress.setValue(done)
+                maintenant = _time.monotonic() - debut_rendu
+                cartes = [(libelles_jobs[i],
+                           deja_fini[i] if deja_fini[i] is not False else maintenant,
+                           deja_fini[i] is not False)
+                          for i in range(len(jobs))]
+                texte = self._texte_progression(titre_rendu, debut_rendu, surveillance,
+                                                noms_serveurs, done, len(jobs), cartes)
+                if texte != texte_affiche:
+                    progress.setLabelText(texte)
+                    texte_affiche = texte
                 if progress.wasCanceled():
                     for j in jobs:
                         j.cancel()
@@ -1158,10 +1512,97 @@ class PrintTool(QgsMapTool):
                     break
                 QApplication.processEvents(
                     QEventLoop.ProcessEventsFlag.AllEvents, 50)
+            # Pas de second passage : le fournisseur WMS de QGIS retente déjà
+            # chaque image trois fois, et un nouveau rendu refaisait ces trois
+            # essais dans le vide quand le serveur flanche (28/09/2026 : 130 s
+            # de plus, sans une image récupérée). On se contente de signaler
+            # les planches dont le fond est incomplet.
+            if surveillance.echecs:
+                incompletes = surveillance.planches_touchees(jobs)
+                hotes_echec = {u.host() for u in surveillance.echecs}
+                chrono.log("  %d requete(s) de fond en echec (%s) -> rendus %s"
+                           % (len(surveillance.echecs),
+                              ", ".join(sorted({u.host() for u in surveillance.echecs})),
+                              [i + 1 for i in incompletes]))
         finally:
             progress.close()
+            surveillance.arreter()
 
         chrono.etape("attente rendu des cartes")
+
+        # Fond lent ou indisponible : on demande plutôt que d'imprimer un
+        # plan troué sans prévenir — sans ce fond, nouvel essai dans deux
+        # minutes (serveur moins chargé), ou tel quel.
+        def _libelle(k):
+            if overview_settings and k == 0:
+                return i18n.tr('pt_plan_ensemble_court')
+            return str(k if overview_settings else k + 1)
+
+        def _reessayer(a_refaire):
+            """Refait les rendus indiqués, fonds compris ; rend (incomplets,
+            hôtes en échec), ou None si l'utilisateur annule."""
+            surv = _SurveillanceReseau()
+            try:
+                titre = i18n.tr('pt_progress_reessai',
+                                planches=", ".join(_libelle(k) for k in a_refaire))
+                for k in a_refaire:
+                    jobs[k] = self._rendre(jobs[k].mapSettings(), titre, surv,
+                                           noms_serveurs)
+                    if jobs[k] is None:
+                        return None
+                touchees = surv.planches_touchees(jobs) if surv.echecs else []
+                return ([k for k in a_refaire if k in touchees],
+                        {u.host() for u in surv.echecs})
+            finally:
+                surv.arreter()
+
+        # Un premier nouvel essai, sans rien demander : un serveur qui a
+        # flanché un instant répond souvent au coup suivant. On ne demande
+        # à l'utilisateur que si le fond manque encore.
+        if incompletes:
+            resultat = _reessayer(incompletes)
+            if resultat is None:
+                return
+            incompletes, hotes_echec = resultat
+            chrono.log("  essai automatique : rendus encore incomplets %s"
+                       % [k + 1 for k in incompletes])
+
+        while incompletes:
+            fonds = [lyr for lyr in _print_layers
+                     if any(h and h in lyr.source() for h in hotes_echec)]
+            noms = ", ".join(lyr.name() for lyr in fonds) or ", ".join(sorted(hotes_echec))
+            planches = ", ".join(_libelle(k) for k in incompletes)
+            choix = self._demander_fond_indisponible(noms, planches, bool(fonds))
+            if choix == 'annuler':
+                self.iface.messageBar().pushMessage(
+                    i18n.tr('msg_impression'), i18n.tr('pt_export_annule'),
+                    level=Qgis.MessageLevel.Warning, duration=5)
+                return
+            if choix == 'tel_quel':
+                break
+            if choix == 'sans':
+                ids = {lyr.id() for lyr in fonds}
+                for k in incompletes:
+                    ms = jobs[k].mapSettings()
+                    ms.setLayers([lyr for lyr in ms.layers() if lyr.id() not in ids])
+                    jobs[k] = self._rendre(ms, i18n.tr('pt_progress_sans', fonds=noms))
+                    if jobs[k] is None:
+                        return
+                sans_fond.append((noms, planches))
+                chrono.log("  rendus %s refaits sans %s" % (planches, noms))
+                incompletes = []
+                break
+            # choix == 'attendre' : compte à rebours, puis nouvel essai des
+            # seules planches incomplètes, fonds compris.
+            if not self._attendre(ATTENTE_REESSAI_S):
+                return
+            resultat = _reessayer(incompletes)
+            if resultat is None:
+                return
+            incompletes, hotes_echec = resultat
+            chrono.log("  nouvel essai : rendus encore incomplets %s"
+                       % [k + 1 for k in incompletes])
+        chrono.etape("fonds indisponibles")
 
         img_ov      = jobs[0].renderedImage() if overview_settings else None
         detail_imgs = [j.renderedImage()
@@ -1289,16 +1730,8 @@ class PrintTool(QgsMapTool):
                 painter.drawPath(chemin)              # le chiffre
             painter.restore()
 
-            _draw_north_arrow(0.0)
-            _draw_scalebar(ov_ctx['ov_ech'])
             _draw_attribution()
-            ov_fmt = i18n.tr(
-                'pt_nb_feuilles', nb=n,
-                echelle=f"{int(ov_ctx['ov_ech']):,}".replace(",", " "))
-            _draw_cartouche(
-                i18n.tr('pt_cartouche_ensemble', titre=titre),
-                ov_fmt,
-                i18n.tr('pt_ens'))
+            _draw_cartouche(ov_ctx['ov_ech'], 0.0, ensemble=True)
 
         # ── Feuilles de détail ────────────────────────────────────────────
         # Même logique que le plan d'ensemble : image limitée à la zone carte
@@ -1307,21 +1740,28 @@ class PrintTool(QgsMapTool):
             _new_page()
             painter.drawImage(QRect(0, 0, w_px, h_map_px), detail_imgs[i])
             detail_imgs[i] = None   # libère l'image (pic mémoire, grands formats)
-            _draw_north_arrow(self._sheets[i]['rotation_rad'])
-            _draw_scalebar()
             _draw_attribution()
-            _draw_cartouche(titre, fmt_ech, f"{i + 1} / {n}")
+            _draw_cartouche(echelle, self._sheets[i]['rotation_rad'], index=i)
 
         painter.end()
 
         chrono.etape("composition et ecriture PDF")
         chrono.log("TOTAL %.2f s" % chrono.depuis_debut())
+        self._pdf_genere = True
 
-        self.iface.messageBar().pushMessage(
-            i18n.tr('msg_impression'),
-            i18n.tr('pt_pdf_exporte', nb=n, chemin=pdf_path),
-            level=Qgis.MessageLevel.Info, duration=8,
-        )
+        from .notification import export_termine
+        texte = i18n.tr('pt_pdf_exporte', nb=n, chemin=pdf_path)
+        for noms, planches in sans_fond:
+            texte += "  |  " + i18n.tr('pt_sans_fond_note', fonds=noms, planches=planches)
+        if incompletes:
+            # Index 0 = plan d'ensemble quand il y en a un.
+            noms = [i18n.tr('pt_plan_ensemble_court') if (overview_settings and k == 0)
+                    else str(k if overview_settings else k + 1)
+                    for k in incompletes]
+            texte += "  |  " + i18n.tr('pt_fonds_incomplets', planches=", ".join(noms))
+        export_termine(i18n.tr('msg_impression'), texte, pdf_path,
+                       niveau=(Qgis.MessageLevel.Warning if incompletes
+                               else Qgis.MessageLevel.Success))
         if self.s.get('open_after', True):
             try:
                 # Ouvre le PDF que le plugin vient d'ecrire, avec le lecteur

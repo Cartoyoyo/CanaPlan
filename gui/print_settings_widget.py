@@ -48,8 +48,17 @@ class PrintSettingsWidget(QWidget):
         super().__init__(parent)
         self._disposition = disposition
 
-        default_title = QgsProject.instance().title() or i18n.tr('pd_plan_reseau')
+        # Titre par défaut : le nom du projet CanaPlan (fichier .bet ouvert),
+        # à défaut le titre du projet QGIS, sinon « Plan de réseau ».
+        from ..tools.projet_bet import current_bet_name
+        default_title = (current_bet_name() or QgsProject.instance().title()
+                         or i18n.tr('pd_plan_reseau'))
         self.titre_edit = QLineEdit(default_title)
+        # Indice de révision du plan, repris dans le cartouche.
+        self.indice_edit = QLineEdit("A")
+        self.indice_edit.setMaxLength(4)
+        self.indice_edit.setFixedWidth(40)
+        self.indice_edit.setToolTip(i18n.tr('pd_indice_tip'))
 
         self.format_combo = QComboBox()
         self.format_combo.addItems(list(FORMATS.keys()))
@@ -113,7 +122,9 @@ class PrintSettingsWidget(QWidget):
         self._dpi_note.setVisible(not compact)
         self.dpi_combo.currentIndexChanged.connect(self._on_dpi_changed)
 
-        self.format_combo.currentIndexChanged.connect(self._suggest_dpi)
+        # Pas d'ajustement de la résolution au format : 150 dpi par défaut,
+        # quel que soit le papier (le passage automatique à 200 ou 300 dpi
+        # alourdissait les fonds de plan à télécharger).
 
         # ── Cadrage des planches ──────────────────────────────────────────
         self.rb_manuel = QRadioButton(i18n.tr('pd_cadrage_manuel'))
@@ -152,6 +163,7 @@ class PrintSettingsWidget(QWidget):
         form = QFormLayout(self)
         form.setContentsMargins(0, 0, 0, 0)
         form.addRow(i18n.tr('pd_titre_plan'), self.titre_edit)
+        form.addRow(i18n.tr('pd_indice'), self.indice_edit)
         if compact:
             # Format et orientation sur une seule ligne : deux listes courtes
             # côte à côte valent mieux que deux lignes de formulaire.
@@ -195,15 +207,28 @@ class PrintSettingsWidget(QWidget):
             ligne.addWidget(widget)
         ligne.addStretch()
 
-        # Le titre et le mode de cadrage ne tiennent pas sur la même ligne :
-        # ils forment le corps du widget, que l'appelant place en dessous.
-        corps = QFormLayout(self)
+        # Le titre est exposé à part (`ligne_titre`) : l'appelant le pose au
+        # bout de la case « Plan DXF », une ligne gagnée. Le corps du widget
+        # ne garde que le cadrage, sur une seule ligne.
+        self.ligne_titre = QWidget()
+        titre = QHBoxLayout(self.ligne_titre)
+        titre.setContentsMargins(0, 0, 0, 0)
+        titre.setSpacing(4)
+        titre.addWidget(QLabel(i18n.tr('pd_titre_plan')))
+        titre.addWidget(self.titre_edit, 1)
+        titre.addSpacing(6)
+        titre.addWidget(QLabel(i18n.tr('pd_indice')))
+        titre.addWidget(self.indice_edit)
+
+        corps = QHBoxLayout(self)
         corps.setContentsMargins(0, 0, 0, 0)
-        corps.setSpacing(4)
-        corps.addRow(i18n.tr('pd_titre_plan'), self.titre_edit)
-        corps.addRow(i18n.tr('pd_cadrage'), self.rb_manuel)
-        corps.addRow("", self.rb_auto)
-        corps.addRow("", self.cb_ensemble)
+        corps.setSpacing(8)
+        corps.addWidget(QLabel(i18n.tr('pd_cadrage')))
+        corps.addWidget(self.rb_manuel)
+        corps.addWidget(self.rb_auto)
+        corps.addSpacing(8)
+        corps.addWidget(self.cb_ensemble)
+        corps.addStretch()
 
     # ------------------------------------------------------------------ slots
 
@@ -222,18 +247,6 @@ class PrintSettingsWidget(QWidget):
         self._cadrage_note.setText(
             i18n.tr('pd_cadrage_note_manuel') if self.rb_manuel.isChecked()
             else i18n.tr('pd_cadrage_note_auto'))
-
-    def _suggest_dpi(self):
-        """Suggère 150 dpi pour A1/A0, 200 pour A2/A3, 300 pour A4.
-        N'écrase pas une saisie personnalisée déjà active."""
-        if self.dpi_combo.currentData() is None:
-            return
-        suggested = {"A0": 1, "A1": 1, "A2": 2, "A3": 2, "A4": 3}.get(
-            self.format_combo.currentText(), 1)
-        self.dpi_combo.blockSignals(True)
-        self.dpi_combo.setCurrentIndex(suggested)
-        self.dpi_combo.blockSignals(False)
-        self._on_dpi_changed()
 
     # ------------------------------------------------------------------ résultat
 
@@ -254,6 +267,7 @@ class PrintSettingsWidget(QWidget):
         return {
             "titre":        (self.titre_edit.text().strip()
                              or i18n.tr('pd_plan_reseau')),
+            "indice":       self.indice_edit.text().strip(),
             "format":       fmt,
             "orientation":  self.orient_combo.currentData(),
             "w_mm":         float(w_mm),

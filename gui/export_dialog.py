@@ -38,11 +38,11 @@ class ExportDialog(QDialog):
         # Bloc « Schémas AEP » seulement s'il y a des schémas de nœuds (SchemAEP).
         self._nb_schemas_aep = nb_schemas_aep if avec_aep else 0
         self.setWindowTitle(i18n.tr('exp_titre'))
-        self.setMinimumWidth(500)
+        self.setMinimumWidth(580)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(6)
+        layout.setSpacing(4)
 
         self._bloc_tout_en_un(layout)
 
@@ -89,9 +89,14 @@ class ExportDialog(QDialog):
         ligne.addWidget(self.reglages.ligne_combos, 1)
         layout.addLayout(ligne)
 
-        layout.addWidget(self.cb_dxf)
+        # Titre du plan au bout de la case DXF : une ligne de gagnée.
+        ligne_dxf = QHBoxLayout()
+        ligne_dxf.setSpacing(12)
+        ligne_dxf.addWidget(self.cb_dxf)
+        ligne_dxf.addWidget(self.reglages.ligne_titre, 1)
+        layout.addLayout(ligne_dxf)
 
-        # Titre du plan et mode de cadrage, en retrait sous les cases.
+        # Mode de cadrage, en retrait sous les cases.
         retrait = QHBoxLayout()
         retrait.setContentsMargins(_INDENT, 0, 0, 0)
         retrait.addWidget(self.reglages)
@@ -102,77 +107,81 @@ class ExportDialog(QDialog):
         self._sync_impression()
 
     def _bloc_profils(self, layout):
-        layout.addWidget(_titre(i18n.tr('exp_profils')))
-
-        self.cb_eu,  self.fmt_eu  = self._profil_row(
-            layout, i18n.tr('exp_profils_reseau', code="EU"))
-        self.cb_ep,  self.fmt_ep  = self._profil_row(
-            layout, i18n.tr('exp_profils_reseau', code="EP"))
+        # EU, EP, AEP côte à côte sur la ligne du titre, chacun avec son
+        # format ; le profil groupé, qui a sa référence, sur la ligne suivante.
+        self.cb_eu,  self.fmt_eu  = self._profil_case("EU")
+        self.cb_ep,  self.fmt_ep  = self._profil_case("EP")
+        cases = [self.cb_eu, self.fmt_eu, self.cb_ep, self.fmt_ep]
         self.cb_aep = self.fmt_aep = None
         if self._avec_aep:
-            self.cb_aep, self.fmt_aep = self._profil_row(
-                layout, i18n.tr('exp_profils_reseau', code="AEP"))
+            self.cb_aep, self.fmt_aep = self._profil_case("AEP")
+            cases += [self.cb_aep, self.fmt_aep]
+        layout.addWidget(_ligne_titree(i18n.tr('exp_profils'), *cases))
         self.cb_grp, self.fmt_grp, self.ref_grp = self._profil_groupe_row(layout)
 
     def _bloc_cubature(self, layout):
-        layout.addWidget(_titre(i18n.tr('exp_cubature_titre')))
-
         self.cb_cubature = QCheckBox(i18n.tr('exp_cub_inclure'))
         self.cb_cubature.setToolTip(i18n.tr('exp_cub_note'))
-        layout.addWidget(self.cb_cubature)
 
         # Tous les réglages vivent dans ce conteneur : une seule connexion
         # suffit à les activer ou les griser avec la case maîtresse.
         self._cub_box = QWidget()
         box = QVBoxLayout(self._cub_box)
-        box.setContentsMargins(_INDENT, 0, 0, 0)
+        # Aligné sous les options de la ligne titrée, pas sous le titre.
+        box.setContentsMargins(_LARGEUR_TITRE + 10, 0, 0, 0)
         box.setSpacing(4)
 
-        self.cub_perimetre = QComboBox()
-        self.cub_perimetre.addItem(i18n.tr('cb_tout'),    'tout')
-        self.cub_perimetre.addItem(i18n.tr('cb_eu_seul'), 'EU')
-        self.cub_perimetre.addItem(i18n.tr('cb_ep_seul'), 'EP')
-        if self._avec_aep:
-            self.cub_perimetre.addItem(i18n.tr('cb_aep_seul'), 'AEP')
+        # Une case par réseau, toutes cochées : le projet entier par défaut,
+        # et n'importe quelle combinaison (EU + AEP…) au besoin.
+        self.cub_reseaux = {}
+        for reseau in (('EU', 'EP', 'AEP') if self._avec_aep else ('EU', 'EP')):
+            case = _colorer(QCheckBox(reseau), reseau)
+            case.setChecked(True)
+            self.cub_reseaux[reseau] = case
 
         self.cub_conduites = QCheckBox(i18n.tr('cb_conduites'))
         self.cub_conduites.setChecked(True)
         self.cub_branchements = QCheckBox(i18n.tr('cb_branchements'))
         self.cub_branchements.setChecked(True)
 
-        box.addWidget(_hrow(
-            QLabel(i18n.tr('exp_cub_perimetre')), self.cub_perimetre,
-            self.cub_conduites, self.cub_branchements))
-
         self.cub_pdf = QCheckBox("PDF")
         self.cub_pdf.setChecked(True)
         self.cub_xlsx = QCheckBox("XLSX")
         self.cub_csv = QCheckBox("CSV")
 
+        # Ligne 1 : la case maîtresse et les réseaux ; ligne 2 : contenu et
+        # formats. Les réglages vivent dans deux conteneurs grisés ensemble.
+        self._cub_reseaux_box = _hrow(QLabel(i18n.tr('exp_cub_perimetre')),
+                                      *self.cub_reseaux.values())
         box.addWidget(_hrow(
+            QLabel(i18n.tr('exp_cub_contenu')),
+            self.cub_conduites, self.cub_branchements, _vsep(),
             QLabel(i18n.tr('exp_cub_formats')),
             self.cub_pdf, self.cub_xlsx, self.cub_csv))
 
-        self._cub_box.setEnabled(False)
-        self.cb_cubature.toggled.connect(self._cub_box.setEnabled)
+        layout.addWidget(_ligne_titree(i18n.tr('exp_cubature_titre'),
+                                       self.cb_cubature, self._cub_reseaux_box))
+        for conteneur in (self._cub_box, self._cub_reseaux_box):
+            conteneur.setEnabled(False)
+            self.cb_cubature.toggled.connect(conteneur.setEnabled)
         layout.addWidget(self._cub_box)
 
     def _bloc_coupes(self, layout):
-        layout.addWidget(_titre(i18n.tr('exp_coupes_titre')))
-
-        self.cb_coupe_eu = QCheckBox(i18n.tr('exp_coupe_type', code="EU"))
-        self.cb_coupe_ep = QCheckBox(i18n.tr('exp_coupe_type', code="EP"))
-        self.cb_coupe_aep = QCheckBox(i18n.tr('exp_coupe_type', code="AEP"))
+        # Le titre dit « coupes types » : les cases n'ont plus qu'à nommer
+        # le réseau, et le format tient sur la même ligne.
+        self.cb_coupe_eu = _colorer(QCheckBox("EU"), "EU")
+        self.cb_coupe_ep = _colorer(QCheckBox("EP"), "EP")
+        self.cb_coupe_aep = _colorer(QCheckBox("AEP"), "AEP")
         self.cb_coupe_aep.setVisible(self._avec_aep)
-        for case in (self.cb_coupe_eu, self.cb_coupe_ep, self.cb_coupe_aep):
-            case.setToolTip(i18n.tr('exp_coupe_note'))
-        layout.addWidget(_hrow(self.cb_coupe_eu, self.cb_coupe_ep,
-                               self.cb_coupe_aep))
+        for case, code in ((self.cb_coupe_eu, "EU"), (self.cb_coupe_ep, "EP"),
+                           (self.cb_coupe_aep, "AEP")):
+            case.setToolTip(i18n.tr('exp_coupe_type', code=code)
+                            + "\n\n" + i18n.tr('exp_coupe_note'))
 
         self._coupe_box = QWidget()
         box = QHBoxLayout(self._coupe_box)
-        box.setContentsMargins(_INDENT, 0, 0, 0)
-        box.setSpacing(8)
+        box.setContentsMargins(8, 0, 0, 0)
+        box.setSpacing(6)
 
         self.coupe_papier = QComboBox()
         for cle in _COUPE_PAPIERS:
@@ -190,15 +199,18 @@ class ExportDialog(QDialog):
         self.cb_coupe_eu.toggled.connect(self._sync_coupe_box)
         self.cb_coupe_ep.toggled.connect(self._sync_coupe_box)
         self.cb_coupe_aep.toggled.connect(self._sync_coupe_box)
-        layout.addWidget(self._coupe_box)
+        layout.addWidget(_ligne_titree(i18n.tr('exp_coupes_titre'),
+                                       self.cb_coupe_eu, self.cb_coupe_ep,
+                                       self.cb_coupe_aep, self._coupe_box))
 
     def _bloc_schemas_aep(self, layout):
-        layout.addWidget(_titre(i18n.tr('exp_schemas_titre', n=self._nb_schemas_aep)))
         self.cb_schemas_pdf = QCheckBox(i18n.tr('exp_schemas_pdf'))
         self.cb_schemas_pdf.setToolTip(i18n.tr('exp_schemas_pdf_note'))
         self.cb_schemas_svg = QCheckBox(i18n.tr('exp_schemas_svg'))
         self.cb_schemas_svg.setToolTip(i18n.tr('exp_schemas_svg_note'))
-        layout.addWidget(_hrow(self.cb_schemas_pdf, self.cb_schemas_svg))
+        layout.addWidget(_ligne_titree(
+            i18n.tr('exp_schemas_titre', n=self._nb_schemas_aep),
+            self.cb_schemas_pdf, self.cb_schemas_svg))
 
     _STYLE_RACCOURCI = (
         "QPushButton {{"
@@ -265,19 +277,19 @@ class ExportDialog(QDialog):
         actif = self.cb_pdf.isChecked() or self.cb_dxf.isChecked()
         self.reglages.setEnabled(actif)
         self.reglages.ligne_combos.setEnabled(actif)
+        self.reglages.ligne_titre.setEnabled(actif)
 
     def get_print_settings(self):
         """Réglages d'impression, au format attendu par PrintTool."""
         return self.reglages.get_settings()
 
     def _bloc_dossier(self, layout, default_dir):
-        layout.addWidget(_titre(i18n.tr('exp_dossier')))
-
         dir_row = QHBoxLayout()
         self.dir_edit = QLineEdit(default_dir or os.path.expanduser("~"))
         self.dir_edit.setReadOnly(False)
         btn_browse = QPushButton(i18n.tr('parcourir'))
         btn_browse.clicked.connect(self._browse_dir)
+        dir_row.addWidget(_titre(i18n.tr('exp_dossier')))
         dir_row.addWidget(self.dir_edit, 1)
         dir_row.addWidget(btn_browse)
         layout.addLayout(dir_row)
@@ -322,6 +334,19 @@ class ExportDialog(QDialog):
 
     # ------------------------------------------------------------------ lignes
 
+    def _profil_case(self, code):
+        """Case « EU » et son format, à poser sur une ligne partagée."""
+        cb = _colorer(QCheckBox(code), code)
+        cb.setToolTip(i18n.tr('exp_profils_reseau', code=code))
+        combo = QComboBox()
+        combo.addItems(_FORMATS)
+        combo.setCurrentText('A3')
+        combo.setEnabled(False)
+        combo.setFixedWidth(52)
+        combo.setToolTip(i18n.tr('pd_format'))
+        cb.toggled.connect(combo.setEnabled)
+        return cb, combo
+
     def _profil_row(self, layout, label):
         row = QHBoxLayout()
         cb = QCheckBox(label)
@@ -360,6 +385,7 @@ class ExportDialog(QDialog):
 
         cb.toggled.connect(_on_toggle)
 
+        row.setContentsMargins(_LARGEUR_TITRE + 6, 0, 0, 0)
         row.addWidget(cb, 1)
         row.addWidget(ref_lbl)
         row.addWidget(ref_combo)
@@ -384,7 +410,8 @@ class ExportDialog(QDialog):
             'profil_groupe_format':  self.fmt_grp.currentText(),
             'profil_groupe_reseau':  self.ref_grp.currentText(),
             'cubature':              self.cb_cubature.isChecked(),
-            'cubature_perimetre':    self.cub_perimetre.currentData(),
+            'cubature_perimetre':    'tout',
+            'cubature_reseaux':      [r for r, c in self.cub_reseaux.items() if c.isChecked()],
             'cubature_conduites':    self.cub_conduites.isChecked(),
             'cubature_branchements': self.cub_branchements.isChecked(),
             'cubature_pdf':          self.cub_pdf.isChecked(),
@@ -409,6 +436,33 @@ def _titre(texte):
     lbl = QLabel(texte)
     lbl.setStyleSheet("font-weight: bold;")
     return lbl
+
+
+def _colorer(case, reseau):
+    """Case d'un réseau à la couleur de ce réseau (celle de la carte),
+    estompée quand la case est grisée."""
+    from qgis.PyQt.QtGui import QColor
+    from .quick_config_widgets import NETWORK_COLORS
+    couleur = QColor(NETWORK_COLORS.get(reseau, '#000000'))
+    pale = QColor(couleur)
+    pale.setAlpha(110)
+    case.setStyleSheet(
+        "QCheckBox { color: %s; font-weight: bold; } "
+        "QCheckBox:disabled { color: rgba(%d, %d, %d, %d); }"
+        % (couleur.name(), pale.red(), pale.green(), pale.blue(), pale.alpha()))
+    return case
+
+
+# Largeur de la colonne des titres de section : les cases s'alignent dessous.
+_LARGEUR_TITRE = 118
+
+
+def _ligne_titree(texte, *widgets):
+    """Titre de section en gras, puis ses options sur la même ligne."""
+    titre = _titre(texte)
+    titre.setFixedWidth(_LARGEUR_TITRE)
+    titre.setWordWrap(True)
+    return _hrow(titre, *widgets)
 
 
 def _hrow(*widgets):

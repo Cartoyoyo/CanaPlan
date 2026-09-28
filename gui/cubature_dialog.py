@@ -11,8 +11,8 @@ from qgis.PyQt.QtWidgets import (
 from qgis.core import QgsProject
 
 from ..tools import i18n
-from qgis.PyQt.QtCore import Qt, QUrl
-from qgis.PyQt.QtGui import QColor, QDesktopServices
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtGui import QColor
 from ..tools import errlog
 from ..tools.reseaux import RESEAUX as _RESEAUX, hex_fonce, hex_clair, cle_role
 
@@ -536,8 +536,11 @@ class CubatureDialog(QDialog):
         # l'explorateur à chaque écriture serait insupportable.
         if not self._ouvrir_dossier:
             return
-        folder = os.path.dirname(os.path.abspath(path))
-        QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
+        # Proposé, pas imposé : l'explorateur ne s'ouvre qu'au clic.
+        from ..tools.notification import export_termine
+        export_termine(i18n.tr('msg_cubature_titre'),
+                       i18n.tr('msg_fichier_exporte',
+                               fichier=os.path.basename(path)), path)
 
     def _default_filename(self, ext):
         # Tous les fichiers produits par l'outil sont prefixes "cubature"

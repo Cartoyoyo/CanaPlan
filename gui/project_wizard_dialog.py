@@ -8,7 +8,7 @@ from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget,
     QWidget, QCheckBox, QGroupBox, QToolBox, QTextEdit, QFrame,
     QLineEdit, QFileDialog, QMessageBox, QScrollArea, QApplication,
-    QRadioButton, QButtonGroup,
+    QRadioButton, QButtonGroup, QGridLayout,
 )
 from qgis.PyQt.QtGui import QFont, QColor
 from qgis.core import (
@@ -403,7 +403,9 @@ class _RecapPage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Ascenseur horizontal seulement en dernier recours (dialogue réduit à
+        # sa largeur minimale) : jamais de contenu rogné sans moyen d'y accéder.
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.verticalScrollBar().setStyleSheet(_SCROLLBAR_DISCRET_QSS)
         outer.addWidget(scroll)
 
@@ -459,6 +461,9 @@ class _RecapPage(QWidget):
         self._network_ep.setMinimumHeight(95)
         self._network_aep = NetworkSchemaWidget()
         self._network_aep.setMinimumHeight(95)
+        # 200 px par défaut × 3 dépasse la largeur du dialogue.
+        for widget in (self._network_eu, self._network_ep, self._network_aep):
+            widget.setMinimumWidth(160)
         for sub_title, widget in (("EU", self._network_eu), ("EP", self._network_ep),
                                   ("AEP", self._network_aep)):
             sub_box = QGroupBox(sub_title)
@@ -470,11 +475,15 @@ class _RecapPage(QWidget):
         reseau_group.setLayout(reseau_layout)
         layout.addWidget(reseau_group)
 
+        # Six largeurs en une seule rangée dépassaient la largeur du dialogue :
+        # la zone défilante (sans ascenseur horizontal) rognait alors tout le
+        # contenu à droite, dont le bouton « Parcourir » du dossier. Grille
+        # réseau (colonnes EU/EP/AEP) × type (lignes conduite/branchement).
         cubature_group = QGroupBox(i18n.tr('wz_cubature_largeurs'))
-        cubature_layout = QHBoxLayout()
+        cubature_layout = QGridLayout()
         self._cubature_widgets = {}
-        for key in ('larg_cond_eu', 'larg_branch_eu', 'larg_cond_ep', 'larg_branch_ep',
-                    'larg_cond_aep', 'larg_branch_aep'):
+        for i, key in enumerate(('larg_cond_eu', 'larg_branch_eu', 'larg_cond_ep',
+                                 'larg_branch_ep', 'larg_cond_aep', 'larg_branch_aep')):
             w = CubatureSchemaWidget()
             w.setMinimumHeight(95)
             w.setMinimumWidth(110)
@@ -485,7 +494,7 @@ class _RecapPage(QWidget):
             sub_layout = QVBoxLayout()
             sub_layout.addWidget(w)
             sub_box.setLayout(sub_layout)
-            cubature_layout.addWidget(sub_box)
+            cubature_layout.addWidget(sub_box, i % 2, i // 2)
         cubature_group.setLayout(cubature_layout)
         layout.addWidget(cubature_group)
 

@@ -164,7 +164,7 @@ def open_dxf_externally(dxf_path):
 
 def run_export_dxf_with_ui(iface, dxf_path, extent, scale, *,
                            with_label_decorations=True, force_2d=True,
-                           open_after=True):
+                           open_after=False):
     """Wrapper : exécute l'export avec gestion du curseur d'attente, post-
     traitement des étiquettes regards/tabourets (fond + cadre + callout via
     ezdxf), message bar et ouverture du fichier après écriture.
@@ -218,11 +218,10 @@ def run_export_dxf_with_ui(iface, dxf_path, extent, scale, *,
 
     suffix = (i18n.tr('dxf_etiquettes_decorees', nb=n_decorated)
               if n_decorated else "")
-    iface.messageBar().pushMessage(
-        i18n.tr('pt_export_dxf'),
-        i18n.tr('ot_dxf_exporte', nb=str(n_layers) + suffix, chemin=dxf_path),
-        level=Qgis.MessageLevel.Info, duration=8,
-    )
+    from .notification import export_termine
+    export_termine(i18n.tr('pt_export_dxf'),
+                   i18n.tr('ot_dxf_exporte', nb=str(n_layers) + suffix,
+                           chemin=dxf_path), dxf_path)
     if open_after:
         open_dxf_externally(dxf_path)
     return True

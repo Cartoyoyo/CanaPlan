@@ -1,6 +1,7 @@
 # gui/coupe_transversale_dialog.py
 
 import math
+import os
 import datetime
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -596,10 +597,10 @@ class CoupeTransversaleDialog(QDialog):
         self.figure.set_size_inches(*old_size)
         self.canvas.draw()
 
-        from qgis.PyQt.QtWidgets import QMessageBox
-        QMessageBox.information(
-            self, i18n.tr('ct_export_pdf_titre'),
-            i18n.tr('ct_exporte', chemin=path))
+        from ..tools.notification import export_termine
+        export_termine(i18n.tr('ct_export_pdf_titre'),
+                       i18n.tr('msg_fichier_exporte',
+                               fichier=os.path.basename(path)), path)
 
     # ------------------------------------------------------------------ export PNG
 
@@ -619,7 +620,7 @@ class CoupeTransversaleDialog(QDialog):
         self.figure.set_size_inches(*old_size)
         self.canvas.draw()
 
-        from qgis.PyQt.QtWidgets import QMessageBox
-        QMessageBox.information(
-            self, i18n.tr('ct_export_png_titre'),
-            i18n.tr('ct_exporte', chemin=path))
+        from ..tools.notification import export_termine
+        export_termine(i18n.tr('ct_export_png_titre'),
+                       i18n.tr('msg_fichier_exporte',
+                               fichier=os.path.basename(path)), path)

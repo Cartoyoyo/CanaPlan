@@ -1573,6 +1573,60 @@ TR = {
         'pt': "Cubagem — larguras de vala",
         'de': "Massen — Grabenbreiten",
     },
+    'qc_interface': {
+        'fr': "Interface", 'en': "Interface", 'es': "Interfaz",
+        'pt': "Interface", 'de': "Oberfläche",
+    },
+    'qc_interface_general': {
+        'fr': "Affichage", 'en': "Display", 'es': "Visualización",
+        'pt': "Visualização", 'de': "Anzeige",
+    },
+    'qc_interface_coloree': {
+        'fr': "Interface colorée", 'en': "Coloured interface",
+        'es': "Interfaz en color", 'pt': "Interface colorida",
+        'de': "Farbige Oberfläche",
+    },
+    'qc_apparence': {
+        'fr': "Apparence du panneau", 'en': "Panel appearance",
+        'es': "Apariencia del panel", 'pt': "Aparência do painel",
+        'de': "Darstellung des Seitenbereichs",
+    },
+    'qc_apparence_coloree': {
+        'fr': "Colorée", 'en': "Coloured", 'es': "En color", 'pt': "Colorida",
+        'de': "Farbig",
+    },
+    'qc_apparence_classique': {
+        'fr': "Classique", 'en': "Classic", 'es': "Clásica", 'pt': "Clássica",
+        'de': "Klassisch",
+    },
+    'qc_interface_coloree_tip': {
+        'fr': "Sections du panneau latéral sur fond de couleur (EU rouge, EP bleu, AEP turquoise…). Le choix est gardé pour les prochaines sessions.",
+        'en': "Side panel sections on a coloured background (WW red, SW blue, DW teal…). The choice is kept for the next sessions.",
+        'es': "Secciones del panel lateral sobre fondo de color (EU rojo, EP azul, AEP turquesa…). La elección se conserva para las próximas sesiones.",
+        'pt': "Secções do painel lateral com fundo colorido (EU vermelho, EP azul, AEP turquesa…). A escolha é guardada para as próximas sessões.",
+        'de': "Abschnitte des Seitenbereichs farbig hinterlegt (SW rot, RW blau, TW türkis…). Die Wahl bleibt für die nächsten Sitzungen erhalten.",
+    },
+    'qc_panneau': {
+        'fr': "Panneau latéral", 'en': "Side panel", 'es': "Panel lateral",
+        'pt': "Painel lateral", 'de': "Seitenbereich",
+    },
+    'qc_panneau_aide': {
+        'fr': "Décochez une entrée pour la masquer ; sélectionnez-la puis montez-la ou descendez-la pour changer l'ordre.",
+        'en': "Untick an entry to hide it; select it, then move it up or down to change the order.",
+        'es': "Desmarque una entrada para ocultarla; selecciónela y súbala o bájela para cambiar el orden.",
+        'pt': "Desmarque uma entrada para a ocultar; selecione-a e suba-a ou desça-a para mudar a ordem.",
+        'de': "Eintrag abwählen, um ihn auszublenden; auswählen und nach oben oder unten verschieben, um die Reihenfolge zu ändern.",
+    },
+    'qc_monter': {
+        'fr': "Monter", 'en': "Up", 'es': "Subir", 'pt': "Subir", 'de': "Nach oben",
+    },
+    'qc_descendre': {
+        'fr': "Descendre", 'en': "Down", 'es': "Bajar", 'pt': "Descer", 'de': "Nach unten",
+    },
+    'qc_reinitialiser': {
+        'fr': "Ordre par défaut", 'en': "Default order", 'es': "Orden por defecto",
+        'pt': "Ordem predefinida", 'de': "Standardreihenfolge",
+    },
     'wz_remblai': {
         'fr': "Remblai", 'en': "Backfill", 'es': "Relleno",
         'pt': "Aterro", 'de': "Verfüllung",
@@ -2244,6 +2298,15 @@ TR = {
         'fr': "Dossier : {chemin}", 'en': "Folder: {chemin}",
         'es': "Carpeta: {chemin}", 'pt': "Pasta: {chemin}",
         'de': "Ordner: {chemin}",
+    },
+    'msg_details': {
+        'fr': "Détails", 'en': "Details", 'es': "Detalles", 'pt': "Detalhes",
+        'de': "Details",
+    },
+    'msg_fichier_exporte': {
+        'fr': "{fichier} exporté.", 'en': "{fichier} exported.",
+        'es': "{fichier} exportado.", 'pt': "{fichier} exportado.",
+        'de': "{fichier} exportiert.",
     },
     'msg_ouvrir_dossier': {
         'fr': "Ouvrir le dossier", 'en': "Open folder",
@@ -4281,6 +4344,210 @@ TR = {
         'es': "Exportación PDF cancelada.", 'pt': "Exportação PDF cancelada.",
         'de': "PDF-Export abgebrochen.",
     },
+    'se_titre_export': {
+        'fr': "Suivi de l'export", 'en': 'Export progress',
+        'es': 'Seguimiento de la exportación', 'pt': 'Acompanhamento da exportação',
+        'de': 'Exportverlauf',
+    },
+    'se_col_sortie': {
+        'fr': 'Sortie', 'en': 'Output',
+        'es': 'Salida', 'pt': 'Saída',
+        'de': 'Ausgabe',
+    },
+    'se_col_temps': {
+        'fr': 'Temps', 'en': 'Time',
+        'es': 'Tiempo', 'pt': 'Tempo',
+        'de': 'Zeit',
+    },
+    'se_etape_profil_eu': {
+        'fr': 'Profils en long EU', 'en': 'WW long profiles',
+        'es': 'Perfiles longitudinales EU', 'pt': 'Perfis longitudinais EU',
+        'de': 'Längsschnitte SW',
+    },
+    'se_etape_profil_ep': {
+        'fr': 'Profils en long EP', 'en': 'SW long profiles',
+        'es': 'Perfiles longitudinales EP', 'pt': 'Perfis longitudinais EP',
+        'de': 'Längsschnitte RW',
+    },
+    'se_etape_profil_aep': {
+        'fr': 'Profils en long AEP', 'en': 'DW long profiles',
+        'es': 'Perfiles longitudinales AEP', 'pt': 'Perfis longitudinais AEP',
+        'de': 'Längsschnitte TW',
+    },
+    'se_etape_profil_groupe': {
+        'fr': 'Profil groupé', 'en': 'Grouped profile',
+        'es': 'Perfil agrupado', 'pt': 'Perfil agrupado',
+        'de': 'Gruppierter Längsschnitt',
+    },
+    'se_etape_cubature': {
+        'fr': 'Cubature et remblai', 'en': 'Earthworks and backfill',
+        'es': 'Cubicación y relleno', 'pt': 'Cubicagem e aterro',
+        'de': 'Erdmassen und Verfüllung',
+    },
+    'se_etape_coupes': {
+        'fr': 'Coupes types de tranchée', 'en': 'Typical trench sections',
+        'es': 'Secciones tipo de zanja', 'pt': 'Cortes tipo de vala',
+        'de': 'Regelgrabenprofile',
+    },
+    'se_etape_schemas': {
+        'fr': 'Schémas de nœuds AEP', 'en': 'DW node diagrams',
+        'es': 'Esquemas de nudos AEP', 'pt': 'Esquemas de nós AEP',
+        'de': 'TW-Knotenschemata',
+    },
+    'se_etape_plan_pdf': {
+        'fr': 'Plan de réseau (PDF)', 'en': 'Network plan (PDF)',
+        'es': 'Plano de red (PDF)', 'pt': 'Planta da rede (PDF)',
+        'de': 'Netzplan (PDF)',
+    },
+    'se_etape_plan_dxf': {
+        'fr': 'Plan de réseau (DXF)', 'en': 'Network plan (DXF)',
+        'es': 'Plano de red (DXF)', 'pt': 'Planta da rede (DXF)',
+        'de': 'Netzplan (DXF)',
+    },
+    'se_etape_assemblage': {
+        'fr': 'Assemblage du PDF complet', 'en': 'Assembling the complete PDF',
+        'es': 'Montaje del PDF completo', 'pt': 'Montagem do PDF completo',
+        'de': 'Zusammenstellen des Gesamt-PDF',
+    },
+    'se_etape_archive': {
+        'fr': 'Archive ZIP', 'en': 'ZIP archive',
+        'es': 'Archivo ZIP', 'pt': 'Arquivo ZIP',
+        'de': 'ZIP-Archiv',
+    },
+    'se_non_demande': {
+        'fr': 'non demandé', 'en': 'not requested',
+        'es': 'no solicitado', 'pt': 'não pedido',
+        'de': 'nicht angefordert',
+    },
+    'se_a_faire': {
+        'fr': 'à faire', 'en': 'to do',
+        'es': 'pendiente', 'pt': 'por fazer',
+        'de': 'ausstehend',
+    },
+    'se_detail_pose': {
+        'fr': 'posez les planches sur la carte', 'en': 'place the sheets on the map',
+        'es': 'coloque las hojas en el mapa', 'pt': 'coloque as folhas no mapa',
+        'de': 'Blätter auf der Karte platzieren',
+    },
+    'se_duree': {
+        'fr': '{s} s', 'en': '{s} s',
+        'es': '{s} s', 'pt': '{s} s',
+        'de': '{s} s',
+    },
+    'se_duree_min': {
+        'fr': '{m} min {s} s', 'en': '{m} min {s} s',
+        'es': '{m} min {s} s', 'pt': '{m} min {s} s',
+        'de': '{m} Min. {s} s',
+    },
+    'se_total_en_cours': {
+        'fr': 'Export en cours — {temps}', 'en': 'Export in progress — {temps}',
+        'es': 'Exportación en curso — {temps}', 'pt': 'Exportação em curso — {temps}',
+        'de': 'Export läuft — {temps}',
+    },
+    'se_total_fini': {
+        'fr': 'Export terminé en {temps}', 'en': 'Export finished in {temps}',
+        'es': 'Exportación terminada en {temps}', 'pt': 'Exportação concluída em {temps}',
+        'de': 'Export beendet in {temps}',
+    },
+    'pt_cart_objet': {
+        'fr': 'Plan de réseau {reseaux}', 'en': 'Network plan {reseaux}',
+        'es': 'Plano de red {reseaux}', 'pt': 'Planta da rede {reseaux}',
+        'de': 'Netzplan {reseaux}',
+    },
+    'pt_cart_objet_seul': {
+        'fr': 'Plan de réseau', 'en': 'Network plan',
+        'es': 'Plano de red', 'pt': 'Planta da rede',
+        'de': 'Netzplan',
+    },
+    'pt_cart_alti': {
+        'fr': 'Altitudes NGF-IGN69', 'en': 'Heights NGF-IGN69',
+        'es': 'Altitudes NGF-IGN69', 'pt': 'Altitudes NGF-IGN69',
+        'de': 'Höhen NGF-IGN69',
+    },
+    'pt_cart_indice': {
+        'fr': 'Indice {indice}', 'en': 'Revision {indice}',
+        'es': 'Índice {indice}', 'pt': 'Índice {indice}',
+        'de': 'Index {indice}',
+    },
+    'pt_cart_planche': {
+        'fr': 'Planche', 'en': 'Sheet',
+        'es': 'Hoja', 'pt': 'Folha',
+        'de': 'Blatt',
+    },
+    'pt_nb_planches_cart': {
+        'fr': '{n} planche(s)', 'en': '{n} sheet(s)',
+        'es': '{n} hoja(s)', 'pt': '{n} folha(s)',
+        'de': '{n} Blatt/Blätter',
+    },
+    'pd_indice': {
+        'fr': 'Indice :', 'en': 'Revision:',
+        'es': 'Índice:', 'pt': 'Índice:',
+        'de': 'Index:',
+    },
+    'pd_indice_tip': {
+        'fr': 'Indice de révision du plan (A, B, C…), repris dans le cartouche.', 'en': 'Plan revision (A, B, C…), shown in the title block.',
+        'es': 'Índice de revisión del plano (A, B, C…), mostrado en el cajetín.', 'pt': 'Índice de revisão da planta (A, B, C…), mostrado na legenda.',
+        'de': 'Planindex (A, B, C…), im Schriftfeld angezeigt.',
+    },
+    'pf_branchement_court': {
+        'fr': "Br {n}", 'en': "Sc {n}", 'es': "Ac {n}",
+        'pt': "Rm {n}", 'de': "HA {n}",
+    },
+    'pt_fond_indisponible': {
+        'fr': "Le fond de plan « {fonds} » ne répond pas ou est trop lent (serveur surchargé).\nPlanche(s) concernée(s) : {planches}.",
+        'en': "The basemap “{fonds}” is not responding or too slow (server overloaded).\nSheet(s) affected: {planches}.",
+        'es': "El fondo de plano «{fonds}» no responde o es demasiado lento (servidor saturado).\nHoja(s) afectada(s): {planches}.",
+        'pt': "O fundo de mapa «{fonds}» não responde ou está demasiado lento (servidor sobrecarregado).\nFolha(s) afetada(s): {planches}.",
+        'de': "Die Hintergrundkarte „{fonds}“ antwortet nicht oder ist zu langsam (Server überlastet).\nBetroffene Blätter: {planches}.",
+    },
+    'pt_fond_indisponible_aide': {
+        'fr': "Imprimer le plan sans ce fond, réessayer dans {minutes} minutes quand le serveur sera moins chargé, ou imprimer tel quel avec un fond incomplet ?",
+        'en': "Print the plan without this basemap, retry in {minutes} minutes when the server is less busy, or print as is with an incomplete basemap?",
+        'es': "¿Imprimir el plano sin este fondo, reintentar dentro de {minutes} minutos cuando el servidor esté menos cargado, o imprimir tal cual con un fondo incompleto?",
+        'pt': "Imprimir a planta sem este fundo, tentar de novo dentro de {minutes} minutos quando o servidor estiver menos carregado, ou imprimir assim com um fundo incompleto?",
+        'de': "Plan ohne diese Hintergrundkarte drucken, in {minutes} Minuten erneut versuchen, wenn der Server weniger ausgelastet ist, oder so drucken mit unvollständigem Hintergrund?",
+    },
+    'pt_btn_sans_fond': {
+        'fr': "Imprimer sans « {fonds} »", 'en': "Print without “{fonds}”",
+        'es': "Imprimir sin «{fonds}»", 'pt': "Imprimir sem «{fonds}»",
+        'de': "Ohne „{fonds}“ drucken",
+    },
+    'pt_btn_reessayer': {
+        'fr': "Réessayer dans {minutes} min", 'en': "Retry in {minutes} min",
+        'es': "Reintentar en {minutes} min", 'pt': "Tentar de novo em {minutes} min",
+        'de': "In {minutes} Min. erneut versuchen",
+    },
+    'pt_btn_tel_quel': {
+        'fr': "Imprimer tel quel", 'en': "Print as is", 'es': "Imprimir tal cual",
+        'pt': "Imprimir assim", 'de': "So drucken",
+    },
+    'pt_attente_reessai': {
+        'fr': "Nouvel essai du fond de plan dans {s} s…", 'en': "Retrying the basemap in {s} s…",
+        'es': "Nuevo intento del fondo en {s} s…", 'pt': "Nova tentativa do fundo em {s} s…",
+        'de': "Neuer Versuch der Hintergrundkarte in {s} s…",
+    },
+    'pt_reessayer_maintenant': {
+        'fr': "Réessayer maintenant", 'en': "Retry now", 'es': "Reintentar ahora",
+        'pt': "Tentar agora", 'de': "Jetzt erneut versuchen",
+    },
+    'pt_sans_fond_note': {
+        'fr': "imprimé sans « {fonds} » : planche(s) {planches}",
+        'en': "printed without “{fonds}”: sheet(s) {planches}",
+        'es': "impreso sin «{fonds}»: hoja(s) {planches}",
+        'pt': "impresso sem «{fonds}»: folha(s) {planches}",
+        'de': "ohne „{fonds}“ gedruckt: Blatt/Blätter {planches}",
+    },
+    'pt_fonds_incomplets': {
+        'fr': "fond de plan incomplet (serveur sans réponse) : planche(s) {planches}",
+        'en': "incomplete basemap (server not responding): sheet(s) {planches}",
+        'es': "fondo de plano incompleto (servidor sin respuesta): hoja(s) {planches}",
+        'pt': "fundo de mapa incompleto (servidor sem resposta): folha(s) {planches}",
+        'de': "Hintergrundkarte unvollständig (Server antwortet nicht): Blatt/Blätter {planches}",
+    },
+    'pt_plan_ensemble_court': {
+        'fr': "plan d'ensemble", 'en': "overview", 'es': "plano de conjunto",
+        'pt': "planta de conjunto", 'de': "Übersichtsplan",
+    },
     'pt_pdf_exporte': {
         'fr': "PDF exporté — {nb} planche : {chemin}",
         'en': "PDF exported — {nb} sheet(s): {chemin}",
@@ -5504,6 +5771,75 @@ TR = {
         'de': "{format} {orientation}  ·  1:{echelle}  —  1. Klick: verankern  ·  "
               "drehen  ·  2. Klick: setzen  |  Rechtsklick: exportieren  |  "
               "Esc: Maßstab ändern",
+    },
+    'pt_progress_titre_ensemble': {
+        'fr': "Préparation du plan d'ensemble et de {n} planche(s)",
+        'en': "Preparing the overview and {n} sheet(s)",
+        'es': "Preparando el plano de conjunto y {n} hoja(s)",
+        'pt': "A preparar a planta de conjunto e {n} folha(s)",
+        'de': "Übersichtsplan und {n} Blatt/Blätter werden vorbereitet",
+    },
+    'pt_progress_titre': {
+        'fr': "Préparation de {n} planche(s)", 'en': "Preparing {n} sheet(s)",
+        'es': "Preparando {n} hoja(s)", 'pt': "A preparar {n} folha(s)",
+        'de': "{n} Blatt/Blätter werden vorbereitet",
+    },
+    'pt_progress_cartes': {
+        'fr': "{faits}/{total} carte(s) prête(s) — {s} s écoulées",
+        'en': "{faits}/{total} map(s) ready — {s} s elapsed",
+        'es': "{faits}/{total} mapa(s) listo(s) — {s} s transcurridos",
+        'pt': "{faits}/{total} mapa(s) pronto(s) — {s} s decorridos",
+        'de': "{faits}/{total} Karte(n) fertig — {s} s vergangen",
+    },
+    'pt_progress_ecoule': {
+        'fr': "{s} s écoulées", 'en': "{s} s elapsed", 'es': "{s} s transcurridos",
+        'pt': "{s} s decorridos", 'de': "{s} s vergangen",
+    },
+    'pt_progress_fonds': {
+        'fr': "Téléchargement des fonds de plan en cours :",
+        'en': "Downloading basemaps:",
+        'es': "Descargando los fondos de plano:",
+        'pt': "A descarregar os fundos de mapa:",
+        'de': "Hintergrundkarten werden geladen:",
+    },
+    'pt_progress_images': {
+        'fr': "{n} image(s) attendue(s), depuis {s} s", 'en': "{n} image(s) pending, for {s} s",
+        'es': "{n} imagen(es) pendiente(s), desde hace {s} s",
+        'pt': "{n} imagem(ns) em espera, há {s} s",
+        'de': "{n} Bild(er) ausstehend, seit {s} s",
+    },
+    'pt_progress_planche': {
+        'fr': "Planche {n}", 'en': "Sheet {n}", 'es': "Hoja {n}", 'pt': "Folha {n}",
+        'de': "Blatt {n}",
+    },
+    'pt_progress_carte_prete': {
+        'fr': "{carte} — prête en {s} s", 'en': "{carte} — ready in {s} s",
+        'es': "{carte} — lista en {s} s", 'pt': "{carte} — pronta em {s} s",
+        'de': "{carte} — fertig in {s} s",
+    },
+    'pt_progress_carte_en_cours': {
+        'fr': "{carte} — en cours ({s} s)", 'en': "{carte} — in progress ({s} s)",
+        'es': "{carte} — en curso ({s} s)", 'pt': "{carte} — em curso ({s} s)",
+        'de': "{carte} — läuft ({s} s)",
+    },
+    'pt_progress_dessin': {
+        'fr': "Dessin du réseau, des étiquettes et des fonds locaux…",
+        'en': "Drawing the network, labels and local layers…",
+        'es': "Dibujando la red, las etiquetas y las capas locales…",
+        'pt': "A desenhar a rede, as etiquetas e as camadas locais…",
+        'de': "Netz, Beschriftungen und lokale Ebenen werden gezeichnet…",
+    },
+    'pt_progress_reessai': {
+        'fr': "Nouvel essai du fond de plan : planche(s) {planches}",
+        'en': "Retrying the basemap: sheet(s) {planches}",
+        'es': "Nuevo intento del fondo: hoja(s) {planches}",
+        'pt': "Nova tentativa do fundo: folha(s) {planches}",
+        'de': "Neuer Versuch der Hintergrundkarte: Blatt/Blätter {planches}",
+    },
+    'pt_progress_sans': {
+        'fr': "Nouveau rendu sans « {fonds} »", 'en': "Rendering again without “{fonds}”",
+        'es': "Nueva generación sin «{fonds}»", 'pt': "Nova geração sem «{fonds}»",
+        'de': "Erneutes Rendern ohne „{fonds}“",
     },
     'pt_rendu_cartes': {
         'fr': "Rendu des cartes…", 'en': "Rendering the maps…",

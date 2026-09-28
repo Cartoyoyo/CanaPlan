@@ -366,12 +366,16 @@ def _apply_placement_policy(pal, role, min_scale=LABEL_MIN_SCALE):
     Les ouvrages ponctuels sont déclarés obstacles : sans cela une
     caractéristique de conduite peut se poser sur le symbole d'un regard,
     qui devient illisible alors que c'est le repère principal du plan.
-    Les lignes, elles, ne sont pas des obstacles : une étiquette curviligne
-    est *censée* reposer sur sa conduite.
+
+    Les lignes le sont aussi : l'étiquette d'un regard ou d'un compteur se
+    posait sur la conduite voisine (28/09/2026). Une conduite n'est pas un
+    obstacle pour sa propre étiquette — QGIS l'exclut — qui continue donc de
+    reposer sur elle. Quand ses étiquettes sont masquées, la couche reste un
+    obstacle (voir definir_visibilite).
     """
     pal.priority = _PRIORITY.get(role, 5)
 
-    is_obstacle = role in _POINT_ROLES
+    is_obstacle = role in _POINT_ROLES or role in _LINE_ROLES
     try:
         obstacle = pal.obstacleSettings()
         obstacle.setIsObstacle(is_obstacle)
@@ -534,6 +538,57 @@ def pal_settings(labeling):
         return None
 
 
+# Compteurs AEP : ordre des positions d'étiquette, la première tournée à
+# l'opposé de la conduite. sym_angle vaut l'azimut du dernier segment du
+# branchement + 90 ; ce segment va de la conduite vers le compteur, donc
+# « sym_angle - 90 » pointe de la conduite vers le compteur, c'est-à-dire
+# vers le côté libre. Sur une planche tournée, la direction à l'écran est
+# l'azimut plus la rotation de la carte. Huit secteurs de 45°, chacun avec
+# sa position préférée et ses deux voisines seulement : une position de
+# secours côté conduite reposait l'étiquette sur la conduite dès que le côté
+# libre était encombré (28/09/2026).
+_ORDRES_COTE_LIBRE = (
+    'T,TR,TL',
+    'TR,R,T',
+    'R,TR,BR',
+    'BR,R,B',
+    'B,BR,BL',
+    'BL,B,L',
+    'L,BL,TL',
+    'TL,L,T',
+)
+
+
+def _expr_ordre_cote_libre():
+    direction = '("sym_angle" - 90 + coalesce(@map_rotation, 0))'
+    secteur = f'floor(((({direction} % 360) + 360 + 22.5) % 360) / 45)'
+    # Pas de « CASE valeur WHEN » dans les expressions QGIS : tableau indexé.
+    ordres = ", ".join(f"'{o}'" for o in _ORDRES_COTE_LIBRE)
+    return (f"if(\"sym_angle\" IS NULL, 'TR,TL,BR,BL,R,L,T,B', "
+            f"array_get(array({ordres}), {secteur}))")
+
+
+#: Écart maximal d'une étiquette de point à son ouvrage, en unités carte,
+#: quand les positions proches sont occupées.
+LABEL_DISTANCE_MAX_MAP_UNITS = 8.0
+
+
+def _distance_max(pal):
+    try:
+        ps = pal.pointSettings()
+        ps.setMaximumDistance(max(LABEL_DISTANCE_MAX_MAP_UNITS, pal.dist))
+        ps.setMaximumDistanceUnit(pal.distUnits)
+        pal.setPointSettings(ps)
+        placement = pal.placementSettings()
+        # L'ordre des positions prime (côté libre d'abord), la distance
+        # départage ensuite.
+        placement.setPrioritization(Qgis.LabelPrioritization.PreferPositionOrdering)
+        pal.setPlacementSettings(placement)
+    except AttributeError as _err:
+        # QGIS < 3.38 : pas de distance maximale, placement à distance fixe.
+        errlog.ignored(_err, "etiquettes._distance_max")
+
+
 def _make_point_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
                          unit=Qgis.RenderUnit.MapUnits,
                          padding=LABEL_PADDING_MAP_UNITS,
@@ -565,7 +620,17 @@ def _make_point_labeling(reseau, role, expression, size=LABEL_SIZE_MAP_UNITS,
     pc.setProperty(QgsPalLayerSettings.Property.PositionY, QgsProperty.fromField(LBL_Y))
     pc.setProperty(QgsPalLayerSettings.Property.Hali, QgsProperty.fromValue('Center'))
     pc.setProperty(QgsPalLayerSettings.Property.Vali, QgsProperty.fromValue('Half'))
+    # Positions ordonnées autour du point, et distance maximale : quand les
+    # places proches sont prises, l'étiquette s'écarte et son connecteur
+    # s'allonge, au lieu de disparaître (QGIS 3.38+).
+    pal.placement = Qgis.LabelPlacement.OrderedPositionsAroundPoint
+    if reseau == 'AEP' and role == 'tabouret':
+        # Compteur : du côté opposé à la conduite, lu dans l'orientation
+        # du branchement (28/09/2026).
+        pc.setProperty(QgsPalLayerSettings.Property.PredefinedPositionOrder,
+                       QgsProperty.fromExpression(_expr_ordre_cote_libre()))
     pal.setDataDefinedProperties(pc)
+    _distance_max(pal)
 
     fmt = QgsTextFormat()
     fmt.setFont(QFont('Arial', 9))
@@ -746,6 +811,36 @@ def get_label_min_scale(plugin):
     return default_min_scale(*remembered_size())
 
 
+def definir_visibilite(layer, role, visible):
+    """Affiche ou masque les étiquettes d'une couche du réseau.
+
+    Points : l'étiquetage est simplement activé ou coupé.
+    Lignes : l'étiquetage reste actif, seul le texte est masqué
+    (drawLabels) — la couche garde son rôle d'obstacle et les étiquettes
+    des ouvrages continuent d'éviter les conduites. Une couche dont
+    l'étiquetage est coupé n'est plus un obstacle pour QGIS.
+    """
+    if layer is None:
+        return
+    if role in _LINE_ROLES and layer.labeling() is not None:
+        def _texte(pal, v=bool(visible)):
+            pal.drawLabels = v
+        layer.setLabeling(_mutate_pal(layer.labeling(), _texte))
+        layer.setLabelsEnabled(True)
+    else:
+        layer.setLabelsEnabled(bool(visible))
+    layer.triggerRepaint()
+
+
+def etiquettes_visibles(layer):
+    """Vrai si les étiquettes de la couche sont affichées (pas seulement
+    actives : une ligne masquée garde un étiquetage « obstacle seul »)."""
+    if layer is None or not layer.labelsEnabled():
+        return False
+    pal = pal_settings(layer.labeling())
+    return pal is None or bool(pal.drawLabels)
+
+
 def apply_label_display_prefs(plugin, visibility, robinets=None, regards_compteur=None):
     """Applique la visibilité des étiquettes par réseau et par rôle.
 
@@ -771,8 +866,7 @@ def apply_label_display_prefs(plugin, visibility, robinets=None, regards_compteu
             enabled = visibility.get(reseau, {}).get(role, True)
             if reseau == 'AEP' and role == 'tabouret':
                 enabled = enabled or reg      # même couche : compteurs et regards de comptage
-            layer.setLabelsEnabled(enabled)
-            layer.triggerRepaint()
+            definir_visibilite(layer, role, enabled)
 
 
 def get_label_display_prefs(plugin):
@@ -780,7 +874,7 @@ def get_label_display_prefs(plugin):
     prefs = {}
     for reseau in _reseaux(plugin):
         couches = plugin._get_couches(reseau)
-        prefs[reseau] = {role: layer.labelsEnabled()
+        prefs[reseau] = {role: etiquettes_visibles(layer)
                          for role, layer in couches.items()}
         if reseau == 'AEP' and 'tabouret' in prefs[reseau]:
             prefs[reseau]['tabouret'] = prefs[reseau]['tabouret'] and _variable_active(VAR_ETIQ_COMPTEURS)

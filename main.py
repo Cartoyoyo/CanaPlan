@@ -360,7 +360,7 @@ class ReseauAssainissementPlugin(QObject):
 
         menu_groups = [
             ('grp_projet', ['nouveau_projet_assistant', 'projets_recents', 'enregistrer_projet', 'enregistrer_projet_sous', 'charger_projet', 'import_dxf', 'import_star_dt']),
-            ('grp_general', ['renseignement', 'tableau_saisie', 'insert_regard', 'move', 'copy_attributes', 'delete', 'magic_box', 'config']),
+            ('grp_general', ['renseignement', 'tableau_saisie', 'insert_regard', 'move', 'copy_attributes', 'delete', 'config', 'magic_box']),
             ('grp_eu', ['conduite_eu', 'branchement_eu', 'profil_eu', 'coupe_eu', 'renommer_eu']),
             ('grp_ep', ['conduite_ep', 'branchement_ep', 'profil_ep', 'coupe_ep', 'renommer_ep']),
             ('grp_aep', ['conduite_aep', 'branchement_aep', 'appareil_aep', 'profil_aep', 'coupe_aep', 'renommer_aep', 'schemaep']),
@@ -931,6 +931,18 @@ class ReseauAssainissementPlugin(QObject):
         canvas.setMapTool(tool)
         self.tools[key] = tool
 
+    def relancer_outil_actif(self):
+        """Recrée l'outil coché sur les couches actuelles du projet.
+
+        Appelé après l'enregistrement ou le chargement d'un .bet, qui
+        remplacent les couches : l'outil en cours reste actif, sans que
+        l'utilisateur ait à le décocher puis le recocher.
+        """
+        for action in self.tool_group.actions():
+            if action.isChecked():
+                action.toggled.emit(True)
+                return
+
     def _deactivate_current(self):
         """Désactive l'outil courant et revient au mode navigation."""
         self._cleanup_tools()
@@ -1219,11 +1231,11 @@ class ReseauAssainissementPlugin(QObject):
             recalc_pentes(couches['conduite'], couches['regard'],
                           branchement_layer=couches['branchement'],
                           tabouret_layer=couches['tabouret'])
+            from .gui.etiquettes import definir_visibilite
             for role in ("regard", "tabouret", "conduite", "branchement"):
                 layer = couches[role]
                 self._apply_style(layer, role, reseau)
-                layer.setLabelsEnabled(checked)
-                layer.triggerRepaint()
+                definir_visibilite(layer, role, checked)
 
     def run_fond_projet(self, options=None):
         """Ajoute le fond de projet (OSM, Ortho, BAN, Noms de rue, PCI).
@@ -1878,37 +1890,35 @@ class ReseauAssainissementPlugin(QObject):
                     do_schemas]):
             return
 
-        # ── Profils en long (export immédiat, sans interaction carte) ──────
-        if do_profil_eu or do_profil_ep or do_profil_aep or do_profil_grp:
-            self._export_profils_batch(choices)
+        # Fenêtre de suivi : tout ce que l'export peut produire, ce qui est
+        # demandé ou non, et le temps mesuré de chaque étape.
+        out_dir = choices.get('output_dir')
+        suivi = self._ouvrir_suivi(i18n.tr('se_titre_export'), choices,
+                                   do_plan_pdf, do_plan_dxf)
 
-        # ── Cubature et coupes types (export immédiat, sans interaction) ───
-        # Un seul compte rendu pour les deux : ils partagent le dossier de
-        # sortie et l'utilisateur les a demandés d'un même clic.
-        msgs = []
-        if do_cubature:
-            msgs.extend(self._export_cubature_batch(choices))
-        if do_coupes:
-            msgs.extend(self._export_coupes_batch(choices))
-        if do_schemas:
-            msgs.extend(self._export_schemas_batch(choices))
+        # ── Sorties automatiques (profils, cubature, coupes, schémas) ──────
+        # Un seul compte rendu pour toutes : elles partagent le dossier de
+        # sortie et l'utilisateur les a demandées d'un même clic.
+        msgs = self._sorties_automatiques(choices, suivi)
         if msgs:
-            from qgis.PyQt.QtWidgets import QMessageBox
-            QMessageBox.information(
-                self.iface.mainWindow(),
-                i18n.tr('msg_export_sorties_ok'),
-                "\n".join(msgs) + "\n\n"
-                + i18n.tr('msg_dossier', chemin=choices.get('output_dir', '')),
-            )
+            from .tools.notification import export_termine
+            export_termine(i18n.tr('msg_export_sorties_ok'), msgs[0],
+                           choices.get('output_dir', ''),
+                           details="\n".join(msgs) if len(msgs) > 1 else None)
 
         # ── Plan PDF/DXF → PrintTool ───────────────────────────────────────
         if not do_plan_pdf and not do_plan_dxf:
+            suivi.fin(out_dir)
             return
 
-        out_dir = choices.get('output_dir')
-
         if do_plan_dxf and not do_plan_pdf:
-            self._export_dxf_direct(out_dir=out_dir)
+            suivi.demarrer('plan_dxf')
+            ok = self._export_dxf_direct(out_dir=out_dir)
+            if ok:
+                suivi.terminer('plan_dxf')
+            else:
+                suivi.abandonner('plan_dxf')
+            suivi.fin(out_dir)
             return
 
         from .tools.print_tool import PrintTool
@@ -1916,6 +1926,12 @@ class ReseauAssainissementPlugin(QObject):
         settings['do_pdf']     = do_plan_pdf
         settings['do_dxf']     = do_plan_dxf
         settings['output_dir'] = out_dir
+        settings['_suivi']     = suivi
+
+        def fin_du_plan():
+            # Pose abandonnée : les plans encore en attente le restent.
+            suivi.abandonner_restantes()
+            suivi.fin(out_dir)
 
         crs = self.iface.mapCanvas().mapSettings().destinationCrs()
         if crs.mapUnits() != Qgis.DistanceUnit.Meters:
@@ -1926,10 +1942,14 @@ class ReseauAssainissementPlugin(QObject):
             )
 
         if settings.get('cadrage_auto'):
-            self._imprimer_cadrage_auto(settings)
+            self._imprimer_cadrage_auto(settings, on_finished=fin_du_plan)
             return
 
-        tool = PrintTool(self.iface.mapCanvas(), self.iface, settings)
+        for cle, demande in (('plan_pdf', do_plan_pdf), ('plan_dxf', do_plan_dxf)):
+            if demande:
+                suivi.poser_planches(cle)
+        tool = PrintTool(self.iface.mapCanvas(), self.iface, settings,
+                         on_finished=fin_du_plan)
         self._cleanup_tools()
         self.iface.mapCanvas().setMapTool(tool)
         self.tools['imprimer'] = tool
@@ -1939,6 +1959,65 @@ class ReseauAssainissementPlugin(QObject):
             i18n.tr('msg_impression'), _aide_pose(settings),
             level=Qgis.MessageLevel.Info, duration=0,
         )
+
+    _PROFILS = ('profil_eu', 'profil_ep', 'profil_aep', 'profil_groupe')
+
+    def _sorties_automatiques(self, choices, suivi):
+        """Profils, cubature, coupes types, schémas : chaque sortie demandée
+        est lancée et chronométrée dans la fenêtre de suivi. Rend les lignes
+        de compte rendu."""
+        msgs = []
+        for cle in self._PROFILS:
+            if not choices.get(cle):
+                continue
+            suivi.demarrer(cle)
+            seul = dict(choices)
+            seul.update({k: (k == cle) for k in self._PROFILS})
+            try:
+                lignes = self._export_profils_batch(seul, silencieux=True)
+                suivi.terminer(cle, detail=" / ".join(lignes))
+            except Exception as e:
+                lignes = [i18n.tr('msg_erreur_detail', detail=e)]
+                suivi.terminer(cle, ok=False, detail=str(e))
+            msgs.extend(lignes)
+        for cle, demande, fonction in (
+                ('cubature', choices.get('cubature'), self._export_cubature_batch),
+                ('coupes', (choices.get('coupe_eu') or choices.get('coupe_ep')
+                            or choices.get('coupe_aep')), self._export_coupes_batch),
+                ('schemas', (choices.get('schemas_aep_pdf')
+                             or choices.get('schemas_aep_svg')), self._export_schemas_batch)):
+            if not demande:
+                continue
+            suivi.demarrer(cle)
+            try:
+                lignes = fonction(choices)
+                suivi.terminer(cle, detail=" / ".join(lignes))
+            except Exception as e:
+                lignes = [i18n.tr('msg_erreur_detail', detail=e)]
+                suivi.terminer(cle, ok=False, detail=str(e))
+            msgs.extend(lignes)
+        return msgs
+
+    def _ouvrir_suivi(self, titre, choices, plan_pdf, plan_dxf, finale=None):
+        """Fenêtre de suivi : toutes les sorties possibles, demandées ou non."""
+        from .gui.suivi_export import SuiviExport
+        demandees = {cle for cle in self._PROFILS if choices.get(cle)}
+        if choices.get('cubature'):
+            demandees.add('cubature')
+        if choices.get('coupe_eu') or choices.get('coupe_ep') or choices.get('coupe_aep'):
+            demandees.add('coupes')
+        if choices.get('schemas_aep_pdf') or choices.get('schemas_aep_svg'):
+            demandees.add('schemas')
+        if plan_pdf:
+            demandees.add('plan_pdf')
+        if plan_dxf:
+            demandees.add('plan_dxf')
+        if finale:
+            demandees.add(finale)
+        masquees = {'assemblage', 'archive'} - {finale}
+        if 'AEP' not in self.reseaux_actifs():
+            masquees |= {'profil_aep', 'schemas'}
+        return SuiviExport(titre, demandees, self.iface.mainWindow(), masquees)
 
     def _export_tout_en_un(self, choices, settings, mode='zip'):
         """Raccourcis « Tout en un » : une seule livraison, deux formes.
@@ -2018,11 +2097,11 @@ class ReseauAssainissementPlugin(QObject):
             'schemas_aep_svg':       self._nb_schemas_aep() > 0 and mode != 'pdf',
         })
 
-        msgs = []
-        msgs.extend(self._export_profils_batch(sous_choix, silencieux=True))
-        msgs.extend(self._export_cubature_batch(sous_choix))
-        msgs.extend(self._export_coupes_batch(sous_choix))
-        msgs.extend(self._export_schemas_batch(sous_choix))
+        finale = 'assemblage' if mode == 'pdf' else 'archive'
+        suivi = self._ouvrir_suivi(
+            i18n.tr('msg_pdf_complet' if mode == 'pdf' else 'msg_tout_en_un'),
+            sous_choix, True, mode != 'pdf', finale)
+        msgs = self._sorties_automatiques(sous_choix, suivi)
 
         # ── Plan PDF + DXF : cadrage posé par l'utilisateur ────────────────
         from .tools.print_tool import PrintTool, _aide_pose
@@ -2037,6 +2116,7 @@ class ReseauAssainissementPlugin(QObject):
         # les ouvrir afficherait un PDF et lancerait AutoCAD sur des fichiers
         # qui n'existeront plus dans la seconde.
         settings['open_after'] = False
+        settings['_suivi']     = suivi
 
         crs = self.iface.mapCanvas().mapSettings().destinationCrs()
         if crs.mapUnits() != Qgis.DistanceUnit.Meters:
@@ -2045,10 +2125,16 @@ class ReseauAssainissementPlugin(QObject):
                 i18n.tr('msg_crs_non_metrique', crs=crs.authid()),
             )
 
-        if mode == 'pdf':
-            cloture = lambda: self._finaliser_pdf(work_dir, out_dir, base, msgs)
-        else:
-            cloture = lambda: self._finaliser_zip(work_dir, out_dir, base, msgs)
+        def cloture():
+            for cle in ('plan_pdf', 'plan_dxf'):
+                suivi.abandonner(cle)
+            suivi.demarrer(finale)
+            if mode == 'pdf':
+                ok = self._finaliser_pdf(work_dir, out_dir, base, msgs)
+            else:
+                ok = self._finaliser_zip(work_dir, out_dir, base, msgs)
+            suivi.terminer(finale, ok=bool(ok))
+            suivi.fin(out_dir)
 
         if settings.get('cadrage_auto'):
             # Le ZIP se referme de la même façon : c'est PrintTool qui
@@ -2057,6 +2143,9 @@ class ReseauAssainissementPlugin(QObject):
             self._imprimer_cadrage_auto(settings, on_finished=cloture)
             return
 
+        suivi.poser_planches('plan_pdf')
+        if mode != 'pdf':
+            suivi.poser_planches('plan_dxf')
         tool = PrintTool(
             self.iface.mapCanvas(), self.iface, settings,
             on_finished=cloture,
@@ -2190,7 +2279,7 @@ class ReseauAssainissementPlugin(QObject):
             QMessageBox.warning(self.iface.mainWindow(),
                                 i18n.tr('msg_tout_en_un'),
                                 i18n.tr('msg_zip_vide'))
-            return
+            return False
 
         zip_path = os.path.join(out_dir, base + ".zip")
         try:
@@ -2199,7 +2288,7 @@ class ReseauAssainissementPlugin(QObject):
             QMessageBox.critical(self.iface.mainWindow(),
                                  i18n.tr('msg_tout_en_un'),
                                  i18n.tr('msg_zip_erreur', erreur=e))
-            return
+            return False
         finally:
             # Le dossier temporaire ne doit jamais survivre, réussite ou non.
             shutil.rmtree(work_dir, ignore_errors=True)
@@ -2208,6 +2297,7 @@ class ReseauAssainissementPlugin(QObject):
                                      fichier=os.path.basename(zip_path),
                                      nb=len(fichiers))]
         self._rapport_livraison(msgs, out_dir)
+        return True
 
     # Ordre d'assemblage du PDF complet, et reconnaissance des pièces par leur
     # nom de fichier. Le plan n'a pas de motif : c'est PrintTool qui le nomme,
@@ -2254,7 +2344,7 @@ class ReseauAssainissementPlugin(QObject):
             QMessageBox.warning(self.iface.mainWindow(),
                                 i18n.tr('msg_pdf_complet'),
                                 i18n.tr('msg_pdf_vide'))
-            return
+            return False
 
         ordonnes = self._classer_pdf(noms)
         pdf_path = os.path.join(out_dir, base + ".pdf")
@@ -2272,7 +2362,7 @@ class ReseauAssainissementPlugin(QObject):
             QMessageBox.critical(self.iface.mainWindow(),
                                  i18n.tr('msg_pdf_complet'),
                                  i18n.tr('msg_pdf_erreur', erreur=e))
-            return
+            return False
         finally:
             # Le dossier temporaire ne doit jamais survivre, réussite ou non.
             shutil.rmtree(work_dir, ignore_errors=True)
@@ -2282,29 +2372,22 @@ class ReseauAssainissementPlugin(QObject):
                     nb=pages),
             i18n.tr('msg_pdf_ordre', pieces=" → ".join(ordonnes)),
         ]
-        self._rapport_livraison(msgs, out_dir, titre='msg_pdf_complet')
+        self._rapport_livraison(msgs, out_dir, titre='msg_pdf_complet',
+                                principal=msgs[-2])
+        return True
 
-    def _rapport_livraison(self, msgs, out_dir, titre='msg_tout_en_un'):
-        """Compte rendu final, avec un raccourci vers le dossier de sortie."""
-        from qgis.PyQt.QtWidgets import QMessageBox
-
-        # Le compte rendu se termine par le dossier de sortie : autant
-        # proposer de l'ouvrir plutôt que de laisser recopier le chemin.
-        box = QMessageBox(self.iface.mainWindow())
-        box.setIcon(QMessageBox.Icon.Information)
-        box.setWindowTitle(i18n.tr(titre))
-        box.setText("\n".join(msgs) + "\n\n"
-                    + i18n.tr('msg_dossier', chemin=out_dir))
-        btn_ouvrir = box.addButton(i18n.tr('msg_ouvrir_dossier'),
-                                   QMessageBox.ButtonRole.ActionRole)
-        box.addButton(QMessageBox.StandardButton.Close)
-        box.setDefaultButton(btn_ouvrir)
-        exec_dialog(box)
-
-        if box.clickedButton() is btn_ouvrir:
-            from qgis.PyQt.QtCore import QUrl
-            from qgis.PyQt.QtGui import QDesktopServices
-            QDesktopServices.openUrl(QUrl.fromLocalFile(out_dir))
+    def _rapport_livraison(self, msgs, out_dir, titre='msg_tout_en_un',
+                           principal=None):
+        """Compte rendu final dans la barre de messages, sans « OK » à
+        cliquer : bouton vers le dossier de sortie, détails à la demande.
+        `principal` : la ligne affichée dans la barre (défaut : la dernière,
+        celle de l'archive pour le tout-en-un)."""
+        from .tools.notification import export_termine
+        msgs = list(msgs)
+        if principal is None:
+            principal = msgs[-1] if msgs else ""
+        export_termine(i18n.tr(titre), principal, out_dir,
+                       details="\n".join(msgs + ["", i18n.tr('msg_dossier', chemin=out_dir)]))
 
     def _nb_schemas_aep(self):
         """Nombre de schémas de nœuds SchemAEP du projet."""
@@ -2390,9 +2473,13 @@ class ReseauAssainissementPlugin(QObject):
 
         config    = get_cubature_config()
         perimetre = choices.get('cubature_perimetre', 'tout')
+        # Cases EU / EP / AEP de la fenêtre d'export ; à défaut (tout en un,
+        # API), l'ancien périmètre « tout » ou un seul réseau.
+        choisis = choices.get('cubature_reseaux')
 
         reseaux = [(r, self._get_couches(r)) for r in self.reseaux_actifs()
-                   if perimetre in ('tout', r)]
+                   if (r in choisis if choisis is not None
+                       else perimetre in ('tout', r))]
 
         all_results = []
         for reseau, couches in reseaux:
@@ -2482,7 +2569,7 @@ class ReseauAssainissementPlugin(QObject):
         afficher, pour que l'export tout en un n'empile pas les fenêtres.
         """
         import os
-        from qgis.PyQt.QtWidgets import QApplication, QMessageBox
+        from qgis.PyQt.QtWidgets import QApplication
         from qgis.PyQt.QtCore import Qt
 
         out_dir = choices.get('output_dir')
@@ -2546,12 +2633,9 @@ class ReseauAssainissementPlugin(QObject):
             QApplication.restoreOverrideCursor()
 
         if msgs and not silencieux:
-            QMessageBox.information(
-                self.iface.mainWindow(),
-                i18n.tr('msg_export_profils_ok'),
-                "\n".join(msgs) + "\n\n"
-                + i18n.tr('msg_dossier', chemin=out_dir),
-            )
+            from .tools.notification import export_termine
+            export_termine(i18n.tr('msg_export_profils_ok'), msgs[-1], out_dir,
+                           details="\n".join(msgs) if len(msgs) > 1 else None)
         return msgs
 
     def _export_dxf_direct(self, out_dir=None):
@@ -2593,11 +2677,11 @@ class ReseauAssainissementPlugin(QObject):
                 "DXF (*.dxf)",
             )
             if not dxf_path:
-                return
+                return False
 
-        run_export_dxf_with_ui(
+        return run_export_dxf_with_ui(
             self.iface, dxf_path, extent, scale_denom,
-            with_label_decorations=True, force_2d=True, open_after=True,
+            with_label_decorations=True, force_2d=True, open_after=False,
         )
 
     def run_import_dxf(self):
@@ -2717,7 +2801,7 @@ class ReseauAssainissementPlugin(QObject):
 
     def show_config_dialog(self):
         from .config_dialog import ConfigDialog
-        dialog = ConfigDialog(self.iface)
+        dialog = ConfigDialog(self.iface, plugin=self)
         exec_dialog(dialog)
 
     def show_tableau_saisie(self):

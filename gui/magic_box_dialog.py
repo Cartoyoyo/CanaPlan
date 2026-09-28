@@ -14,7 +14,8 @@ from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, QSize, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QFont
 from qgis.PyQt.QtWidgets import (
-    QDialog, QDialogButtonBox, QGridLayout, QHBoxLayout, QLabel, QMessageBox, QPushButton,
+    QDialog, QDialogButtonBox, QDoubleSpinBox, QGridLayout, QHBoxLayout, QLabel,
+    QMessageBox, QPushButton,
     QStackedWidget, QTextEdit, QToolButton, QVBoxLayout, QWidget,
 )
 
@@ -24,7 +25,8 @@ from ..tools.qt_exec import exec_dialog
 from ..tools.spatial_utils import nearest_line_feature
 from .quick_config_widgets import NETWORK_COLORS
 
-DISTANCE_MAX = 10.0      # m, conduite → limite de parcelle
+DISTANCE_MAX = 10.0      # m, conduite → limite de parcelle (valeur de départ)
+DISTANCE_PLAFOND = 100.0  # m : au-delà, ce n'est plus un branchement
 
 
 # Ambiance boîte à rythmes (Launchpad / MPC) : panneau noir, pads carrés à
@@ -352,33 +354,62 @@ class SelectionConduitesTool(QgsMapTool):
 # ── Aperçu ──────────────────────────────────────────────────────────────────
 
 class ApercuDialog(QDialog):
-    """Fenêtre non modale : la carte reste navigable pendant l'aperçu."""
+    """Fenêtre non modale : la carte reste navigable pendant l'aperçu.
 
-    def __init__(self, n, reseau, ecartes, parent=None):
+    La portée se règle ici, après coup : on voit ce qui a été écarté (bâti en
+    retrait de la rue…) et on l'agrandit sans refaire la sélection.
+    """
+
+    recalcul = pyqtSignal(float)
+
+    def __init__(self, reseau, distance, parent=None):
         super().__init__(parent)
         self.setWindowTitle("🪄 " + i18n.tr('mb_apercu'))
         self.setModal(False)
         self.setMinimumWidth(380)
         _habiller(self)
+        self._reseau = reseau
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(i18n.tr('mb_apercu_resume', n=n, reseau=reseau,
-                                        e=len(ecartes))))
-        if ecartes:
-            detail = QTextEdit()
-            detail.setReadOnly(True)
-            detail.setPlainText("\n".join(
-                "• %s : %s" % (e.get("cible") or "?", e["cause"]) for e in ecartes))
-            detail.setMaximumHeight(140)
-            detail.setVisible(False)
-            bouton = QPushButton(i18n.tr('mb_details'))
-            bouton.setCheckable(True)
-            bouton.toggled.connect(detail.setVisible)
-            layout.addWidget(bouton)
-            layout.addWidget(detail)
+        self._resume = QLabel()
+        layout.addWidget(self._resume)
+
+        portee = QHBoxLayout()
+        libelle = QLabel(i18n.tr('mb_portee'))
+        libelle.setToolTip(i18n.tr('mb_portee_tip'))
+        portee.addWidget(libelle)
+        self._distance = QDoubleSpinBox()
+        self._distance.setRange(1.0, DISTANCE_PLAFOND)
+        self._distance.setSingleStep(5.0)
+        self._distance.setDecimals(1)
+        self._distance.setSuffix(" m")
+        self._distance.setValue(distance)
+        self._distance.setToolTip(i18n.tr('mb_portee_tip'))
+        self._distance.setStyleSheet(
+            "QDoubleSpinBox { background: #1E1E1E; color: #E0E0E0; "
+            "border: 1px solid #444; padding: 2px 4px; }")
+        portee.addWidget(self._distance)
+        recalculer = QPushButton(i18n.tr('mb_recalculer'))
+        # Entrée dans le champ relance le calcul, et ne trace rien.
+        recalculer.setDefault(True)
+        recalculer.clicked.connect(
+            lambda: self.recalcul.emit(self._distance.value()))
+        portee.addWidget(recalculer)
+        portee.addStretch()
+        layout.addLayout(portee)
+
+        self._bouton_details = QPushButton(i18n.tr('mb_details'))
+        self._bouton_details.setCheckable(True)
+        self._detail = QTextEdit()
+        self._detail.setReadOnly(True)
+        self._detail.setMaximumHeight(140)
+        self._detail.setVisible(False)
+        self._bouton_details.toggled.connect(self._detail.setVisible)
+        layout.addWidget(self._bouton_details)
+        layout.addWidget(self._detail)
 
         ligne = QHBoxLayout()
         tracer = _tuile("▶", i18n.tr('mb_tracer'), "#00E676", taille=(140, 90))
-        tracer.setEnabled(n > 0)
+        self._tracer = tracer
         tracer.clicked.connect(self.accept)
         annuler = _tuile("■", i18n.tr('mb_annuler'), "#FF1744", taille=(140, 90))
         annuler.clicked.connect(self.reject)
@@ -387,6 +418,17 @@ class ApercuDialog(QDialog):
         ligne.addWidget(annuler)
         ligne.addStretch()
         layout.addLayout(ligne)
+
+    def afficher(self, n, ecartes):
+        """Met à jour le résumé, les écartés et le bouton Tracer."""
+        self._resume.setText(i18n.tr('mb_apercu_resume', n=n, reseau=self._reseau,
+                                     e=len(ecartes)))
+        self._detail.setPlainText("\n".join(
+            "• %s : %s" % (e.get("cible") or "?", e["cause"]) for e in ecartes))
+        self._bouton_details.setVisible(bool(ecartes))
+        if not ecartes:
+            self._bouton_details.setChecked(False)
+        self._tracer.setEnabled(n > 0)
 
 
 # ── Enchaînement ────────────────────────────────────────────────────────────
@@ -400,6 +442,8 @@ class MagicBranchements:
         self.canvas = self.iface.mapCanvas()
         self.params = None
         self.reseau = None
+        self.fids = []
+        self.distance = DISTANCE_MAX
         self.couches = None
         self.propositions = []
         self._bandes = []
@@ -426,21 +470,36 @@ class MagicBranchements:
     def _sur_selection(self, reseau, fids):
         self._fin_outil()
         self.reseau = reseau
+        self.fids = fids
         self.couches = self.plugin._get_couches(reseau)
-        p = self.params
-        res = MB.calculer(self.couches, fids, p['mode'], DISTANCE_MAX, p['cote'])
-        self.propositions = res['propositions']
-        if not self.propositions and not res['ecartes']:
+        ecartes = self._calculer()
+        if not self.propositions and not ecartes:
             self.iface.messageBar().pushMessage(
                 "🪄 " + i18n.tr('magic_box'), i18n.tr('mb_rien'),
                 level=Qgis.MessageLevel.Warning, duration=5)
-            return
-        self._dessiner_apercu()
-        self._apercu = ApercuDialog(len(self.propositions), reseau,
-                                    res['ecartes'], self.iface.mainWindow())
+        # L'aperçu s'ouvre même vide : les cibles au-delà de la portée ne
+        # sont pas comptées, et c'est ici qu'on l'agrandit.
+        self._apercu = ApercuDialog(reseau, self.distance, self.iface.mainWindow())
+        self._apercu.afficher(len(self.propositions), ecartes)
+        self._apercu.recalcul.connect(self._recalculer)
         self._apercu.accepted.connect(self._tracer)
         self._apercu.rejected.connect(self._effacer_apercu)
         self._apercu.show()
+
+    def _calculer(self):
+        """Propositions à la portée courante, aperçu redessiné ; rend les écartés."""
+        p = self.params
+        res = MB.calculer(self.couches, self.fids, p['mode'], self.distance,
+                          p['cote'])
+        self.propositions = res['propositions']
+        self._dessiner_apercu()
+        return res['ecartes']
+
+    def _recalculer(self, distance):
+        self.distance = distance
+        ecartes = self._calculer()
+        if self._apercu is not None:
+            self._apercu.afficher(len(self.propositions), ecartes)
 
     def _dessiner_apercu(self):
         self._effacer_apercu()

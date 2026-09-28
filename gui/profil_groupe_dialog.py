@@ -652,6 +652,10 @@ class ProfilGroupeDialog(QDialog):
             fmt_papier = self.opts.get('format_papier', 'A3')
             dpi = _EXPORT_DPI.get(fmt_papier, 150)
             self.figure.savefig(path, format=fmt, dpi=dpi)
+            from ..tools.notification import export_termine
+            export_termine(self.windowTitle(),
+                           i18n.tr('msg_fichier_exporte',
+                                   fichier=os.path.basename(path)), path)
 
     # ------------------------------------------------------------------ close
 

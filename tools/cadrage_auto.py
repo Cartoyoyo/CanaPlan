@@ -420,34 +420,243 @@ def ordonner_planches(planches, collecteur=None):
     return ordre
 
 
-def harmoniser_orientations(planches, carto_h_m):
-    """Met le cartouche des planches voisines du meme cote.
+#: Rotation maximale d'une planche retournee pour suivre sa voisine. Au-dela
+#: d'un quart de tour, le nord part vers le bas de la feuille : la carte se lit
+#: tete en bas, textes compris. On tolere un peu plus de 90 degres pour que deux
+#: planches jointives a +85 et -85 se lisent dans le meme sens.
+_ROTATION_MAX = math.radians(115.0)
 
-    Une planche tournee de 180 degres couvre exactement la meme emprise,
-    mais son cartouche part a l'oppose. Comme les orientations sont ramenees
-    dans [-90, +90], deux planches jointives peuvent se retrouver a +85 et
-    -85 : au sol elles s'alignent, mais l'une se lit a l'envers de l'autre.
 
-    On parcourt donc le cheminement en retournant une planche des qu'elle
-    s'ecarte de plus d'un quart de tour de la precedente. Le retournement ne
-    deplace pas la zone cartographiee : seul le centre de la FEUILLE bouge,
-    d'une hauteur de cartouche, puisque celui-ci passe de l'autre cote.
+def _retourner(centre, theta, carto_h_m):
+    """Meme emprise cartographiee, cartouche de l'autre cote.
+
+    Seul le centre de la FEUILLE bouge, d'une hauteur de cartouche, puisque
+    celui-ci passe de l'autre cote de la zone carte.
+    """
+    # Le haut du papier avant retournement, en coordonnees monde.
+    vx, vy = math.sin(theta), math.cos(theta)
+    return (QgsPointXY(centre.x() + carto_h_m * vx, centre.y() + carto_h_m * vy),
+            _signe(theta + math.pi))
+
+
+def _signe(theta):
+    """Angle ramene dans ]-pi, pi]."""
+    return (theta + math.pi) % (2 * math.pi) - math.pi
+
+
+def harmoniser_orientations(planches, carto_h_m, voisinage=None):
+    """Nord vers le haut, et cartouches des planches voisines du meme cote.
+
+    Une planche tournee de 180 degres couvre exactement la meme emprise, mais
+    son cartouche part a l'oppose. Chaque planche est d'abord ramenee dans
+    [-90, +90] : le nord reste dans la moitie haute de la feuille.
+
+    Deux planches jointives peuvent alors se retrouver a +85 et -85 : au sol
+    elles s'alignent, mais l'une se lit a l'envers de l'autre. On retourne la
+    seconde pour suivre la premiere, mais seulement si elle reste sous
+    _ROTATION_MAX. L'ancienne version retournait sans limite, et les
+    retournements s'enchainaient de proche en proche : sur un reseau en
+    boucle, les planches finissaient a 180-250 degres, cartes tete en bas —
+    et le secteur suivant heritait de l'inversion (constate le 27/09/2026).
+
+    `voisinage` : distance maximale entre deux centres de feuille pour que la
+    seconde suive la premiere. Au-dela, les planches ne se touchent pas (autre
+    rue, autre secteur) et chacune garde son nord.
+    """
+    nord = []
+    for centre, theta in planches:
+        if abs(_signe(theta)) > math.pi / 2:
+            centre, theta = _retourner(centre, theta, carto_h_m)
+        nord.append((centre, theta))
+    if len(nord) < 2:
+        return nord
+
+    harmonisees = [nord[0]]
+    for centre, theta in nord[1:]:
+        c_prec, precedent = harmonisees[-1]
+        voisine = (voisinage is None
+                   or math.hypot(centre.x() - c_prec.x(), centre.y() - c_prec.y()) <= voisinage)
+        if voisine and abs(_signe(theta - precedent)) > math.pi / 2:
+            c2, t2 = _retourner(centre, theta, carto_h_m)
+            if abs(_signe(t2)) <= _ROTATION_MAX:
+                centre, theta = c2, t2
+        harmonisees.append((centre, theta))
+    return harmonisees
+
+
+def _repere(centre, theta, carto_h_m):
+    """(cx, cy, ux, uy, wx, wy) : centre de la zone carte et axes papier."""
+    ux, uy = math.cos(theta), -math.sin(theta)
+    wx, wy = math.sin(theta), math.cos(theta)
+    return (centre.x() + (carto_h_m / 2.0) * wx,
+            centre.y() + (carto_h_m / 2.0) * wy, ux, uy, wx, wy)
+
+
+def repartir_planches(planches, points, w_u, h_u, debord_u, carto_h_m,
+                      tours=20):
+    """Répartit les planches le long du réseau, sans en changer le nombre.
+
+    Le glouton place chaque planche pour avaler le plus de réseau restant :
+    la première déborde souvent du bout du réseau, les dernières se
+    recouvrent largement (rue de Grenoble, 27/09/2026 : une planche dépassait
+    de 20 m l'extrémité sud, deux autres se superposaient aux trois quarts).
+
+    Chaque tour attribue chaque point à la planche dont il est le plus proche
+    du centre (distance rapportée aux dimensions utiles), puis recentre chaque
+    planche sur l'emprise de ses points, orientation inchangée. Un tour n'est
+    retenu que si tout le réseau reste couvert : sinon on garde le précédent.
+    """
+    if len(planches) < 2 or not points:
+        return planches
+    demi_w, demi_h = w_u / 2.0, h_u / 2.0
+
+    def couvert(courantes):
+        reperes = [_repere(c, t, carto_h_m) for c, t in courantes]
+        for x, y in points:
+            if not any(abs((x - cx) * ux + (y - cy) * uy) <= demi_w + debord_u
+                       and abs((x - cx) * wx + (y - cy) * wy) <= demi_h + debord_u
+                       for cx, cy, ux, uy, wx, wy in reperes):
+                return False
+        return True
+
+    courantes = list(planches)
+    for _tour in range(tours):
+        reperes = [_repere(c, t, carto_h_m) for c, t in courantes]
+        attribues = [[] for _ in courantes]
+        for x, y in points:
+            meilleur, k_min = None, 0
+            for k, (cx, cy, ux, uy, wx, wy) in enumerate(reperes):
+                a = (x - cx) * ux + (y - cy) * uy
+                b = (x - cx) * wx + (y - cy) * wy
+                d = max(abs(a) / demi_w, abs(b) / demi_h)
+                if meilleur is None or d < meilleur:
+                    meilleur, k_min = d, k
+            attribues[k_min].append((x, y))
+
+        nouvelles = []
+        for (centre, theta), (cx, cy, ux, uy, wx, wy), pts in zip(
+                courantes, reperes, attribues):
+            if not pts:
+                nouvelles.append((centre, theta))
+                continue
+            aa = [(x - cx) * ux + (y - cy) * uy for x, y in pts]
+            bb = [(x - cx) * wx + (y - cy) * wy for x, y in pts]
+            da = (min(aa) + max(aa)) / 2.0
+            db = (min(bb) + max(bb)) / 2.0
+            nouvelles.append((QgsPointXY(centre.x() + da * ux + db * wx,
+                                         centre.y() + da * uy + db * wy), theta))
+
+        deplacement = max(math.hypot(n[0].x() - c[0].x(), n[0].y() - c[0].y())
+                          for n, c in zip(nouvelles, courantes))
+        if not couvert(nouvelles):
+            break
+        courantes = nouvelles
+        if deplacement < 0.05:
+            break
+    return courantes
+
+
+def secteurs(points, distance):
+    """Groupes de points séparés de plus de `distance` (union-find sur grille).
+
+    Deux chantiers d'un même projet (deux rues éloignées) se cadrent chacun
+    pour lui : aucune planche ne peut servir aux deux.
+    """
+    parent = list(range(len(points)))
+
+    def racine(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    cases = {}
+    for i, (x, y) in enumerate(points):
+        cases.setdefault((int(x // distance), int(y // distance)), []).append(i)
+    for (cx, cy), membres in cases.items():
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for j in cases.get((cx + dx, cy + dy), ()):
+                    xj, yj = points[j]
+                    for i in membres:
+                        if i < j and (points[i][0] - xj) ** 2 + (points[i][1] - yj) ** 2 <= distance ** 2:
+                            parent[racine(i)] = racine(j)
+    groupes = {}
+    for i in range(len(points)):
+        groupes.setdefault(racine(i), []).append(points[i])
+    return list(groupes.values())
+
+
+def quadrillage(points, w_u, h_u, carto_h_m):
+    """Planches nord en haut, posées en quadrillage sur l'emprise du réseau.
+
+    Candidat de comparaison pour le glouton : sur un réseau maillé ou en
+    boucle, les planches alignées tronçon par tronçon partent dans tous les
+    sens et se recouvrent (8 planches là où un quadrillage en demande 4,
+    27/09/2026). On essaie plusieurs calages de la grille et on garde celui
+    qui touche le moins de cases occupées.
+    """
+    if not points:
+        return []
+    x0 = min(p[0] for p in points)
+    y0 = min(p[1] for p in points)
+    meilleure = None
+    for fx in (0.0, 0.25, 0.5, 0.75):
+        for fy in (0.0, 0.25, 0.5, 0.75):
+            ox, oy = x0 - fx * w_u, y0 - fy * h_u
+            cases = {(int((x - ox) // w_u), int((y - oy) // h_u)) for x, y in points}
+            if meilleure is None or len(cases) < len(meilleure[0]):
+                meilleure = (cases, ox, oy)
+    cases, ox, oy = meilleure
+    # Rotation nulle : le centre de la feuille est un demi-cartouche sous
+    # celui de la zone carte.
+    return [(QgsPointXY(ox + (i + 0.5) * w_u, oy + (j + 0.5) * h_u - carto_h_m / 2.0), 0.0)
+            for i, j in sorted(cases)]
+
+
+def _points_couverts(planche, points, w_u, h_u, debord_u, carto_h_m):
+    """Points du réseau visibles sur la planche (zone utile + débord)."""
+    cx, cy, ux, uy, wx, wy = _repere(planche[0], planche[1], carto_h_m)
+    da, db = w_u / 2.0 + debord_u, h_u / 2.0 + debord_u
+    return [(x, y) for x, y in points
+            if abs((x - cx) * ux + (y - cy) * uy) <= da
+            and abs((x - cx) * wx + (y - cy) * wy) <= db]
+
+
+def elaguer_planches(planches, points, w_u, h_u, debord_u, carto_h_m):
+    """Retire les planches dont tout le contenu figure deja sur les autres.
+
+    Le glouton pose chaque planche pour couvrir le reste du reseau, sans
+    revenir sur les precedentes : les derniers bouts de reseau donnent
+    souvent une planche presque superposee a une voisine (mesure sur la rue
+    de Grenoble : deux planches a 10 m l'une de l'autre). On retire d'abord
+    celles qui montrent le moins, tant que chaque point reste sur au moins
+    une planche.
     """
     if len(planches) < 2:
         return planches
 
-    harmonisees = [planches[0]]
-    for centre, theta in planches[1:]:
-        precedent = harmonisees[-1][1]
-        ecart = (theta - precedent + math.pi) % (2 * math.pi) - math.pi
-        if abs(ecart) > math.pi / 2:
-            # Le haut du papier avant retournement, en coordonnees monde.
-            vx, vy = math.sin(theta), math.cos(theta)
-            centre = QgsPointXY(centre.x() + carto_h_m * vx,
-                                centre.y() + carto_h_m * vy)
-            theta += math.pi
-        harmonisees.append((centre, theta))
-    return harmonisees
+    def couverts(centre, theta):
+        ux, uy = math.cos(theta), -math.sin(theta)
+        wx, wy = math.sin(theta), math.cos(theta)
+        # Centre de la zone carte : un demi-cartouche au-dessus de la feuille.
+        cx = centre.x() + (carto_h_m / 2.0) * wx
+        cy = centre.y() + (carto_h_m / 2.0) * wy
+        da, db = w_u / 2.0 + debord_u, h_u / 2.0 + debord_u
+        return {i for i, (x, y) in enumerate(points)
+                if abs((x - cx) * ux + (y - cy) * uy) <= da
+                and abs((x - cx) * wx + (y - cy) * wy) <= db}
+
+    ensembles = [couverts(c, t) for c, t in planches]
+    gardees = list(range(len(planches)))
+    for k in sorted(gardees, key=lambda i: len(ensembles[i])):
+        autres = set()
+        for j in gardees:
+            if j != k:
+                autres |= ensembles[j]
+        if ensembles[k] <= autres:
+            gardees.remove(k)
+    return [planches[i] for i in gardees]
 
 
 def calculer_planches(couches, w_mm, h_mm, echelle, max_planches=200,
@@ -615,8 +824,36 @@ def calculer_planches(couches, w_mm, h_mm, echelle, max_planches=200,
             reste = [p for p in restants if p != (px, py)]
         restants = reste
 
-    # L'ordre d'abord — il definit qui touche qui — puis le sens de lecture,
+    def affiner(candidates, pts):
+        # Planches superflues d'abord, puis répartition régulière, qui peut
+        # en libérer une de plus.
+        candidates = elaguer_planches(candidates, pts, w_u, h_u, debord_u, carto_h_m)
+        candidates = repartir_planches(candidates, pts, w_u, h_u, debord_u, carto_h_m)
+        return elaguer_planches(candidates, pts, w_u, h_u, debord_u, carto_h_m)
+
+    planches = affiner(planches, points)
+
+    # Secteur par secteur, le quadrillage nord en haut remplace les planches
+    # du glouton s'il en économise au moins une : à nombre égal, les planches
+    # alignées sur les rues se lisent mieux. Une rue droite presque nord-sud
+    # tient en 3 planches quadrillées là où le glouton, qui l'attaque par un
+    # bout, en pose 4 (rue de Grenoble, 27/09/2026) ; une boucle, à l'inverse,
+    # se couvre mieux en suivant ses tronçons.
+    finales = []
+    for groupe in secteurs(points, rayon):
+        dedans = set(groupe)
+        a_lui = [pl for pl in planches
+                 if any(p in dedans for p in _points_couverts(pl, points, w_u, h_u, debord_u, carto_h_m))]
+        grille = affiner(quadrillage(groupe, w_u, h_u, carto_h_m), groupe)
+        if grille and (not a_lui or len(grille) < len(a_lui)):
+            a_lui = grille
+        # Une planche à cheval sur deux secteurs ne doit pas sortir deux fois.
+        finales.extend(pl for pl in a_lui if not any(pl is f for f in finales))
+    planches = finales
+
+    # L'ordre ensuite — il definit qui touche qui — puis le sens de lecture,
     # qui se propage de proche en proche le long de ce chemin. La numerotation
     # suit le collecteur, de l'aval vers l'amont, quand le reseau est cote.
     return harmoniser_orientations(
-        ordonner_planches(planches, _collecteur(couches)), carto_h_m)
+        ordonner_planches(planches, _collecteur(couches)), carto_h_m,
+        voisinage=rayon)

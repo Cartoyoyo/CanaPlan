@@ -167,6 +167,13 @@ de piquage y devient une valeur calculee a partir de la pente.
 
 #### Placement et lisibilite
 
+**Pas d'étiquette sur les conduites.** Conduites et branchements sont des
+obstacles pour les étiquettes des ouvrages, même quand leurs propres
+étiquettes sont masquées (mode « obstacle seul »). Une étiquette de point qui
+ne trouve pas de place s'écarte jusqu'à 8 m et son connecteur s'allonge, au
+lieu de disparaître. En AEP, l'étiquette d'un regard compteur se pose du
+**côté opposé à la conduite**, y compris sur une planche tournée.
+
 **Deplacement.** Les quatre roles — regards, tabourets, conduites et
 branchements — portent `lbl_x` / `lbl_y` et se deplacent a la souris avec
 l'outil *Deplacer*. Les deux roles lineaires portent en plus `lbl_rot`, qui
@@ -502,15 +509,18 @@ Une seule fenêtre rassemble ce qu'on veut produire et la façon dont le plan
 s'imprime : plus aucune boîte de dialogue intermédiaire entre la validation et
 le PDF.
 
-**Ce qu'on exporte** — plan PDF, plan DXF, profils en long EU / EP / groupé,
-cubature (périmètre, contenu, PDF / XLSX / CSV), coupes types EU / EP et, si
-le projet en a, les **schémas de nœuds AEP** ([SchemAEP](#-schemaep--schémas-de-nœuds-aep)),
-le tout dans un dossier choisi.
+**Ce qu'on exporte** — plan PDF, plan DXF, profils en long EU / EP / AEP /
+groupé, cubature (réseaux EU / EP / AEP à cocher, contenu, PDF / XLSX / CSV),
+coupes types EU / EP / AEP et, si le projet en a, les **schémas de nœuds AEP**
+([SchemAEP](#-schemaep--schémas-de-nœuds-aep)), le tout dans un dossier choisi.
+La fenêtre tient sur un écran portable (titre de section et options sur une
+même ligne) et les cases propres à un réseau portent sa couleur (EU rouge,
+EP bleu, AEP turquoise).
 
-**Comment le plan s'imprime** — titre, format, orientation, échelle et
-résolution, en listes déroulantes à la suite de la case *Plan PDF*. La
-résolution est suggérée selon le format (A4 → 300 dpi, A2/A3 → 200,
-A0/A1 → 150).
+**Comment le plan s'imprime** — format, orientation, échelle et résolution,
+en listes déroulantes à la suite de la case *Plan PDF* ; titre du plan
+(par défaut **le nom du projet**) et **indice de révision** à côté de la case
+*Plan DXF*. Résolution **150 dpi** par défaut, quel que soit le format.
 
 **Le cadrage des planches**, au choix :
 
@@ -524,6 +534,10 @@ A0/A1 → 150).
   du réseau se déduit des **étiquettes réellement affichées** — leur texte est
   évalué — afin qu'aucune ne soit coupée. À échelle large, quand tout tient
   sur une planche, celle-ci est centrée sur le réseau, nord en haut.
+  Le nord reste toujours dans la moitié haute de la feuille (plus de planche
+  tête en bas), les planches sont **réparties régulièrement** le long du
+  réseau et les planches superflues retirées ; secteur par secteur, un
+  quadrillage nord en haut remplace le découpage s'il économise une planche.
 - **Pose manuelle** — placement des planches à la souris, clic pour ancrer,
   clic pour orienter, clic droit pour lancer l'export. `Échap` rouvre les
   réglages sans perdre les planches déjà posées.
@@ -532,7 +546,27 @@ A0/A1 → 150).
 planche y apparaît avec **sa propre teinte** et son numéro cerné de blanc, et
 son cadre délimite exactement la zone que montrera la planche.
 
-**Le plan final** porte cartouche, flèche du nord et barre d'échelle.
+**Le cartouche** rassemble tout ce qui n'est pas la carte, qui n'est plus
+masquée par la barre d'échelle ni la flèche du nord :
+
+| Titre | Échelle | Nord | Réseaux | Références | Date | Planche |
+|---|---|---|---|---|---|---|
+| titre du plan, « Plan de réseau EU · AEP » | format et échelle, barre graduée | orienté selon la planche | trait de couleur par réseau présent | RGF93 / Lambert-93 (ou système du projet), altitudes NGF-IGN69 en France | date, indice | n / N et **mini-plan de situation** (planche courante en couleur) |
+
+**Fonds de plan lents ou indisponibles** — pendant l'impression, une image
+de fond (Ortho IGN, OSM…) n'est attendue que 20 s. Si un serveur ne répond
+pas, les planches concernées sont retentées une fois automatiquement ; si le
+fond manque encore, CanaPlan le dit et propose d'**imprimer sans ce fond**,
+de **réessayer dans 2 minutes** (serveur moins chargé) ou d'imprimer tel quel.
+La fenêtre de progression détaille chaque carte (prête en x s / en cours) et
+les images de fond encore attendues, serveur par serveur.
+
+**Fenêtre de suivi de l'export** — toutes les sorties possibles, demandées ou
+non, avec leur état (à faire, en cours, posez les planches, fait, erreur,
+abandonné) et le temps mesuré de chacune ; elle reste ouverte à la fin avec
+« Ouvrir le dossier ». Les comptes rendus ne demandent plus de cliquer sur
+*OK* : un bandeau dans la barre de messages propose d'ouvrir le dossier, et
+le DXF ne s'ouvre plus tout seul.
 
 > **Toutes les pièces (ZIP)** — le bouton rouge, en haut à droite de la
 > fenêtre, produit d'un coup le plan PDF et DXF, les profils EU et EP, la
@@ -855,7 +889,9 @@ des tronçons choisis à la souris, pour tous les réseaux (EU, EP, AEP) :
    droite ;
 3. clic sur les tronçons, clic droit ou Entrée pour valider ;
 4. aperçu en pointillés, avec la liste des cibles écartées et leur motif,
-   puis **Tracer** ou **Annuler**.
+   puis **Tracer** ou **Annuler**. La **portée max** (10 m par défaut, jusqu'à
+   100 m) se règle dans l'aperçu et **Recalculer** met à jour les propositions
+   sans refaire la sélection — pour atteindre un bâti en retrait de la rue.
 
 Le piquage est perpendiculaire à la conduite, au milieu du front de rue de la
 cible ; le branchement s'arrête sur la limite de parcelle, où se pose le
@@ -891,6 +927,14 @@ En tete du menu, **Afficher la barre d'outils** bascule sa visibilite. La
 case est synchronisee nativement par Qt avec l'etat reel de la barre : elle
 reste juste meme si l'utilisateur a ferme la barre par la croix ou par le
 menu contextuel de QGIS.
+
+**Onglet Interface** de la configuration rapide : langue du plugin,
+**apparence du panneau** (colorée par défaut — un bandeau de couleur par
+section, EU / EP / AEP aux couleurs de la carte — ou classique) et **contenu
+du panneau** : sections et entrées à afficher ou masquer, et leur ordre
+(▲ / ▼, retour à l'ordre par défaut). Les choix sont gardés d'une session à
+l'autre. Au survol, l'entrée du panneau passe en gras. La configuration
+rapide se redimensionne librement (ascenseurs au besoin).
 
 En pied de menu, **A propos** ouvre un dialogue qui lit `metadata.txt` :
 nom, version, auteur, description, lien vers le depot et vers le profil
@@ -1535,6 +1579,7 @@ From field survey to delivery, one tool covers the whole chain: Star-DT / StaR-E
 - **Magic Box**: automatic service connections on the pipes you click — one per parcel, per building or per street number, on both sides or one — previewed before drawing.
 - **SchemAEP**: a fittings diagram for each water node (tees, valves, flanges, sockets, hydrants…), started from the pipes that reach the node and the fitting of its type, with joint checks and bill of materials; saved on the node in the `.bet`, exported as PDF pages (6 diagrams per A4 sheet) and SVG files. See [📐 SchemAEP](#-schemaep--schémas-de-nœuds-aep).
 - **Data-entry table, SLOPE chain**: water meters can start or end a chain (through their service connection).
+- **Upcoming**: redesigned PDF title block (scale bar, north arrow, networks, CRS and heights, revision, location mini-map), basemap fallback when a tile server stalls (print without it or retry in 2 minutes), timed export progress window, labels that avoid pipes, customisable coloured side panel.
 
 ### 📋 Requirements
 
@@ -1721,6 +1766,8 @@ CanaPlan/
 │   ├── tableau_saisie_dialog.py    # Tableau de saisie groupee (regards/tabourets/conduites/branchements)
 │   ├── chain_profile_widget.py     # Widget du profil simplifie pour l'onglet Chaine du tableau de saisie
 │   ├── export_dialog.py            # Fenetre unique d'export : sorties + reglages du plan + raccourcis Toutes les pieces (ZIP) et PDF complet
+│   ├── suivi_export.py             # Fenetre de suivi d'export : sorties demandees ou non, etat et temps de chaque etape
+│   ├── interface_config_widget.py  # Onglet Interface de la configuration rapide (langue, apparence, contenu du panneau)
 │   ├── welcome_dialog.py           # Dialogue d'accueil (assistant / ouvrir / annuler)
 │   ├── recent_projects_dialog.py   # Liste des projets .bet recemment ouverts
 │   ├── dependances_dialog.py       # Proposition d'installation des librairies manquantes (ezdxf, pypdf)
@@ -1779,6 +1826,8 @@ CanaPlan/
 │   ├── calc_cubature.py            # Calcul cubature (volumes, BFS, remblai par couche)
 │   ├── print_tool.py               # Impression PDF multi-planches (pose manuelle ou cadrage automatique)
 │   ├── api.py                      # Facade de pilotage : verbes metier sans fenetre, suites et recettes
+│   ├── notification.py             # Compte rendu de fin d'export dans la barre de messages (bouton Ouvrir le dossier)
+│   ├── panneau_prefs.py            # Contenu du panneau lateral (donnees) et preferences Interface
 │   ├── recettes/                   # Procedures rejouables (JSON) : collecteur_de_rue, recaler_cotes, livraison
 │   ├── cadrage_auto.py             # Decoupage automatique en planches : couverture minimale, ordre aval-amont, marge etiquettes
 │   ├── coupe_type.py               # Coupe type EU/EP calculee sur les statistiques du reseau (sans troncon designe)
@@ -1811,6 +1860,7 @@ CanaPlan/
 
 | Version | Notes |
 |---------|-------|
+| **À venir** | **Cartouche** repensé (barre d'échelle, nord, réseaux, références, indice, mini-plan de situation) — **fonds indisponibles** : nouvel essai puis choix sans fond / réessayer dans 2 min — **fenêtre de suivi de l'export** chronométrée — cadrage automatique sans planche tête en bas, planches réparties et moins nombreuses — **onglet Interface** (panneau coloré, ordre des entrées) — étiquettes qui évitent les conduites — Magic Box : portée réglable — fenêtre d'export compacte, cubature par réseau — correctifs : robinets AEP du mauvais côté sur les planches tournées, outil actif et tableau de saisie cassés après enregistrement ou chargement du `.bet`, choix du dossier masqué dans l'assistant en mode International, branchements AEP sans repère sur le profil en long |
 | **2.3** | **SchemAEP** : schéma de pièces de chaque nœud AEP, pré-rempli depuis les conduites et le type du nœud, contrôle des assemblages et nomenclature, rangé dans le `.bet` (table `schema_aep`), copier / coller entre nœuds, bouton dans Renseigner, pages PDF « 6 schémas par A4 » et SVG à l'export, nomenclature du chantier — **Tableau de saisie** : compteurs AEP en départ ou arrivée de la chaîne PENTE — SchemAEP en 5 langues — cadrage automatique : moins de planches à grande échelle — correctifs : branchements AEP absents des profils en long après la coupe de leur conduite, symboles AEP masqués dans le DXF, options d'étiquettes ignorées au PDF |
 | **2.2** | **Réseau AEP (eau potable)** : troisième réseau complet, symboles StaR-Eau, nœuds typés, robinets de branchement, fil d'eau par la couverture, profils / cubature / coupes / plans / export StaR-Eau « EAU » — **Magic Box** : branchements automatiques par parcelle, bâti ou numéro, avec aperçu — correctifs : conduite de longueur nulle en fin de tracé, coupe d'une conduite dans un projet GeoPackage (clé `fid` dupliquée) |
 | **2.1.1** | Correctif de publication : `metadata.txt` refusé par plugins.qgis.org (signe `%` dans le changelog) — contenu identique à la 2.1 |
@@ -1831,6 +1881,45 @@ CanaPlan/
 
 <details>
 <summary>Détail complet des versions</summary>
+
+### À venir
+
+- **Cartouche du plan PDF** : titre du plan et objet (« Plan de réseau EU ·
+  AEP »), format et échelle avec **barre graduée**, **flèche du nord** tournée
+  comme la planche, trait de couleur par réseau présent, système de
+  coordonnées et altitudes NGF-IGN69 (France), date et **indice de révision**,
+  numéro de planche et **mini-plan de situation**. La carte n'est plus
+  masquée par la barre d'échelle ni la flèche.
+- **Fenêtre d'export** : titre du plan par défaut = nom du projet, champ
+  *Indice*, 150 dpi par défaut quel que soit le format, cubature par réseau
+  (cases EU / EP / AEP), mise en page compacte (706 → 386 px de haut) et
+  cases aux couleurs des réseaux.
+- **Fonds de plan à l'impression** : délai de 20 s par image, nouvel essai
+  automatique des planches incomplètes, puis choix *imprimer sans ce fond* /
+  *réessayer dans 2 min* / *tel quel* ; fenêtre de progression détaillée
+  (chrono par carte, images attendues par serveur).
+- **Fenêtre de suivi de l'export** (toutes les sorties, état et temps) ;
+  comptes rendus sans *OK* à cliquer, avec « Ouvrir le dossier » ; le DXF ne
+  s'ouvre plus automatiquement.
+- **Cadrage automatique** : nord toujours vers le haut, planches réparties
+  régulièrement et superflues retirées, quadrillage nord en haut retenu
+  secteur par secteur quand il économise une planche.
+- **Étiquettes** : conduites et branchements obstacles même masqués ;
+  étiquette écartée jusqu'à 8 m (connecteur allongé) plutôt que supprimée ;
+  compteurs AEP étiquetés du côté opposé à la conduite.
+- **Magic Box** : portée max réglable dans l'aperçu, avec *Recalculer* ;
+  l'aperçu s'ouvre même sans proposition.
+- **Onglet Interface** de la configuration rapide (langue, panneau coloré ou
+  classique, ordre et visibilité des entrées) ; Magic Box sous *Configuration
+  rapide* ; entrée survolée en gras ; configuration rapide redimensionnable.
+- **Overpass** : 35 s par miroir, miroir défaillant relégué en fin de tour,
+  message d'erreur lisible.
+- **Corrections** : robinets de branchement AEP décalés du mauvais côté sur
+  les planches tournées ; outil de dessin actif et tableau de saisie pointant
+  sur des couches détruites après l'enregistrement ou le chargement d'un
+  `.bet` ; bouton *Parcourir* hors de la fenêtre dans l'assistant en mode
+  International ; branchements AEP sans repère sur le profil en long
+  (repère « Br n » à défaut de nom).
 
 ### 2.3
 

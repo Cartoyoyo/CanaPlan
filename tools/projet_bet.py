@@ -256,6 +256,29 @@ def cleanup_plugin_resources(plugin):
     plugin._bet_temp_dir = None
 
 
+def _raccrocher(plugin):
+    """Raccroche aux couches rechargées ce qui tient encore les anciennes.
+
+    Enregistrer ou charger un .bet détruit les couches du réseau et en crée
+    de nouvelles. Le tableau de saisie ouvert et l'outil de carte actif
+    (tracé de conduite, branchement…) gardaient les anciennes : leur action
+    suivante tombait sur un objet mort (« wrapped C/C++ object of type
+    QgsVectorLayer has been deleted », constaté le 28/09/2026 sur le tracé
+    de conduite).
+    """
+    dlg = getattr(plugin, '_tableau_saisie_dialog', None)
+    if dlg is not None and not sip.isdeleted(dlg):
+        try:
+            dlg.set_couches(plugin._get_couches("EU"), plugin._get_couches("EP"),
+                            couches_aep=plugin._couches_si_presentes("AEP"))
+        except Exception as _err:
+            errlog.ignored(_err, "projet_bet._raccrocher:tableau")
+    try:
+        plugin.relancer_outil_actif()
+    except Exception as _err:
+        errlog.ignored(_err, "projet_bet._raccrocher:outil")
+
+
 def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
     """Corps commun de la sauvegarde.
     gpkg_temp : chemin du GPKG intermédiaire (sera supprimé après archivage).
@@ -307,7 +330,8 @@ def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
     for reseau in _RESEAUX:
         layer_id = get_layer_id('conduite', reseau)
         layer    = project.mapLayer(layer_id) if layer_id else None
-        labels_state[reseau] = bool(layer.labelsEnabled()) if layer else False
+        from ..gui.etiquettes import etiquettes_visibles
+        labels_state[reseau] = etiquettes_visibles(layer) if layer else False
 
     # Phase 1 : copie en mémoire de toutes les couches
     to_save = []
@@ -513,7 +537,8 @@ def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
             _get_or_create_group(project, reseau).addLayer(new_layer)
             set_layer_id(role, reseau, new_layer.id())
             apply_etiquettes(new_layer, role, reseau)
-            new_layer.setLabelsEnabled(labels_state.get(reseau, False))
+            from ..gui.etiquettes import definir_visibilite
+            definir_visibilite(new_layer, role, labels_state.get(reseau, False))
             node = project.layerTreeRoot().findLayer(new_layer.id())
             if node:
                 node.setItemVisibilityChecked(
@@ -535,12 +560,9 @@ def _do_save(plugin, iface, gpkg_temp, bet_path, silencieux=False):
     # Le tableau de saisie eventuellement ouvert pointe encore sur les couches
     # memoire detruites en phase 2 : on le raccroche aux couches rechargees,
     # sinon sa prochaine ecriture (ou sa fermeture) tombe sur un objet mort.
-    dlg = getattr(plugin, '_tableau_saisie_dialog', None)
     # Variables de style AEP (identifiants des couches rechargées).
-    couches_aep = plugin._couches_si_presentes("AEP")
-    if dlg is not None and not sip.isdeleted(dlg):
-        dlg.set_couches(plugin._get_couches("EU"), plugin._get_couches("EP"),
-                        couches_aep=couches_aep)
+    plugin._couches_si_presentes("AEP")
+    _raccrocher(plugin)
     # Schémas SchemAEP rattachés aux nœuds rechargés (nouveaux fid)
     try:
         schemaep.apres_rechargement(plugin, extracted_gpkg, etat_schemas or {'entrees': [], 'fen': None})
@@ -702,7 +724,8 @@ def load_projet(plugin, iface, bet_path=None):
             except Exception as e:
                 errors.append(i18n.tr('bet_err_etiquettes',
                                       couche=layer_name, detail=e))
-            new_layer.setLabelsEnabled(labels_enabled)
+            from ..gui.etiquettes import definir_visibilite
+            definir_visibilite(new_layer, role, labels_enabled)
             project.addMapLayer(new_layer, False)
             _get_or_create_group(project, reseau).addLayer(new_layer)
             set_layer_id(role, reseau, new_layer.id())
@@ -715,6 +738,7 @@ def load_projet(plugin, iface, bet_path=None):
 
     # Variables de style AEP (identifiants des couches chargées).
     plugin._couches_si_presentes("AEP")
+    _raccrocher(plugin)
 
     # Schémas SchemAEP du projet (table schema_aep), rattachés aux nœuds chargés
     try:

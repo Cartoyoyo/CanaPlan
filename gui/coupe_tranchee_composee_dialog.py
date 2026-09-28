@@ -762,6 +762,12 @@ class CoupeTrancheeComposeeDialog(QDialog):
                               facecolor='white')
         except Exception as e:
             QMessageBox.warning(self, i18n.tr('dt_erreur_export'), str(e))
+            return
+        import os
+        from ..tools.notification import export_termine
+        export_termine(self.windowTitle(),
+                       i18n.tr('msg_fichier_exporte',
+                               fichier=os.path.basename(path)), path)
 
     # ── Persistance ───────────────────────────────────────────────────────────
 

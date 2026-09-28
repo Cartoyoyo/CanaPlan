@@ -134,6 +134,21 @@ TR_MAGIC = {
         'pt': "<b>{n}</b> ramal(is) {reseau} proposto(s) a tracejado no mapa.<br>{e} alvo(s) excluído(s).",
         'de': "<b>{n}</b> {reseau}-Anschluss/Anschlüsse gestrichelt in der Karte.<br>{e} Ziel(e) übersprungen.",
     },
+    'mb_portee': {
+        'fr': "Portée max :", 'en': "Max reach:", 'es': "Alcance máx.:",
+        'pt': "Alcance máx.:", 'de': "Max. Reichweite:",
+    },
+    'mb_portee_tip': {
+        'fr': "Distance maximale entre la conduite et la cible (bâtiment, parcelle, numéro), qui borne aussi la longueur du branchement. À augmenter quand des cibles sont écartées faute de limite atteinte.",
+        'en': "Maximum distance between the main and the target (building, parcel, number), which also caps the connection length. Increase it when targets are skipped because no boundary was reached.",
+        'es': "Distancia máxima entre la conducción y el objetivo (edificio, parcela, número), que también limita la longitud de la acometida. Auméntela cuando se descarten objetivos por no alcanzar ningún límite.",
+        'pt': "Distância máxima entre a conduta e o alvo (edifício, parcela, número), que também limita o comprimento do ramal. Aumente-a quando alvos forem excluídos por nenhum limite ser alcançado.",
+        'de': "Maximaler Abstand zwischen Leitung und Ziel (Gebäude, Flurstück, Hausnummer), der auch die Anschlusslänge begrenzt. Erhöhen, wenn Ziele mangels erreichter Grenze übersprungen werden.",
+    },
+    'mb_recalculer': {
+        'fr': "↻ Recalculer", 'en': "↻ Recompute", 'es': "↻ Recalcular",
+        'pt': "↻ Recalcular", 'de': "↻ Neu berechnen",
+    },
     'mb_details': {
         'fr': "Détails des cibles écartées", 'en': "Skipped targets details",
         'es': "Detalle de los objetivos descartados", 'pt': "Detalhe dos alvos excluídos",

@@ -258,6 +258,15 @@ class ProfilDialog(QDialog):
         conduites = d['conduites']
         abscisses = d['abscisses']
         piquages  = d['piquages']   # {idx: [{abscisse, nom}]}
+        # Branchement sans nom (robinet et compteur non nommés, cas courant
+        # avant renumérotation) : repère « Br n » dans l'ordre du profil,
+        # sinon la bande des piquages restait vide et rien n'identifiait
+        # les flèches (28/09/2026, profil AEP de 40 branchements).
+        tous = sorted((p for liste in piquages.values() for p in liste),
+                      key=lambda p: p['abscisse'])
+        for k, piq in enumerate(tous, start=1):
+            if not piq.get('nom'):
+                piq['nom'] = i18n.tr('pf_branchement_court', n=k)
 
         n_reg  = len(regards)
         n_cond = len(conduites)
@@ -594,6 +603,10 @@ class ProfilDialog(QDialog):
             fmt_papier = self.opts.get('format_papier', 'A3')
             dpi = _EXPORT_DPI.get(fmt_papier, 150)
             self.figure.savefig(path, format=fmt, dpi=dpi)
+            from ..tools.notification import export_termine
+            export_termine(self.windowTitle(),
+                           i18n.tr('msg_fichier_exporte',
+                                   fichier=os.path.basename(path)), path)
 
     # ------------------------------------------------------------------ close
 

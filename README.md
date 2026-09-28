@@ -553,6 +553,10 @@ masquée par la barre d'échelle ni la flèche du nord :
 |---|---|---|---|---|---|---|
 | titre du plan, « Plan de réseau EU · AEP » | format et échelle, barre graduée | orienté selon la planche | trait de couleur par réseau présent | RGF93 / Lambert-93 (ou système du projet), altitudes NGF-IGN69 en France | date, indice | n / N et **mini-plan de situation** (planche courante en couleur) |
 
+<div align="center">
+  <img src="images/plan_cartouche.png" alt="Cartouche du plan PDF">
+</div>
+
 **Fonds de plan lents ou indisponibles** — pendant l'impression, une image
 de fond (Ortho IGN, OSM…) n'est attendue que 20 s. Si un serveur ne répond
 pas, les planches concernées sont retentées une fois automatiquement ; si le
@@ -561,12 +565,20 @@ de **réessayer dans 2 minutes** (serveur moins chargé) ou d'imprimer tel quel.
 La fenêtre de progression détaille chaque carte (prête en x s / en cours) et
 les images de fond encore attendues, serveur par serveur.
 
+<div align="center">
+  <img src="images/impression_progression.png" alt="Fenêtre de progression de l'impression">
+</div>
+
 **Fenêtre de suivi de l'export** — toutes les sorties possibles, demandées ou
 non, avec leur état (à faire, en cours, posez les planches, fait, erreur,
 abandonné) et le temps mesuré de chacune ; elle reste ouverte à la fin avec
 « Ouvrir le dossier ». Les comptes rendus ne demandent plus de cliquer sur
 *OK* : un bandeau dans la barre de messages propose d'ouvrir le dossier, et
 le DXF ne s'ouvre plus tout seul.
+
+<div align="center">
+  <img src="images/export_suivi.png" alt="Fenêtre de suivi de l'export">
+</div>
 
 > **Toutes les pièces (ZIP)** — le bouton rouge, en haut à droite de la
 > fenêtre, produit d'un coup le plan PDF et DXF, les profils EU et EP, la
@@ -935,6 +947,12 @@ du panneau** : sections et entrées à afficher ou masquer, et leur ordre
 (▲ / ▼, retour à l'ordre par défaut). Les choix sont gardés d'une session à
 l'autre. Au survol, l'entrée du panneau passe en gras. La configuration
 rapide se redimensionne librement (ascenseurs au besoin).
+
+<div align="center">
+  <img src="images/config_interface.png" alt="Configuration rapide : onglet Interface">
+  &nbsp;&nbsp;
+  <img src="images/aep_panneau.png" alt="Panneau latéral coloré">
+</div>
 
 En pied de menu, **A propos** ouvre un dialogue qui lit `metadata.txt` :
 nom, version, auteur, description, lien vers le depot et vers le profil

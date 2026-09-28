@@ -5714,11 +5714,11 @@ TR = {
         'de': "Standard  –  150 dpi",
     },
     'pd_dpi_standard_note': {
-        'fr': "Bon compromis taille / qualité (recommandé A1/A0)",
-        'en': "Good size / quality trade-off (recommended for A1/A0)",
-        'es': "Buen equilibrio tamaño / calidad (recomendado A1/A0)",
-        'pt': "Bom compromisso tamanho / qualidade (recomendado A1/A0)",
-        'de': "Guter Kompromiss Größe / Qualität (empfohlen für A1/A0)",
+        'fr': "Bon compromis taille / qualité (par défaut)",
+        'en': "Good size / quality trade-off (default)",
+        'es': "Buen equilibrio tamaño / calidad (por defecto)",
+        'pt': "Bom compromisso tamanho / qualidade (predefinido)",
+        'de': "Guter Kompromiss Größe / Qualität (Standard)",
     },
     'pd_dpi_bonne': {
         'fr': "Bonne qualité  –  200 dpi", 'en': "Good quality  –  200 dpi",

@@ -2,7 +2,7 @@
 name=CanaPlan – Réseau Assainissement
 description=Dessin topologique de réseaux EU (rouge), EP (bleu) et eau potable AEP (cyan, symboles StaR-Eau) : conduites, branchements, regards, tabourets, nœuds et compteurs. PILOTABLE PAR SCRIPT AUTANT QU'À LA SOURIS — point d'entrée : from CanaPlan.tools import api ; api.aide() — chaque outil est un verbe Python, et des recettes JSON jouent un chantier complet (projet, fonds, tracé sur axe OSM, un branchement par habitation, terrain naturel sur MNT IGN, cotes, plan PDF) en un seul appel, sans aucun clic. Profils en long, cubatures, coupes, impression PDF multi-feuilles, export DXF et export GeoPackage StaR-Eau (CNIG/ASTEE). En France comme à l'international : adresses et bâti OpenStreetMap, photo aérienne Esri, système UTM contrôlé hors de France. [EN] Topological drawing of foul (red) and storm (blue) sewer networks and drinking-water (AEP, cyan, StaR-Eau symbols) networks: pipes, service connections, manholes, inspection chambers, nodes and meters. FULLY SCRIPTABLE, NOT A MOUSE-ONLY TOOL — entry point: from CanaPlan.tools import api ; api.aide() — every tool is a Python verb, and JSON recipes run a complete job (project, basemaps, centreline from OSM, one connection per dwelling, ground level from the national DEM, levels, PDF plan) in a single call. Longitudinal profiles, trench volumes, cross sections, multi-sheet PDF printing, DXF export and StaR-Eau (CNIG/ASTEE) GeoPackage export.
 icon=icon/icon.png
-version=2.3
+version=2.4
 qgisMinimumVersion=3.40
 qgisMaximumVersion=4.99
 author=Yoan Laloux
@@ -35,6 +35,26 @@ about=CanaPlan s'utilise de deux façons, également complètes : à la souris, 
     procedures can be declared as JSON recipes and replayed in a single call.
 
 changelog=
+    2.4  Cartouche du plan PDF repense : barre d'echelle graduee, nord
+         oriente comme la planche, reseaux presents, systeme de coordonnees
+         et altitudes NGF-IGN69, date et indice de revision, mini-plan de
+         situation ; la carte n'est plus masquee. Fonds de plan lents ou
+         indisponibles a l'impression : 20 s par image, nouvel essai
+         automatique, puis choix imprimer sans ce fond / reessayer dans
+         2 minutes / tel quel ; fenetre de progression detaillee. Fenetre
+         de suivi de l'export (sorties, etat et temps de chaque etape) ;
+         comptes rendus sans OK a cliquer ; le DXF ne s'ouvre plus.
+         Fenetre d'export compacte et coloree, cubature par reseau, titre
+         du plan = nom du projet, indice, 150 dpi par defaut. Cadrage
+         automatique : nord vers le haut, planches reparties, quadrillage
+         par secteur. Etiquettes : conduites obstacles meme masquees,
+         etiquettes ecartees plutot que supprimees, compteurs AEP du cote
+         oppose a la conduite. Magic Box : portee reglable. Onglet
+         Interface : panneau colore ou classique, ordre des entrees.
+         Corrections : robinets AEP sur planches tournees, outil actif et
+         tableau de saisie apres enregistrement ou chargement du .bet,
+         dossier de l'assistant en mode International, reperes des
+         branchements sur le profil en long AEP.
     2.3  SchemAEP (dossier AEP - Eau Potable) : schema de pieces de chaque
          noeud AEP, portage Python/Qt de la page SchemAEP (meme catalogue,
          memes controles, meme format .json). Schema de depart pre-rempli

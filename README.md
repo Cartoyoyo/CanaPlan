@@ -13,7 +13,7 @@
 **Plugin QGIS de dessin topologique de réseaux d'assainissement et d'eau potable — EU / EP / AEP, du tracé terrain à la livraison StaR-Eau**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.40%2B%20%7C%204.x-green?logo=qgis&logoColor=white)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-2.3-blue)](#-changelog)
+[![Version](https://img.shields.io/badge/version-2.4-blue)](#-changelog)
 [![Qt](https://img.shields.io/badge/Qt-5%20%7C%206-brightgreen?logo=qt&logoColor=white)](https://qgis.org)
 [![StaR-Eau](https://img.shields.io/badge/StaR--Eau-V2024%20CNIG%2FASTEE-orange)](#-export-star-eau-cnig--astee-v2024)
 [![Langues](https://img.shields.io/badge/langues-FR%20%7C%20EN%20%7C%20ES%20%7C%20PT%20%7C%20DE-purple)](#-langues--languages)
@@ -1597,7 +1597,7 @@ From field survey to delivery, one tool covers the whole chain: Star-DT / StaR-E
 - **Magic Box**: automatic service connections on the pipes you click — one per parcel, per building or per street number, on both sides or one — previewed before drawing.
 - **SchemAEP**: a fittings diagram for each water node (tees, valves, flanges, sockets, hydrants…), started from the pipes that reach the node and the fitting of its type, with joint checks and bill of materials; saved on the node in the `.bet`, exported as PDF pages (6 diagrams per A4 sheet) and SVG files. See [📐 SchemAEP](#-schemaep--schémas-de-nœuds-aep).
 - **Data-entry table, SLOPE chain**: water meters can start or end a chain (through their service connection).
-- **Upcoming**: redesigned PDF title block (scale bar, north arrow, networks, CRS and heights, revision, location mini-map), basemap fallback when a tile server stalls (print without it or retry in 2 minutes), timed export progress window, labels that avoid pipes, customisable coloured side panel.
+- **New in 2.4**: redesigned PDF title block (scale bar, north arrow, networks, CRS and heights, revision, location mini-map), basemap fallback when a tile server stalls (print without it or retry in 2 minutes), timed export progress window, labels that avoid pipes, customisable coloured side panel.
 
 ### 📋 Requirements
 
@@ -1878,7 +1878,7 @@ CanaPlan/
 
 | Version | Notes |
 |---------|-------|
-| **À venir** | **Cartouche** repensé (barre d'échelle, nord, réseaux, références, indice, mini-plan de situation) — **fonds indisponibles** : nouvel essai puis choix sans fond / réessayer dans 2 min — **fenêtre de suivi de l'export** chronométrée — cadrage automatique sans planche tête en bas, planches réparties et moins nombreuses — **onglet Interface** (panneau coloré, ordre des entrées) — étiquettes qui évitent les conduites — Magic Box : portée réglable — fenêtre d'export compacte, cubature par réseau — correctifs : robinets AEP du mauvais côté sur les planches tournées, outil actif et tableau de saisie cassés après enregistrement ou chargement du `.bet`, choix du dossier masqué dans l'assistant en mode International, branchements AEP sans repère sur le profil en long |
+| **2.4** | **Cartouche** repensé (barre d'échelle, nord, réseaux, références, indice, mini-plan de situation) — **fonds indisponibles** : nouvel essai puis choix sans fond / réessayer dans 2 min — **fenêtre de suivi de l'export** chronométrée — cadrage automatique sans planche tête en bas, planches réparties et moins nombreuses — **onglet Interface** (panneau coloré, ordre des entrées) — étiquettes qui évitent les conduites — Magic Box : portée réglable — fenêtre d'export compacte, cubature par réseau — correctifs : robinets AEP du mauvais côté sur les planches tournées, outil actif et tableau de saisie cassés après enregistrement ou chargement du `.bet`, choix du dossier masqué dans l'assistant en mode International, branchements AEP sans repère sur le profil en long |
 | **2.3** | **SchemAEP** : schéma de pièces de chaque nœud AEP, pré-rempli depuis les conduites et le type du nœud, contrôle des assemblages et nomenclature, rangé dans le `.bet` (table `schema_aep`), copier / coller entre nœuds, bouton dans Renseigner, pages PDF « 6 schémas par A4 » et SVG à l'export, nomenclature du chantier — **Tableau de saisie** : compteurs AEP en départ ou arrivée de la chaîne PENTE — SchemAEP en 5 langues — cadrage automatique : moins de planches à grande échelle — correctifs : branchements AEP absents des profils en long après la coupe de leur conduite, symboles AEP masqués dans le DXF, options d'étiquettes ignorées au PDF |
 | **2.2** | **Réseau AEP (eau potable)** : troisième réseau complet, symboles StaR-Eau, nœuds typés, robinets de branchement, fil d'eau par la couverture, profils / cubature / coupes / plans / export StaR-Eau « EAU » — **Magic Box** : branchements automatiques par parcelle, bâti ou numéro, avec aperçu — correctifs : conduite de longueur nulle en fin de tracé, coupe d'une conduite dans un projet GeoPackage (clé `fid` dupliquée) |
 | **2.1.1** | Correctif de publication : `metadata.txt` refusé par plugins.qgis.org (signe `%` dans le changelog) — contenu identique à la 2.1 |
@@ -1900,7 +1900,7 @@ CanaPlan/
 <details>
 <summary>Détail complet des versions</summary>
 
-### À venir
+### 2.4
 
 - **Cartouche du plan PDF** : titre du plan et objet (« Plan de réseau EU ·
   AEP »), format et échelle avec **barre graduée**, **flèche du nord** tournée
